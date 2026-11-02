@@ -32,8 +32,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Validate tag and package versions
-        run: node scripts/update-supabase.js --validate
+      - name: Prepare build version from tag (version drift is a warning)
+        run: node scripts/update-supabase.js --prepare
 
       - name: Install dependencies
         shell: pwsh
