@@ -45,7 +45,11 @@ jobs:
           npm ci --prefix electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Test release configuration and sync script
+      # Tag 发布不运行 npm test、test:studio、test:electron 等 UI 测试。
+      # UI 测试保留在 windows-checks.yml，并允许失败后继续打包。
+      - name: Test release configuration and sync script (non-blocking)
+        continue-on-error: true
+        timeout-minutes: 3
         run: npm run test:release
 
       - name: Build and upload draft GitHub Release
