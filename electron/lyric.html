@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+  /* 窗口高度恒定：上方留出「工具条 + 设置菜单」的空间，歌词永远在底部居中。
+     菜单就地展开在这个预留区里 → 开关菜单完全不改变窗口尺寸，不会跳动。 */
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: flex-end;
+    position: relative;
+    padding-bottom: 8px;
+  }
+  /* ── 顶部预留层：装工具条与设置菜单（不占布局流，避免推开歌词） ── */
+  #topLayer {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center;
+    pointer-events: none;
+  }
+  /* ── 顶部悬浮工具条：默认隐藏，悬停出现 ──
+     注意：锁定后仍必须可点（pointer-events 保持 auto），
+     只是不随窗口整体高亮而已——否则锁定后按钮全废。 */
+  #bar {
+    -webkit-app-region: no-drag;
+    display: flex; align-items: center; gap: 2px;
+    background: rgba(20, 22, 30, 0.78);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 18px;
+    padding: 3px 8px;
+    /* 固定贴在顶部：菜单在其上方展开时工具条不会被推着走（视觉零位移） */
+    position: absolute; bottom: var(--controls-bottom, 76px); left: 50%;
+    transform: translateX(-50%);
+    opacity: 0; pointer-events: none;
+    transition: opacity .18s ease;
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    z-index: 2;
+  }
+  body:not(.locked).near-bar #bar { opacity: 1; pointer-events: auto; }
+  /* 穿透态下 CSS :hover 不可靠（鼠标事件被转发但样式悬停不触发），
+     改由 JS 按鼠标坐标加 .near-bar 来点亮，保证"鼠标移过去工具条就出现" */
+  body.locked.near-lyric #lockFloat { opacity: 1; pointer-events: auto; }
+  /* 菜单展开时工具条常显：否则鼠标从按钮移向菜单，工具条淡出 → 菜单像"自己藏起来" */
+  body.menu-open #bar { opacity: 1; pointer-events: auto; }
+  /* 菜单打开时用不透明底色，避免透出歌词文字 */
+  body.menu-open { background: transparent; }
+  /* 锁定后：工具条依然可以点，只是不再整条高亮 */
+  body.locked #bar { opacity: 0 !important; pointer-events: none !important; transition: none; }
+  body.locked #menu { display: none !important; }
+  #bar button {
+    -webkit-app-region: no-drag;
+    border: none; outline: none; cursor: pointer;
+    width: 26px; height: 26px; line-height: 26px;
+    background: transparent; color: #d7dbe4;
+    border-radius: 50%; font-size: 13px; text-align: center;
+    transition: background .12s, color .12s;
+  }
+  #bar button:hover { background: rgba(255,255,255,.14); color: #fff; }
+  #bar button.brand { font-size: 15px; color: #1ecd8a; }
+  #bar button.accent:hover { color: #1ecd8a; }
+  #bar button.on { color: #1ecd8a; }
+  #bar #bBack, #bar #bFwd { width: 40px; font-size: 12px; }
+  #bar .sep { width: 1px; height: 14px; background: rgba(255,255,255,.18); margin: 0 3px; }
+
+  /* ── 设置下拉菜单：在顶部预留区就地展开，不超出窗口、不改窗口尺寸 ── */
+  #menu {
+    -webkit-app-region: no-drag;
+    display: none; flex-direction: column;
+    position: absolute; bottom: calc(var(--controls-bottom, 76px) + 42px); left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    min-width: 168px; max-width: 240px;
+    background: rgba(28, 30, 38, 0.96);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px;
+    padding: 5px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    pointer-events: auto;
+    max-height: calc(100vh - var(--controls-bottom, 76px) - 50px);
+    overflow-y: auto;
+  }
+  #menu.open { display: flex; }
+  #menu .mi {
+    -webkit-app-region: no-drag;
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; border-radius: 6px;
+    font-size: 12px; color: #dfe3ec; cursor: pointer;
+    white-space: nowrap; line-height: 1.5;
+  }
+  #menu .mi:hover { background: rgba(255,255,255,.10); }
+  #menu .mi .ic { width: 15px; text-align: center; font-size: 12px; opacity: .9; }
+  #menu .mi .arw { margin-left: auto; opacity: .55; font-size: 11px; }
+  #menu .mi.checked .tick { margin-left: auto; color: #ff4d4f; font-size: 12px; }
+  #menu .msep { height: 1px; background: rgba(255,255,255,.10); margin: 4px 8px; }
+
+  /* ── 歌词文字：无背景框，渐变填充 + 柔和描边 ── */
+  /* 窗口整体是透明矩形，空白处会挡住桌面图标 → 由主进程做穿透，
+     这里只需保证「歌词本体 + 工具条 + 菜单」可交互（app-region 与命中矩形上报）。 */
+  #lyricBox {
+    -webkit-app-region: drag;
+    position: relative;
+    display: inline-block;          /* 宽度跟随文字，不占满窗口 */
+    max-width: calc(100% - 92px);
+    padding: 0 10px 6px;
+    text-align: center;
+  }
+  body.locked #lyricBox { -webkit-app-region: no-drag; }
+  #cur {
+    font-size: 28px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: linear-gradient(90deg, #ffb1e1 0%, #d5a5ff 45%, #a8c8ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 1px rgba(90,40,120,.85)) drop-shadow(0 1px 3px rgba(0,0,0,.55));
+  }
+  #cur.solid {
+    background: none; -webkit-background-clip: initial; background-clip: initial;
+    -webkit-text-fill-color: currentColor; color: #1ecd8a;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,.55));
+  }
+  #sub {
+    font-size: 16px; margin-top: 3px;
+    color: rgba(255,255,255,.82);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.6));
+  }
+  #sub:empty { display: none; }
+  body.single #sub { display: none; }
+  /* 外文歌词显示 = 不显示时隐藏副行 */
+  body.hide-sub #sub { display: none !important; }
+  /* 竖排歌词 */
+  body.vertical #lyricBox {
+    max-width: 120px; max-height: 180px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  body.vertical #cur { writing-mode: vertical-rl; text-orientation: upright; font-size: 24px; line-height: 1.35; }
+  body.vertical #sub { writing-mode: vertical-rl; text-orientation: upright; }
+  body.vertical #lyricBox::after {
+    content: ''; position: absolute; top: 4px; right: 2px;
+    width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.5);
+  }
+
+  /* ── 锁定态：仍保留一个小锁用于快速解锁（工具条始终可点） ── */
+  #lockFloat {
+    -webkit-app-region: no-drag;
+    position: absolute; top: 2px; right: -28px;
+    width: 24px; height: 24px; line-height: 24px; text-align: center;
+    border: none; outline: none; cursor: pointer;
+    background: rgba(20,22,30,.55); color: #d7dbe4; border-radius: 50%;
+    font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s;
+  }
+  body:not(.locked) #lockFloat { display: none; }
+  #cur:empty + #sub:empty { visibility: hidden; }
+</style>
+</head>
+<body>
+  <!-- 顶部预留层：工具条 + 设置菜单（高度恒定，菜单开关不改窗口尺寸） -->
+  <div id="topLayer">
+    <div id="bar">
+      <button id="bHome" class="brand" title="小杨音乐">♪</button>
+      <span class="sep"></span>
+      <button id="bBack" title="歌词提前 0.5s">-0.5s</button>
+      <button id="bFwd" title="歌词延后 0.5s">+0.5s</button>
+      <span class="sep"></span>
+      <button id="bPrev" title="上一首">⏮</button>
+      <button id="bPlay" title="播放 / 暂停">⏸</button>
+      <button id="bNext" title="下一首">⏭</button>
+      <span class="sep"></span>
+      <button id="bSet" class="accent" title="歌词设置">⚙</button>
+      <button id="bLock" class="accent" title="锁定歌词位置">🔓</button>
+      <button id="bClose" class="accent" title="关闭桌面歌词">✕</button>
+    </div>
+    <div id="menu"></div>
+  </div>
+  <div id="lyricBox">
+    <button id="lockFloat" title="解锁歌词位置">🔒</button>
+    <div id="cur"></div>
+    <div id="sub"></div>
+  </div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    const box = document.getElementById('lyricBox');
+    const cur = document.getElementById('cur');
+    const sub = document.getElementById('sub');
+    const bar = document.getElementById('bar');
+    const bPlay = document.getElementById('bPlay');
+    const bLock = document.getElementById('bLock');
+    const lockFloat = document.getElementById('lockFloat');
+    const menu = document.getElementById('menu');
+
+    /* ── 锁定：禁拖动窗口，但仍保留工具条可点（只去掉整条高亮） ── */
+    let locked = localStorage.getItem('uzz.lyricLock') === '1';
+    // send 必须在 applyLock 之前定义：applyLock() 会立刻被调用并用到 send
+    const send = (ch, v) => ipcRenderer.send(ch, v);
+    function applyLock(v, notify = true) {
+      locked = v;
+      document.body.classList.toggle('locked', v);
+      bLock.textContent = v ? '🔒' : '🔓';
+      bLock.title = v ? '已锁定，靠近歌词右侧可解锁' : '锁定歌词并隐藏工具条';
+      if (v) { menu.classList.remove('open'); document.body.classList.remove('menu-open', 'near-bar'); }
+      localStorage.setItem('uzz.lyricLock', v ? '1' : '0');
+      // 关键：通知主进程真正改变窗口穿透行为
+      // （原先只写本页 localStorage，主进程完全不知情 → 设置形同虚设）
+      if (notify) send('lyric:setLocked', v);
+    }
+    applyLock(locked, false);
+    bLock.addEventListener('click', (e) => { e.stopPropagation(); applyLock(!locked); });
+    lockFloat.addEventListener('click', (e) => { e.stopPropagation(); applyLock(false); });
+
+    /* ── 把歌词设置真正作用到界面上（原先只存配置、没改渲染，等于失效） ── */
+    function applyCfg() {
+      const c = getCfg();
+      // 总在最前 → 同步到主进程（setCfg 时已发，这里兜底首启）
+      // 双行模式：single 时只显示当前句，隐藏翻译/下一句
+      document.body.classList.toggle('single', !!c.single);
+      // 外文歌词显示：跟随主界面 / 总是显示 / 不显示
+      const st = c.showTrans || '跟随主界面';
+      document.body.classList.toggle('hide-sub', st === '不显示');
+      document.body.classList.toggle('force-sub', st === '总是显示');
+      // 竖排歌词：writing-mode 竖排
+      const vert = !!c.vertical;
+      box.style.writingMode = vert ? 'vertical-rl' : 'horizontal-tb';
+      box.style.textOrientation = vert ? 'upright' : '';
+      document.body.classList.toggle('vertical', vert);
+      // 对齐方式
+      box.style.textAlign = c.align === '左对齐' ? 'left' : c.align === '右对齐' ? 'right' : 'center';
+      // 配色
+      const mode = c.dark || '默认渐变';
+      cur.classList.toggle('solid', mode !== '默认渐变');
+      if (mode === '纯色·绿') cur.style.color = '#1ecd8a';
+      else if (mode === '纯色·粉') cur.style.color = '#ff8fc7';
+      else if (mode === '纯色·金') cur.style.color = '#ffc861';
+      else if (mode === '纯色·蓝') cur.style.color = '#7ab6ff';
+      else cur.style.color = '';
+    }
+    // 启动与外部改动时都应用一次
+    setTimeout(applyCfg, 60);
+    window.addEventListener('storage', applyCfg);
+
+    /* ── 工具条动作 ── */
+
+    /* ── 空白穿透：把可交互元素（歌词/工具条/菜单）的矩形上报主进程 ──
+       主进程据此决定 setIgnoreMouseEvents：
+       鼠标在空白处 → 整窗穿透，桌面图标可正常拖动；
+       鼠标移到歌词或工具条上 → 临时接管，可点可拖。 */
+    function measureLayout() {
+      const r = box.getBoundingClientRect();
+      document.body.style.setProperty('--controls-bottom', (innerHeight - r.top + 8) + 'px');
+    }
+    function reportHitRects() {
+      measureLayout();
+      const rects = [];
+      const push = el => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height) rects.push([Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]);
+      };
+      if (locked) push(lockFloat);
+      else {
+        push(box); push(bar);
+        if (menu.classList.contains('open')) push(menu);
+      }
+      send('lyric:hitTest', rects);
+    }
+    let hitTimer = null, hideTimer = null;
+    function scheduleHit() { clearTimeout(hitTimer); hitTimer = setTimeout(reportHitRects, 30); }
+    window.addEventListener('resize', scheduleHit);
+    new ResizeObserver(scheduleHit).observe(box);
+    new MutationObserver(scheduleHit).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+    setTimeout(reportHitRects, 50);
+    let lastInside = null;
+    function rectHit(el, x, y, pad = 8) {
+      const r = el.getBoundingClientRect();
+      return !!(r.width && r.height && x >= r.left-pad && x <= r.right+pad && y >= r.top-pad && y <= r.bottom+pad);
+    }
+    function showBar() { clearTimeout(hideTimer); hideTimer = null; if (!locked) document.body.classList.add('near-bar'); }
+    function hideControls() { document.body.classList.remove('near-bar', 'near-lyric'); }
+    function reportPointer(inside) {
+      if (inside !== lastInside) { lastInside = inside; send('lyric:pointer', inside); }
+    }
+    window.addEventListener('mousemove', e => {
+      if (locked) {
+        const near = rectHit(box, e.clientX, e.clientY, 36) || rectHit(lockFloat, e.clientX, e.clientY, 12);
+        document.body.classList.toggle('near-lyric', near);
+        reportPointer(near && rectHit(lockFloat, e.clientX, e.clientY, 8));
+        return;
+      }
+      const inside = rectHit(box,e.clientX,e.clientY,12) || rectHit(bar,e.clientX,e.clientY,12)
+        || (menu.classList.contains('open') && rectHit(menu,e.clientX,e.clientY,10));
+      if (inside) showBar();
+      else if (!hideTimer) hideTimer = setTimeout(() => { hideTimer=null; if (!menu.classList.contains('open')) hideControls(); }, 450);
+      reportPointer(inside);
+    }, { passive: true });
+    window.addEventListener('mouseleave', () => {
+      clearTimeout(hideTimer); hideTimer=null; hideControls(); reportPointer(false);
+    });
+
+    // 锁定状态由主进程统一下发（设置页切换时同步）
+    // 带守卫：值未变化时不回发，避免与主进程互相触发形成循环
+    ipcRenderer.on('lyric:locked', (e, on) => {
+      const v = !!on;
+      if (v === locked) return;
+      applyLock(v, false);
+      reportHitRects();
+    });
+    // 首次加载时向主进程询问当前锁定态，避免与设置页不一致
+    send('lyric:askLocked');
+    document.getElementById('bHome').addEventListener('click', () => send('lyric:showMain'));
+    document.getElementById('bBack').addEventListener('click', () => send('lyric:offset', -0.5));
+    document.getElementById('bFwd').addEventListener('click', () => send('lyric:offset', 0.5));
+    document.getElementById('bPrev').addEventListener('click', () => send('lyric:ctrl', 'prev'));
+    bPlay.addEventListener('click', () => send('lyric:ctrl', 'toggle'));
+    document.getElementById('bNext').addEventListener('click', () => send('lyric:ctrl', 'next'));
+    document.getElementById('bClose').addEventListener('click', () => send('lyric:close'));
+
+    /* ── 设置菜单（参考网易云桌面歌词设置） ── */
+    const getCfg = () => {
+      try { return JSON.parse(localStorage.getItem('uzz.dl.cfg') || '{}'); } catch (e) { return {}; }
+    };
+    const setCfg = (k, v) => {
+      const c = getCfg();
+      c[k] = v;
+      localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
+      // 通知主进程 → 转发给设置页应用样式
+      send('lyric:cfg', c);
+    };
+    const items = [
+      { key: 'alwaysTop', ic: '⇧', label: '总在最前', type: 'check' },
+      { key: 'doubleMode', ic: '▢', label: '切换双行模式', type: 'act' },
+      { key: 'showTrans', ic: '译', label: '外文歌词显示', type: 'sub', sub: ['跟随主界面', '总是显示', '不显示'] },
+      { key: 'vertical', ic: 'T', label: '切换竖排歌词', type: 'toggle' },
+      { key: 'align', ic: '≡', label: '对齐方式', type: 'sub', sub: ['左对齐', '居中', '右对齐'] },
+      { key: 'dark', ic: '◐', label: '更换配色', type: 'sub', sub: ['默认渐变', '纯色·绿', '纯色·粉', '纯色·金', '纯色·蓝'] },
+      { key: 'more', ic: '⋯', label: '更多设置', type: 'main' },
+    ];
+    function renderMenu() {
+      const c = getCfg();
+      menu.innerHTML = items.map((it) => {
+        if (it.type === 'check') {
+          return `<div class="mi" data-k="${it.key}" data-t="check">`
+            + `<span class="ic">${it.ic}</span><span>${it.label}</span>`
+            + (c[it.key] === false ? '' : '<span class="tick">✓</span>') + `</div>`;
+        }
+        if (it.type === 'toggle') {
+          return `<div class="mi" data-k="${it.key}" data-t="toggle">`
+            + `<span class="ic">${it.ic}</span><span>${it.label}</span>`
+            + (c[it.key] ? '<span class="tick">✓</span>' : '') + `</div>`;
+        }
+        if (it.type === 'sub') {
+          return `<div class="mi" data-k="${it.key}" data-t="sub">`
+            + `<span class="ic">${it.ic}</span><span>${it.label}</span><span class="arw">›</span></div>`;
+        }
+        if (it.type === 'main') {
+          return `<div class="msep"></div><div class="mi" data-k="${it.key}" data-t="main">`
+            + `<span class="ic">${it.ic}</span><span>${it.label}</span></div>`;
+        }
+        return `<div class="mi" data-k="${it.key}" data-t="act">`
+          + `<span class="ic">${it.ic}</span><span>${it.label}</span></div>`;
+      }).join('');
+    }
+    // 二级子菜单（对齐方式 / 配色）
+    let subBack = null;
+    function renderSub(it) {
+      subBack = renderMenu;
+      const c = getCfg();
+      menu.innerHTML = `<div class="mi" data-t="back"><span class="arw">‹</span><span>${it.label}</span></div>`
+        + it.sub.map((s) => {
+          const on = it.key === 'align'
+            ? (c.align === s || (!c.align && s === '居中'))
+            : (c[it.key] === s);
+          return `<div class="mi" data-k="${it.key}" data-v="${s}" data-t="pick">`
+            + `<span style="width:15px"></span><span>${s}</span>`
+            + (on ? '<span class="tick">✓</span>' : '') + `</div>`;
+        }).join('');
+    }
+    menu.addEventListener('click', (e) => {
+      // 必须阻止冒泡：否则会命中 document 上的"点别处关闭"，
+      // 表现为一点子菜单菜单就自己关掉（用户反馈"点击设置菜单会自动隐藏"）。
+      e.stopPropagation();
+      const el = e.target.closest('.mi');
+      if (!el) return;
+      const t = el.dataset.t, k = el.dataset.k;
+      if (t === 'back') { subBack(); return; }
+      if (t === 'sub') { renderSub(items.find((x) => x.key === k)); scheduleHit(); return; }
+      if (t === 'check') { setCfg(k, getCfg()[k] === false ? true : false); renderMenu(); applyCfg(); scheduleHit(); return; }
+      if (t === 'toggle') { setCfg(k, !getCfg()[k]); renderMenu(); applyCfg(); scheduleHit(); return; }
+      if (t === 'pick') {
+        setCfg(k, el.dataset.v);
+        applyCfg();                 // 立即生效（对齐/配色/翻译显示）
+        subBack ? subBack() : renderMenu();
+        scheduleHit();
+        return;
+      }
+      if (t === 'act') {
+        if (k === 'doubleMode') {
+          const c = getCfg();
+          c.single = !c.single;
+          localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
+          send('lyric:cfg', c);
+          applyCfg();
+          renderMenu();
+        }
+        return;
+      }
+      if (t === 'main') { menu.classList.remove('open'); document.body.classList.remove('menu-open'); scheduleHit(); send('lyric:openSettings'); return; }
+    });
+    const bSet = document.getElementById('bSet');
+    bSet.addEventListener('click', (e) => {
+      e.stopPropagation();
+      subBack = null;
+      renderMenu();
+      menu.classList.toggle('open');
+      // 菜单展开时强制工具条保持可见（否则鼠标移向菜单时工具条淡出，菜单跟着看不见）
+      document.body.classList.toggle('menu-open', menu.classList.contains('open'));
+    });
+    // 点别处关闭：用 closest 精确判断，菜单内部点击不关闭
+    document.addEventListener('click', (e) => {
+      if (!menu.classList.contains('open')) return;
+      if (e.target === bSet) return;
+      if (e.target.closest && e.target.closest('#menu')) return;
+      menu.classList.remove('open');
+      document.body.classList.remove('menu-open');
+    });
+    renderMenu();
+
+    /* ── 样式：兼容设置页推参（字体/字号/字粗/描边/配色/行数/对齐），默认渐变 ── */
+    function applyStyle(s) {
+      s = s || {};
+      if (s.font) { cur.style.fontFamily = s.font; sub.style.fontFamily = s.font; }
+      if (s.size) { cur.style.fontSize = s.size + 'px'; sub.style.fontSize = Math.round(s.size * 0.55) + 'px'; }
+      if (s.weight) { cur.style.fontWeight = s.weight; sub.style.fontWeight = s.weight; }
+      const shadow = s.stroke === false ? 'none' : 'drop-shadow(0 1px 3px rgba(0,0,0,.75))';
+      cur.style.filter = shadow; sub.style.filter = shadow;
+      if (s.unplayed) sub.style.color = s.unplayed;
+      const grad = s.gradient !== false && s.gradient !== '0';
+      cur.classList.toggle('solid', !grad);
+      if (!grad) {
+        if (s.played) cur.style.color = s.played;
+      } else {
+        cur.style.color = '';
+      }
+      document.body.classList.toggle('single', s.layout === 'single');
+      if (s.align) box.style.textAlign = s.align;
+      const c = getCfg();
+      if (s.layout) c.single = s.layout === 'single';
+      if (s.align) c.align = ({ left: '左对齐', right: '右对齐', center: '居中' })[s.align] || '居中';
+      if (typeof s.topmost === 'boolean') c.alwaysTop = s.topmost;
+      if (typeof s.trans === 'boolean') c.showTrans = s.trans ? '跟随主界面' : '不显示';
+      if (s.gradient !== undefined) c.dark = grad ? '默认渐变' : ({ '#1ecd8a': '纯色·绿', '#ff8fc7': '纯色·粉', '#ffc861': '纯色·金', '#7ab6ff': '纯色·蓝' })[s.played] || '自定义';
+      localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
+      document.body.classList.toggle('hide-sub', c.showTrans === '不显示');
+      scheduleHit();
+    }
+    ipcRenderer.on('lyric:config', (e, cfg) => {
+      localStorage.setItem('uzz.dl.cfg', JSON.stringify(cfg || {}));
+      applyCfg(); scheduleHit();
+    });
+
+    /* ── 歌词内容：cur=当前句，sub=翻译（有翻译显示翻译，否则显示下一句） ── */
+    ipcRenderer.on('lyric:payload', (e, p) => {
+      p = p || {};
+      if (!p.keep) {
+        cur.textContent = p.cur || '';
+        sub.textContent = p.trans || p.next || '';
+      }
+      if (typeof p.playing === 'boolean') {
+        bPlay.textContent = p.playing ? '⏸' : '▶';
+        bPlay.title = p.playing ? '暂停' : '播放';
+      }
+      scheduleHit();   // 歌词长度变化 → 歌词框宽度变化 → 命中矩形要更新
+    });
+    ipcRenderer.on('lyric:style', (e, s) => applyStyle(s));
+  </script>
+</body>
+</html>

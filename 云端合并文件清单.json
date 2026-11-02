@@ -1,0 +1,112 @@
+[
+  {
+    "Path": "app/index.html",
+    "Change": "modified",
+    "SHA256": "F27B9400AA9C9CEC3137FB09548AEDFC565F133E0C520C8E84D404F59C495ABF"
+  },
+  {
+    "Path": "app/js/player.js",
+    "Change": "modified",
+    "SHA256": "0AA1CBC988295AE09CE6E2E56ADBEC50E5868017E699B0529B5C650B0BFF87C1"
+  },
+  {
+    "Path": "app/js/app.js",
+    "Change": "modified",
+    "SHA256": "FD1BF26443BF129416BC8C13737AEEB6DC288B3858EB8C145BAC7D568B6A9156"
+  },
+  {
+    "Path": "app/js/studio.js",
+    "Change": "modified",
+    "SHA256": "86C26AADB85F2EA0FB508AED5CDDF82F420D70398418F53F9A4F6CBF779D7828"
+  },
+  {
+    "Path": "package.json",
+    "Change": "modified",
+    "SHA256": "63623F4AD24C695B629F319B816E540BB0CA7C5B30B3785998B9AE88E3DC87B7"
+  },
+  {
+    "Path": "test/regression.cjs",
+    "Change": "modified",
+    "SHA256": "12BE88F7E3961643676065509FCAA815B843641CC20605FCE76249779A5B1298"
+  },
+  {
+    "Path": "test/studio.test.cjs",
+    "Change": "modified",
+    "SHA256": "EE34D4B441567BC1DC9AD241A7CFED0FA225F96B48307C429FFD6C6F7A69F077"
+  },
+  {
+    "Path": "test/electron-regression.cjs",
+    "Change": "modified",
+    "SHA256": "56347DD8F2CFC56891D196CC89A65F2981A7FD5D3E6CE8FFFF36B9F36ADC9255"
+  },
+  {
+    "Path": "app/js/supabase-client.js",
+    "Change": "added",
+    "SHA256": "20EB102BB17BFF6F3F1CB702044689600E76FB0C55C757C9EB132E9E81A52B3B"
+  },
+  {
+    "Path": "app/js/cloud-features.js",
+    "Change": "added",
+    "SHA256": "B66457F7B948ED698D5E0827FABD3AADFAF924AC80B20DD896B2DD3EC0A58C02"
+  },
+  {
+    "Path": "app/js/favorite-button.js",
+    "Change": "added",
+    "SHA256": "94BDBAA9CA58548BBA1291FC7122CE616C568236DFE6181E183C739487CA2541"
+  },
+  {
+    "Path": "app/js/cloud-player.js",
+    "Change": "added",
+    "SHA256": "03D9BD59422065890392CBDA67DC975EA7051349EAC91E9951A4F05923F050FE"
+  },
+  {
+    "Path": "app/css/cloud.css",
+    "Change": "added",
+    "SHA256": "F987532E0AAC86115A656227DE47EDD5F29DF8EEA77BCA26A70A0A620BB931C0"
+  },
+  {
+    "Path": "supabase/app_versions.sql",
+    "Change": "added",
+    "SHA256": "E870F6B95609C14258596FC34DE8000F519292A72A701AD90F3FEADA587362ED"
+  },
+  {
+    "Path": "supabase/favorites-delete-policy.sql",
+    "Change": "added",
+    "SHA256": "33993D6C2BD34609BD33D8FCAA4CCFF1C14621565BE915906DA01129CEDFB485"
+  },
+  {
+    "Path": "test/cloud-functions.cjs",
+    "Change": "added",
+    "SHA256": "5E5F7ED1A6ECE7510D7ACCDB6BAE1A5E22E5FFB96A31466E6410150484618D50"
+  },
+  {
+    "Path": "test/cloud-integration.cjs",
+    "Change": "added",
+    "SHA256": "0B795834F33E112DAE1F468CFC469FAD0FD0CB47D52A8C137EE1ECA4E365791E"
+  },
+  {
+    "Path": "云端合并说明.md",
+    "Change": "added",
+    "SHA256": "319193103BFC6F3F8F70D9AEBBEA7965627BB15141BCF2434813330D3920FE2D"
+  },
+  {
+    "Path": "electron/package.json",
+    "Change": "modified",
+    "SHA256": "47A3460974ACAE9453ED312403BC8E3382E1EBEA96AB2F6674D885772C694DEB"
+  },
+  {
+    "Path": "electron/package-lock.json",
+    "Change": "modified",
+    "SHA256": "16A58A13D77A0262A6F4F4100FC2D80008D7F66C419CD1300A7DE5802D76CD7F"
+  },
+  {
+    "Path": "electron/main.js",
+    "Change": "modified",
+    "SHA256": "5026EBD6310E4D587A513D914EC971F14AD6E000A98EEE1A723AF2D4C16C9F1B"
+  },
+  {
+    "Path": "README.md",
+    "Change": "modified",
+    "SHA256": "8FEBDFD1E392764DBA3A3AEEF048A628CD5FE42EAFE39B363D4399DC7E5602BF"
+  }
+]

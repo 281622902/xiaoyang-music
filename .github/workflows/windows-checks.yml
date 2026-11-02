@@ -1,0 +1,32 @@
+name: Windows regression and installer
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix server
+      - run: npm ci --prefix electron
+      - run: npm run test:release
+      - run: npm exec --prefix electron -- playwright install chromium
+      - run: npm test
+      - run: npm run test:studio
+      - run: |
+          $env:MOCK = '1'
+          npm run test:flow
+      - run: |
+          $env:ELECTRON_PATH = (Resolve-Path electron/node_modules/electron/dist/electron.exe).Path
+          npm run test:electron
+      - run: npm run test:upgrade
+      - run: npm run dist --prefix electron -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xiaoyang-windows-installer
+          path: electron/dist/*.exe

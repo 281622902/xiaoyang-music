@@ -1,0 +1,19 @@
+{
+  "name": "小杨音乐",
+  "short_name": "小杨音乐",
+  "description": "小杨音乐 · 你的个人音乐空间",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0c151c",
+  "theme_color": "#0c151c",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

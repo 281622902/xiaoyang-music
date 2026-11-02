@@ -1,0 +1,32 @@
+{
+  "name": "uzz-music-player",
+  "version": "3.0.1",
+  "description": "小杨音乐：多音源音乐播放器与本地音乐库",
+  "scripts": {
+    "dev": "node server/index.js",
+    "build:desktop": "npm ci --prefix server && npm ci --prefix electron && npm run dist --prefix electron",
+    "release:desktop": "npm run build:desktop && node tools/publish-lan.js",
+    "publish:lan": "node tools/publish-lan.js",
+    "cap:init": "npx cap init",
+    "cap:add": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "build:android": "npx cap build android",
+    "test": "node test/regression.cjs",
+    "test:flow": "node test/flow.js",
+    "test:electron": "node test/electron-regression.cjs",
+    "test:upgrade": "node --test test/upgrade.test.cjs",
+    "test:studio": "node --test test/studio.test.cjs",
+    "test:cloud": "node test/cloud-functions.cjs && node test/cloud-integration.cjs",
+    "test:release": "node --test test/release.test.cjs",
+    "release:sync": "node scripts/update-supabase.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/cli": "^6.1.0",
+    "@capacitor/core": "^6.1.0"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,9 @@
+{
+  "appId": "com.uzz.musicplayer",
+  "appName": "uzz 音乐播放器",
+  "webDir": "app",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {}
+}

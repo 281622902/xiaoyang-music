@@ -1,0 +1,78 @@
+name: Build Windows release and sync Supabase
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_REPOSITORY: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_ARCH: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate tag and package versions
+        run: node scripts/update-supabase.js --validate
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix server
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test release configuration and sync script
+        run: npm run test:release
+
+      - name: Configure repository metadata for nested Electron project
+        run: >-
+          node -e "const fs=require('node:fs');const file='electron/package.json';const p=JSON.parse(fs.readFileSync(file,'utf8'));p.repository={type:'git',url:'https://github.com/'+process.env.RELEASE_REPOSITORY+'.git'};fs.writeFileSync(file,JSON.stringify(p,null,2)+'\n');"
+
+      - name: Build and upload draft GitHub Release
+        working-directory: electron
+        run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          EP_DRAFT: 'true'
+
+      - name: Save installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaoyang-windows-${{ github.ref_name }}
+          path: |
+            electron/dist/*.exe
+            electron/dist/*.blockmap
+            electron/dist/latest.yml
+          if-no-files-found: error
+
+      - name: Sync version to Supabase
+        run: node scripts/update-supabase.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          VERIFY_GITHUB_ASSET: 'true'

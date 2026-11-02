@@ -1,0 +1,97 @@
+{
+  "name": "xiaoyang-music-player",
+  "version": "3.0.1",
+  "description": "小杨音乐（多音源聚合播放器）桌面安装包",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "draft"
+      }
+    ],
+    "appId": "com.xiaoyang.musicplayer",
+    "productName": "小杨音乐",
+    "copyright": "Copyright © 2026 小杨音乐",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "lyric.html",
+      "build/icon.ico",
+      "build/installer.nsh",
+      "installer-launcher.js",
+      "backend-start.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../server",
+        "to": "server"
+      },
+      {
+        "from": "../app",
+        "to": "web"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "xiaoyang-music-${version}-${arch}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "小杨音乐",
+      "include": "build/installer.nsh",
+      "runAfterFinish": true
+    },
+    "fileAssociations": {
+      "ext": [
+        "mp3",
+        "flac",
+        "wav",
+        "ogg",
+        "opus",
+        "m4a",
+        "aac",
+        "ape",
+        "wma",
+        "wv",
+        "tta",
+        "mp2",
+        "dsf",
+        "dff",
+        "aif",
+        "aiff",
+        "alac",
+        "mka",
+        "ac3",
+        "tak",
+        "mpc"
+      ],
+      "name": "小杨音乐音频文件",
+      "role": "Viewer"
+    }
+  },
+  "devDependencies": {
+    "electron": "30.5.1",
+    "electron-builder": "^24.13.3",
+    "playwright": "^1.48.0"
+  }
+}

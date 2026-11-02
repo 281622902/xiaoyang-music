@@ -1,0 +1,9 @@
+node_modules/
+electron/dist/
+安装包/
+server/.localdata/
+Tencent/
+*.log
+.env
+.env.*
+!.env.example

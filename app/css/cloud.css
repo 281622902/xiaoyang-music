@@ -1,0 +1,16 @@
+.cloud-heart { position:relative; flex-shrink:0; color:var(--text-2); }
+.cloud-heart svg { width:23px; height:23px; fill:none; stroke:currentColor; stroke-width:1.7; }
+.cloud-heart.is-favorited { color:#ed5677; }
+.cloud-heart.is-favorited svg { fill:currentColor; }
+.cloud-heart:disabled { opacity:.4; cursor:default; }
+.cloud-heart[aria-busy="true"] { opacity:.6; cursor:wait; }
+.cloud-heart .cloud-badge { position:absolute; right:-2px; bottom:0; font-size:12px; line-height:1; background:var(--bg-1); border-radius:4px; }
+.cloud-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+.cloud-collection { list-style:none; padding:0; margin:12px 0; max-height:220px; overflow:auto; }
+.cloud-collection li { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:12px; }
+.cloud-collection li span { min-width:0; flex:1; overflow-wrap:anywhere; }
+.cloud-collection li button { flex-shrink:0; color:var(--text-2); font-size:11px; }
+#legacyAccount { margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
+#legacyAccount summary { cursor:pointer; color:var(--text-2); font-size:12px; }
+#cloudUserName { font-size:16px; margin-top:18px; }
+#cloudAccountStatus { white-space:pre-wrap; }
