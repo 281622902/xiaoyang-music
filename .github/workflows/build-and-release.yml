@@ -48,10 +48,6 @@ jobs:
       - name: Test release configuration and sync script
         run: npm run test:release
 
-      - name: Configure repository metadata for nested Electron project
-        run: >-
-          node -e "const fs=require('node:fs');const file='electron/package.json';const p=JSON.parse(fs.readFileSync(file,'utf8'));p.repository={type:'git',url:'https://github.com/'+process.env.RELEASE_REPOSITORY+'.git'};fs.writeFileSync(file,JSON.stringify(p,null,2)+'\n');"
-
       - name: Build and upload draft GitHub Release
         working-directory: electron
         run: npx electron-builder --win nsis --x64 --publish always

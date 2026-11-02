@@ -2,6 +2,13 @@
   "name": "uzz-music-player",
   "version": "3.0.1",
   "description": "小杨音乐：多音源音乐播放器与本地音乐库",
+  "author": {
+    "name": "小杨"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/281622902/xiaoyang-music.git"
+  },
   "scripts": {
     "dev": "node server/index.js",
     "build:desktop": "npm ci --prefix server && npm ci --prefix electron && npm run dist --prefix electron",

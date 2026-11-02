@@ -35,8 +35,12 @@ test('tag/version drift, invalid repository and mismatched assets fail before pu
   assert.throws(() => getReleaseConfig({ ...env, RELEASE_ASSET_NAME: 'wrong.exe' }), /不一致/);
   assert.throws(() => getReleaseConfig({ ...env, RELEASE_ARCH: 'arm64' }), /x64/);
 });
-test('draft publish configuration omits owner/repo and credentials', () => {
-  assert.deepEqual(desktop.build.publish, [{ provider: 'github', releaseType: 'draft' }]);
+test('draft publish configuration explicitly identifies the repository and author', () => {
+  assert.deepEqual(desktop.build.publish, [{ provider: 'github', owner: '281622902', repo: 'xiaoyang-music', releaseType: 'draft' }]);
+  for (const metadata of [pkg, desktop]) {
+    assert.ok(metadata.author.name);
+    assert.deepEqual(metadata.repository, { type: 'git', url: 'https://github.com/281622902/xiaoyang-music.git' });
+  }
   assert.equal(desktop.build.nsis.artifactName, 'xiaoyang-music-${version}-${arch}-setup.${ext}');
   assert.ok(pkg.dependencies['@supabase/supabase-js']);
   assert.ok(!desktop.build.files.some(file => /scripts|\.env/.test(file)));
@@ -64,9 +68,7 @@ test('workflow parses and sends secrets only to the required steps', () => {
   assert.equal(sync.env.SUPABASE_URL, '${{ secrets.SUPABASE_URL }}');
   assert.equal(sync.env.SUPABASE_SERVICE_ROLE_KEY, '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}');
   assert.equal(sync.env.VERIFY_GITHUB_ASSET, 'true'); assert.ok(job.steps.indexOf(sync) > job.steps.indexOf(build));
-  const metadata = job.steps.find(step => step.name === 'Configure repository metadata for nested Electron project');
-  assert.match(metadata.run, /process\.env\.RELEASE_REPOSITORY/);
-  assert.ok(job.steps.indexOf(metadata) < job.steps.indexOf(build));
+  assert.ok(!job.steps.some(step => step.run?.includes('p.repository=')));
   const checks = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/windows-checks.yml'), 'utf8'));
   assert.deepEqual(checks.on.push.branches, ['**']); assert.equal(checks.on.push.tags, undefined);
   assert.ok(checks.jobs.windows.steps.some(step => step.run?.includes('--publish never')));

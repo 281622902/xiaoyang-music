@@ -2,6 +2,13 @@
   "name": "xiaoyang-music-player",
   "version": "3.0.1",
   "description": "小杨音乐（多音源聚合播放器）桌面安装包",
+  "author": {
+    "name": "小杨"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/281622902/xiaoyang-music.git"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -11,6 +18,8 @@
     "publish": [
       {
         "provider": "github",
+        "owner": "281622902",
+        "repo": "xiaoyang-music",
         "releaseType": "draft"
       }
     ],

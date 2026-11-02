@@ -32,7 +32,7 @@ GH_TOKEN 需要目标仓库 Contents 写权限。若使用 classic PAT，公共�
 4. 保存 Actions 安装包 artifact。
 5. 在根目录执行 `node scripts/update-supabase.js`；先通过 GitHub API 确认该 Tag 的安装包确实上传完成，再写入 Supabase。
 
-owner/repo 在 publish 配置中省略，不填写空字符串。当前固定使用的 electron-builder 24 在 `electron/` 子目录中不能直接找到仓库根目录的 `.git/config`；工作流因此在打包前从 `${{ github.repository }}` 自动填入临时的 Electron package.json `repository` 元数据，再由 builder 自动识别 owner/repo。该步骤不修改源仓库提交，也不需要额外仓库名 Secret。
+根目录和 electron/package.json 已明确填写作者“小杨”及仓库 `https://github.com/281622902/xiaoyang-music.git`。Electron 的 build.publish 明确配置 `owner: "281622902"`、`repo: "xiaoyang-music"`，保留草稿模式，不再依赖 `.git/config` 自动识别。工作流已移除临时覆盖 repository 的步骤；请在该仓库中运行发布流程。
 
 为了让上传名和下载链接一致，NSIS 安装包名固定为：
 
