@@ -52,12 +52,12 @@ jobs:
         timeout-minutes: 3
         run: npm run test:release
 
-      - name: Build and upload draft GitHub Release
+      - name: Build and upload GitHub Release
         working-directory: electron
         run: npx electron-builder --win nsis --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          EP_DRAFT: 'true'
+          EP_DRAFT: 'false'
 
       - name: Save installer artifact
         uses: actions/upload-artifact@v4
@@ -69,10 +69,16 @@ jobs:
             electron/dist/latest.yml
           if-no-files-found: error
 
-      - name: Sync version to Supabase
+      # electron-builder 24 可能复用同 Tag 已有的草稿；上传完成后自动正式发布。
+      - name: Ensure GitHub Release is published
+        shell: pwsh
+        run: gh release edit "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" --draft=false --prerelease=false
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Sync published version to Supabase
         run: node scripts/update-supabase.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VERIFY_GITHUB_ASSET: 'true'

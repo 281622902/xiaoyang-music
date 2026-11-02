@@ -9,12 +9,14 @@ const desktop = require('../electron/package.json');
 const env = { RELEASE_REPOSITORY: 'example-owner/music-player', RELEASE_TAG: 'v' + pkg.version,
   SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'mock-service-key', GH_TOKEN: 'mock-gh-token' };
 const logger = { log() {}, warn() {} };
-function mockGitHub({ draft = true, missing = false, httpError = false } = {}) {
+function mockGitHub({ draft = false, prerelease = false, published = true, missing = false, httpError = false, downloadUrl } = {}) {
   return async (url, options) => {
     assert.equal(options.headers.Authorization, 'Bearer mock-gh-token');
     if (httpError) return { ok: false, status: 403 };
-    const data = url.includes('/assets?') ? (missing ? [] : [{ name: getReleaseConfig(env).assetName, state: 'uploaded', size: 1024 }])
-      : [{ id: 123, tag_name: env.RELEASE_TAG, draft }];
+    const config = getReleaseConfig(env);
+    const data = url.includes('/assets?') ? (missing ? [] : [{ name: config.assetName, state: 'uploaded', size: 1024, browser_download_url: downloadUrl || config.row.download_url }])
+      : { id: 123, tag_name: env.RELEASE_TAG, draft, prerelease, published_at: published && !draft ? '2026-11-03T00:00:00Z' : null };
+    if (!url.includes('/assets?')) assert.ok(url.endsWith('/releases/tags/' + encodeURIComponent(env.RELEASE_TAG)));
     return { ok: true, json: async () => data };
   };
 }
@@ -91,8 +93,8 @@ test('sync refuses an unprepared installer version before writing any database r
   await assert.rejects(syncRelease({ env: { ...env, RELEASE_TAG: 'v99.0.0' }, logger, createClient: () => { called = true; } }), /--prepare/);
   assert.equal(called, false);
 });
-test('draft publish configuration explicitly identifies the repository and author', () => {
-  assert.deepEqual(desktop.build.publish, [{ provider: 'github', owner: '281622902', repo: 'xiaoyang-music', releaseType: 'draft' }]);
+test('formal publish configuration explicitly identifies the repository and author', () => {
+  assert.deepEqual(desktop.build.publish, [{ provider: 'github', owner: '281622902', repo: 'xiaoyang-music', releaseType: 'release' }]);
   for (const metadata of [pkg, desktop]) {
     assert.ok(metadata.author.name);
     assert.deepEqual(metadata.repository, { type: 'git', url: 'https://github.com/281622902/xiaoyang-music.git' });
@@ -122,19 +124,40 @@ test('workflow parses and sends secrets only to the required steps', () => {
   const sync = job.steps.find(step => step.run === 'node scripts/update-supabase.js');
   assert.equal(build['working-directory'], 'electron'); assert.match(build.run, /--publish always/);
   assert.equal(build.env.GH_TOKEN, '${{ secrets.GH_TOKEN }}');
+  assert.equal(build.env.EP_DRAFT, 'false');
   assert.equal(build.env.SUPABASE_SERVICE_ROLE_KEY, undefined);
   assert.equal(sync.env.SUPABASE_URL, '${{ secrets.SUPABASE_URL }}');
   assert.equal(sync.env.SUPABASE_SERVICE_ROLE_KEY, '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}');
-  assert.equal(sync.env.VERIFY_GITHUB_ASSET, 'true'); assert.ok(job.steps.indexOf(sync) > job.steps.indexOf(build));
+  assert.equal(sync.env.GH_TOKEN, '${{ secrets.GH_TOKEN }}');
+  const publish = job.steps.find(step => step.name === 'Ensure GitHub Release is published');
+  assert.match(publish.run, /gh release edit/); assert.match(publish.run, /--draft=false --prerelease=false/);
+  assert.equal(publish.env.GH_TOKEN, '${{ secrets.GH_TOKEN }}');
+  assert.ok(job.steps.indexOf(publish) > job.steps.indexOf(build));
+  assert.ok(job.steps.indexOf(sync) > job.steps.indexOf(publish));
   assert.ok(job.steps.indexOf(prepare) < job.steps.indexOf(build));
   assert.ok(!job.steps.some(step => step.run?.includes('p.repository=')));
   const checks = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/windows-checks.yml'), 'utf8'));
   assert.deepEqual(checks.on.push.branches, ['**']); assert.equal(checks.on.push.tags, undefined);
   assert.ok(checks.jobs.windows.steps.some(step => step.run?.includes('--publish never')));
 });
-test('authenticated verification finds the expected draft and uploaded installer', async () => {
+test('verification finds the published release and returns the actual attachment download URL', async () => {
   const release = await verifyGitHubAsset(getReleaseConfig(env), env, mockGitHub());
-  assert.equal(release.id, 123); assert.equal(release.draft, true);
+  assert.equal(release.id, 123); assert.equal(release.draft, false); assert.equal(release.prerelease, false);
+  assert.equal(release.download_url, getReleaseConfig(env).row.download_url);
+});
+test('draft, prerelease or unpublished records never reach the database client', async () => {
+  let created = false;
+  for (const options of [{ draft: true }, { prerelease: true }, { published: false }]) {
+    await assert.rejects(syncRelease({ env, logger, fetchImpl: mockGitHub(options), createClient: () => { created = true; } }), /尚未正式发布/);
+  }
+  assert.equal(created, false);
+});
+test('wrong or external download links are rejected before database writes', async () => {
+  let created = false;
+  for (const downloadUrl of ['https://example.test/app.exe', 'https://github.com/example-owner/music-player/releases/download/v0.0.0/wrong.exe']) {
+    await assert.rejects(syncRelease({ env, logger, fetchImpl: mockGitHub({ downloadUrl }), createClient: () => { created = true; } }), /下载地址.*不一致/);
+  }
+  assert.equal(created, false);
 });
 test('missing asset or denied GitHub access blocks database writes', async () => {
   let writes = 0;
@@ -152,8 +175,8 @@ test('first sync inserts and retry updates the same platform/version record', as
       assert.equal(opts.onConflict, 'platform,version'); rows.set(row.platform + ':' + row.version, { ...row }); return { error: null };
     } }; } };
   };
-  for (let i = 0; i < 2; i++) await syncRelease({ env: { ...env, VERIFY_GITHUB_ASSET: 'true' }, createClient, fetchImpl: mockGitHub(), logger: { log() {}, warn() { warnings++; } } });
-  assert.equal(creations, 2); assert.equal(rows.size, 1); assert.equal(warnings, 2);
+  for (let i = 0; i < 2; i++) await syncRelease({ env, createClient, fetchImpl: mockGitHub(), logger: { log() {}, warn() { warnings++; } } });
+  assert.equal(creations, 2); assert.equal(rows.size, 1); assert.equal(warnings, 0);
   assert.equal([...rows.values()][0].version, pkg.version);
 });
 test('missing service credentials and invalid URL fail without network writes', async () => {
@@ -163,6 +186,6 @@ test('missing service credentials and invalid URL fail without network writes', 
 });
 test('database failures propagate and secret values are redacted in CLI messages', async () => {
   const createClient = () => ({ from: () => ({ upsert: async () => ({ error: { message: 'database unavailable' } }) }) });
-  await assert.rejects(syncRelease({ env, createClient, logger }), /database unavailable/);
+  await assert.rejects(syncRelease({ env, createClient, fetchImpl: mockGitHub(), logger }), /database unavailable/);
   assert.equal(safeMessage(new Error('bad ' + env.GH_TOKEN + '\n' + env.SUPABASE_SERVICE_ROLE_KEY), env), 'bad [REDACTED] [REDACTED]');
 });

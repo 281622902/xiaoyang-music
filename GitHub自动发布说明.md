@@ -16,7 +16,7 @@ npm install @supabase/supabase-js
 
 | Secret | 用途 |
 | --- | --- |
-| GH_TOKEN | 创建 GitHub 草稿 Release、上传安装包、验证附件 |
+| GH_TOKEN | 创建和正式发布 GitHub Release、上传安装包、验证附件 |
 | SUPABASE_URL | Supabase 项目 URL |
 | SUPABASE_SERVICE_ROLE_KEY | 仅在同步步骤运行的服务端密钥 |
 
@@ -28,11 +28,12 @@ GH_TOKEN 需要目标仓库 Contents 写权限。若使用 classic PAT，公共�
 
 1. 检出 Tag 对应的提交，通过 `node scripts/update-supabase.js --prepare` 从当前 Tag 提取版本；现有版本不同只输出 Warning，随后在 Runner 中同步根目录、Electron、锁文件和前端回退版本。
 2. 安装根目录 SDK、后端运行依赖和 Electron 打包依赖，运行发布测试。
-3. 在 `electron/` 执行 `npx electron-builder --win nsis --x64 --publish always`，通过 GH_TOKEN 创建草稿 Release 并上传产物。
+3. 在 `electron/` 执行 `npx electron-builder --win nsis --x64 --publish always`，通过 GH_TOKEN 创建正式 Release 并上传产物。
 4. 保存 Actions 安装包 artifact。
-5. 在根目录执行 `node scripts/update-supabase.js`；先通过 GitHub API 确认该 Tag 的安装包确实上传完成，再写入 Supabase。
+5. 执行 `gh release edit ... --draft=false --prerelease=false`，保证对应 Release 已正式发布；兼容 electron-builder 复用同 Tag 已有草稿的情况。
+6. 在根目录执行 `node scripts/update-supabase.js`；通过 GitHub API 确认该 Tag 是已发布的正式版、安装包上传完成，取得实际的 browser_download_url 后写入 Supabase。
 
-根目录和 electron/package.json 已明确填写作者“小杨”及仓库 `https://github.com/281622902/xiaoyang-music.git`。Electron 的 build.publish 明确配置 `owner: "281622902"`、`repo: "xiaoyang-music"`，保留草稿模式，不再依赖 `.git/config` 自动识别。工作流已移除临时覆盖 repository 的步骤；请在该仓库中运行发布流程。
+根目录和 electron/package.json 已明确填写作者“小杨”及仓库 `https://github.com/281622902/xiaoyang-music.git`。Electron 的 build.publish 明确配置 `owner: "281622902"`、`repo: "xiaoyang-music"`、`releaseType: "release"`，不再依赖 `.git/config` 自动识别。工作流的 EP_DRAFT 为 false；请在该仓库中运行发布流程。
 
 为了让上传名和下载链接一致，NSIS 安装包名固定为：
 
@@ -50,11 +51,13 @@ https://github.com/owner/repo/releases/download/v3.0.1/xiaoyang-music-3.0.1-x64-
 
 本机升级包扫描和局域网发布工具也已兼容新英文文件名，并继续接受旧中文名。
 
-## 草稿与公开下载
+## 全自动正式发布与公开下载
 
-按本次要求，创建草稿后立即同步版本记录。**草稿附件在手动点击 Publish release 前不可公开下载**；因此此时播放器可能提示存在新版本，但普通用户尚不能下载。需要先在 GitHub 检查草稿并发布，链接随后才能供公开播放器使用。私有仓库的附件即使发布，也不适合匿名客户端直接下载。
+提交本次配置并推送包含修复的新 Tag 后，Actions 自动构建、上传、正式发布，再同步 Supabase，**不需要手动点击 Publish release**。原有 UI 测试放行策略和动态 Tag 版本准备保留。
 
-若希望避免提前提示更新，下一步可把数据库同步改为 `release.published` 触发；当前文件保持你要求的“打包完成后同步”流程，没有自动将草稿转为公开发布。
+当前 electron-builder 24 如果找到同 Tag 的已有草稿，可能直接复用；因此工作流在所有上传完成后补一次 GitHub CLI 正式发布操作。这只处理当前工作流对应的 Tag，不批量修改历史草稿。本次只修改文件，没有直接发布现有草稿或推送 Tag。
+
+同步脚本始终验证 `draft === false`、`prerelease === false`、有效的 `published_at` 和安装包上传状态；任何一项不满足就停止写库。数据库下载链接来自 GitHub 附件实际的 `browser_download_url`，同时校验仓库、Tag 与文件名，避免使用猜测或错误附件链接。正式版和草稿的 URL 格式本身相同，区分依据是发布状态。
 
 ## 同步脚本行为
 
@@ -62,7 +65,7 @@ https://github.com/owner/repo/releases/download/v3.0.1/xiaoyang-music-3.0.1-x64-
 - 默认写 `platform: 'windows'`、`release_notes: '新版本发布'`。
 - 使用 `upsert`：首次插入，同一版本重跑更新同一条记录，避免唯一约束导致失败。依赖之前 app_versions.sql 中的 `(platform, version)` 唯一约束。
 - Supabase Auth 持久会话与自动刷新关闭；服务端密钥只读取环境变量，不输出到日志。
-- GitHub 附件校验或数据库写入失败会返回非零退出码，让 Actions 标红。可修正问题后重跑工作流；不会删除 Release 或其他版本记录。
+- GitHub 正式发布、附件校验或数据库写入失败会返回非零退出码，让 Actions 标红。可修正问题后重跑工作流；不会删除 Release 或其他版本记录。
 - `.env` 已加入忽略规则；工作流和安装包不写入 Secret 值。
 
 可选环境变量：
@@ -73,7 +76,8 @@ https://github.com/owner/repo/releases/download/v3.0.1/xiaoyang-music-3.0.1-x64-
 | RELEASE_TAG | 工作流传入 Tag；本机未设置时默认为 v + package.json 版本 |
 | RELEASE_ARCH | 默认 x64，当前仅支持 Windows x64 |
 | RELEASE_ASSET_NAME | 可选；必须与 builder 配置解析出的名称一致 |
-| VERIFY_GITHUB_ASSET | 工作流为 true；校验需 GH_TOKEN。本机不设置时可只执行数据库同步 |
+
+执行数据库同步时也必须提供 GH_TOKEN，发布状态与附件校验始终执行，不能通过取消环境变量跳过。`--prepare` 和 `--validate` 仍不访问 GitHub 或 Supabase，不需要凭证。
 
 仅校验配置（不访问 GitHub、不访问 Supabase、不需要 SDK 或密钥；版本差异只 Warning，不会返回 exit 1）：
 
@@ -118,6 +122,6 @@ git push origin v3.0.1
 
 ## 本次验证
 
-已通过 15 项本地测试，新增覆盖“v3.0.3 + 旧 3.0.1 元数据”、GitHub ref 动态读取、无 Tag 本机回退、预检 Warning 且退出码为 0、Runner 版本同步及保留依赖版本、未准备的安装包不写库；原有发布、附件和幂等测试保留。没有推送 Tag、创建 GitHub Release、读取仓库 Secrets 或写入正式 Supabase。
+已通过 17 项本地测试，覆盖动态 Tag、版本准备、正式版配置、发布步骤顺序、实际附件下载链接、草稿/预发布/未发布拒绝写库、错误链接拒绝写库、重跑幂等及异常处理。没有推送 Tag、创建或发布 GitHub Release、读取仓库 Secrets 或写入正式 Supabase。
 
 参考：[electron-builder 发布配置](https://www.electron.build/docs/publish/)、[GitHub Releases API 与草稿可见性](https://docs.github.com/en/rest/releases/releases)、[Supabase SDK 安装](https://supabase.com/docs/reference/javascript/installing)。

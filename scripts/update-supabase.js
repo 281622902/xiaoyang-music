@@ -86,14 +86,11 @@ async function verifyGitHubAsset(config, env, fetchImpl = globalThis.fetch) {
     return response.json();
   }
   const base = 'https://api.github.com/repos/' + config.repository;
-  let release;
-  // 草稿不能依赖公开 tag 下载接口；使用带身份验证的列表查找。
-  for (let page = 1; page <= 100; page++) {
-    const releases = await get(base + '/releases?per_page=100&page=' + page);
-    release = releases.find(item => item.tag_name === config.tag);
-    if (release || releases.length < 100) break;
+  const release = await get(base + '/releases/tags/' + encodeURIComponent(config.tag));
+  if (release.tag_name !== config.tag) throw new Error('GitHub Release 的 Tag 与当前版本不一致');
+  if (release.draft !== false || release.prerelease !== false || !Number.isFinite(Date.parse(release.published_at))) {
+    throw new Error('该 Tag 尚未正式发布（可能是草稿或预发布），此次不写入 Supabase');
   }
-  if (!release) throw new Error('未找到对应 GitHub Release，请先完成 electron-builder 发布');
   let asset;
   for (let page = 1; page <= 100; page++) {
     const assets = await get(base + '/releases/' + release.id + '/assets?per_page=100&page=' + page);
@@ -101,7 +98,13 @@ async function verifyGitHubAsset(config, env, fetchImpl = globalThis.fetch) {
     if (asset || assets.length < 100) break;
   }
   if (!asset || asset.state !== 'uploaded' || !(asset.size > 0)) throw new Error('GitHub Release 中未找到上传完成的安装包：' + config.assetName);
-  return release;
+  let download;
+  try { download = new URL(asset.browser_download_url); } catch { throw new Error('GitHub 未返回有效的安装包下载链接'); }
+  const expected = new URL(config.row.download_url);
+  if (download.origin !== expected.origin || download.pathname !== expected.pathname || download.search || download.hash) {
+    throw new Error('GitHub 附件下载地址与当前仓库、Tag 或安装包名称不一致');
+  }
+  return { ...release, download_url: download.href };
 }
 
 async function syncRelease({ env = process.env, createClient, fetchImpl = globalThis.fetch, logger = console } = {}) {
@@ -113,10 +116,9 @@ async function syncRelease({ env = process.env, createClient, fetchImpl = global
   let parsed;
   try { parsed = new URL(url); } catch { throw new Error('SUPABASE_URL 格式无效'); }
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash || !['', '/'].includes(parsed.pathname)) throw new Error('SUPABASE_URL 必须是 https 项目根地址');
-  if (env.VERIFY_GITHUB_ASSET === 'true') {
-    const release = await verifyGitHubAsset(config, env, fetchImpl);
-    if (release.draft) logger.warn('::warning::按配置同步草稿版本；该下载链接需手动 Publish release 后才能公开访问。');
-  }
+  // 同步始终校验正式发布状态及实际附件，不能通过环境变量绕过。
+  const release = await verifyGitHubAsset(config, env, fetchImpl);
+  config.row.download_url = release.download_url;
   if (!createClient) {
     try { ({ createClient } = require('@supabase/supabase-js')); }
     catch { throw new Error('请先在项目根目录运行 npm install @supabase/supabase-js'); }
