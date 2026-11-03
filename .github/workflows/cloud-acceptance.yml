@@ -1,0 +1,32 @@
+name: Isolated cloud account acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Create isolated no-SMS test accounts, or remove only marked test accounts'
+        required: true
+        default: setup
+        type: choice
+        options: [setup, cleanup]
+permissions:
+  contents: read
+concurrency:
+  group: isolated-cloud-acceptance
+  cancel-in-progress: false
+jobs:
+  account-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run owned test account operation
+        run: node scripts/cloud-acceptance.cjs '${{ inputs.action }}'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANDROID_ACCEPTANCE_PASSWORD: ${{ secrets.ANDROID_ACCEPTANCE_PASSWORD }}
