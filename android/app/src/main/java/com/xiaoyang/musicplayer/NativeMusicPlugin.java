@@ -42,6 +42,7 @@ public class NativeMusicPlugin extends Plugin {
     private boolean visible = true;
     private String lastQueueSignature = "";
     private final java.util.concurrent.ExecutorService files = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final java.util.concurrent.ExecutorService authFiles = java.util.concurrent.Executors.newSingleThreadExecutor();
     private final Runnable ticker = new Runnable(){public void run(){if(!destroyed){if(visible)emit();main.postDelayed(this,visible?500:2000);}}};
     @Override public void load() { main.post(()->{connect();main.post(ticker);handleFileIntent(getActivity().getIntent());}); }
     private void connect() {
@@ -68,6 +69,9 @@ public class NativeMusicPlugin extends Plugin {
     }
     private void emit(){if(controller!=null){MediaItem item=controller.getCurrentMediaItem();String id=item!=null?item.mediaId:"";JSONObject full=MusicService.resolved.get(id);String signature=MusicService.epoch+"|"+controller.getMediaItemCount()+"|"+controller.getCurrentMediaItemIndex()+"|"+id+"|"+(full!=null?full.hashCode():0);boolean changed=!signature.equals(lastQueueSignature);lastQueueSignature=signature;notifyListeners("state",snapshot(changed));}}
     @PluginMethod public void getState(PluginCall call){ready(call,()->{});}
+    @PluginMethod public void authStorageGet(PluginCall call){authFiles.execute(()->{try{String value=new NativeSessionStore(getContext()).get(call.getString("key",""));JSObject result=new JSObject();result.put("value",value==null?JSONObject.NULL:value);call.resolve(result);}catch(Exception error){call.reject("无法读取本机登录状态，请重新登录",error);}});}
+    @PluginMethod public void authStorageSet(PluginCall call){authFiles.execute(()->{try{new NativeSessionStore(getContext()).set(call.getString("key",""),call.getString("value"));call.resolve();}catch(Exception error){call.reject("无法保存本机登录状态，请重试",error);}});}
+    @PluginMethod public void authStorageRemove(PluginCall call){authFiles.execute(()->{try{new NativeSessionStore(getContext()).remove(call.getString("key",""));call.resolve();}catch(Exception error){call.reject("无法清除本机登录状态，请重试",error);}});}
     @PluginMethod public void getLaunchConfig(PluginCall call){main.post(()->{JSObject result=new JSObject();Intent intent=getActivity().getIntent();String backend=intent.getStringExtra("xy_backend");if((getContext().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0 && "http://localhost:3000".equals(backend))result.put("developmentBackend",backend);intent.removeExtra("xy_backend");call.resolve(result);});}
     @PluginMethod public void setQueue(PluginCall call){ready(call,()->{
         JSArray tracks=call.getArray("tracks",new JSArray());int index=call.getInt("index",0);String base=call.getString("base","");String url=call.getString("url","");
@@ -143,5 +147,5 @@ public class NativeMusicPlugin extends Plugin {
     @Override protected void handleOnNewIntent(Intent intent){handleFileIntent(intent);}
     @Override protected void handleOnPause(){visible=false;}
     @Override protected void handleOnResume(){visible=true;main.post(()->{connect();lastQueueSignature="";emit();});}
-    @Override protected void handleOnDestroy(){destroyed=true;main.removeCallbacksAndMessages(null);files.shutdownNow();if(future!=null)MediaController.releaseFuture(future);controller=null;}
+    @Override protected void handleOnDestroy(){destroyed=true;main.removeCallbacksAndMessages(null);files.shutdownNow();authFiles.shutdown();if(future!=null)MediaController.releaseFuture(future);controller=null;}
 }

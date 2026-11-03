@@ -1,0 +1,23 @@
+{
+  "device": "127.0.0.1:16416",
+  "isolatedInstance": true,
+  "noSms": true,
+  "originalAccountChanged": false,
+  "loginA": {
+    "ok": true,
+    "prefixApplied": true,
+    "passwordCleared": true
+  },
+  "sessionSurvivesForceStop": true,
+  "liveHeartAdded": true,
+  "logoutClearsSession": true,
+  "loginB": {
+    "ok": true,
+    "prefixApplied": true,
+    "passwordCleared": true
+  },
+  "accountBFavoriteIsolation": true,
+  "accountAFavoritePreserved": true,
+  "testFavoriteRemoved": true,
+  "passed": true
+}

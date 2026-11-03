@@ -25,5 +25,15 @@ function configureGitHub(){
  const values={ANDROID_KEYSTORE_BASE64:fs.readFileSync(keystore).toString('base64'),ANDROID_STORE_PASSWORD:env.XY_ANDROID_STORE_PASSWORD,ANDROID_KEY_ALIAS:env.XY_ANDROID_KEY_ALIAS,ANDROID_KEY_PASSWORD:env.XY_ANDROID_KEY_PASSWORD};
  for(const [name,value] of Object.entries(values)){const result=cp.spawnSync('gh',['secret','set',name,'--repo',repo],{input:value,encoding:'utf8',windowsHide:true});if(result.error||result.status!==0)throw Error('设置 '+name+' 失败；修复权限后可安全重试（沿用同一签名）');console.log('已配置 '+name);}
 }
-if(require.main===module)try{if(process.argv.includes('--create'))create();else if(process.argv.includes('--configure-github'))configureGitHub();else throw Error('参数：--create 或 --configure-github');}catch(e){console.error(e.message);process.exitCode=1;}
-module.exports={signingEnvironment,create,configureGitHub};
+function build(){
+ create();const {javaHome,sdkDirectory}=require('./build-android');const env={...signingEnvironment(),JAVA_HOME:javaHome(),ANDROID_HOME:sdkDirectory()};
+ if(!env.JAVA_HOME||!env.ANDROID_HOME)throw Error('需要 JDK 17 和 Android SDK 34');
+ const run=(exe,args,cwd=ROOT)=>{const result=cp.spawnSync(exe,args,{cwd,env,stdio:'inherit',windowsHide:true});if(result.error||result.status!==0)throw Error('正式构建命令失败：'+path.basename(exe));};
+ run(process.execPath,['scripts/build-android.js','--sync-only']);
+ run(process.env.ComSpec||'cmd.exe',['/d','/c','gradlew.bat','assembleRelease','--console=plain'],path.join(ROOT,'android'));
+ const file=path.join(ROOT,'android/app/build/outputs/apk/release/app-release.apk');
+ run(path.join(env.JAVA_HOME,'bin/java.exe'),['-jar',path.join(env.ANDROID_HOME,'build-tools/34.0.0/lib/apksigner.jar'),'verify',file]);
+ const version=JSON.parse(fs.readFileSync(path.join(ROOT,'package.json'),'utf8')).version,destination=path.join(path.dirname(file),'xiaoyang-music-'+version+'-android.apk');fs.copyFileSync(file,destination);console.log('正式签名 APK：'+destination);return destination;
+}
+if(require.main===module)try{if(process.argv.includes('--create'))create();else if(process.argv.includes('--configure-github'))configureGitHub();else if(process.argv.includes('--build'))build();else throw Error('参数：--create、--configure-github 或 --build');}catch(e){console.error(e.message);process.exitCode=1;}
+module.exports={signingEnvironment,create,configureGitHub,build};

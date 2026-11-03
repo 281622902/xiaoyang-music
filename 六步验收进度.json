@@ -1,6 +1,6 @@
 {
   "goal": "用户授权自动完成六步；仅实际验证后标记完成",
-  "branch": "codex/android-acceptance-20261103",
+  "branch": "main",
   "resumeAutomation": {
     "id": "automation",
     "schedule": "hourly",
@@ -14,8 +14,8 @@
     },
     {
       "id": 2,
-      "status": "partial",
-      "evidence": "移动 UI 10 组、桌面云端交互 11 组回归通过；真实已有会话红心添加/取消通过且恢复原状态；真实手机号密码登录/注册仍未验收"
+      "status": "complete",
+      "evidence": "真实 MuMu 两套无短信测试账户：手机号密码/+86/密码清空、force-stop 登录保持、退出清空、双账户红心隔离及重新登录恢复通过。WebView 会话丢失由 Keystore 加密+commit 原生存储修复"
     },
     {
       "id": 3,
@@ -30,7 +30,7 @@
     {
       "id": 5,
       "status": "partial",
-      "evidence": "稳定正式签名与 CI 四项 Secrets 已配置，同证书覆盖保留数据通过；准备 v3.0.12 真实云端签名发布/匿名镜像/版本同步"
+      "evidence": "v3.0.12 正式 APK 已发布，匿名下载 SHA-256 与正式 GitHub 附件一致；v3.0.13 本地正式签名构建已通过，尚未提交发布"
     },
     {
       "id": 6,
@@ -45,7 +45,7 @@
     "不绕过额度或认证限制",
     "公网部署仍只作为 README 后续方案"
   ],
-  "updatedAt": "2026-11-03T16:17:09.200Z",
+  "updatedAt": "2026-11-03T22:53:08.152Z",
   "blockerAudit": {
     "goalTurnsObserved": 1,
     "doNotMarkGoalBlockedBeforeThreeConsecutiveTurns": true
@@ -56,7 +56,11 @@
     "正式签名 .toolchain/signing/ 已存在；绝不重新生成/提交密钥",
     "Windows Computer Use 本轮因 URL 识别失败停止，不能在同一轮绕过",
     "未把六步全部验收完成，不可标记 goal complete",
-    "GitHub Secrets 已通过现有 Git 仓库认证配置；work/configure-signing-secrets.cjs 的 github() 可在内存中复用认证，不输出或保存令牌"
+    "GitHub Secrets 已通过现有 Git 仓库认证配置；work/configure-signing-secrets.cjs 的 github() 可在内存中复用认证，不输出或保存令牌",
+    "2026-11-04 06:52 本地只读复核：v3.0.13 修复仍在工作树未提交，勿覆盖；先完成提交和真实发布",
+    "真实密码验收已通过，无须索要用户密码；测试账户 cleanup run41675361628 成功",
+    "不能将六步标记完成：歌单 SQL DDL 与 ARM64 物理硬件尚缺"
   ],
-  "signingSecretsConfigured": true
+  "signingSecretsConfigured": true,
+  "backupBranch": "codex/android-acceptance-20261103"
 }
