@@ -1,0 +1,132 @@
+name: Android build and release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag, for example v3.0.7'
+        required: true
+        type: string
+      publish:
+        description: 'Publish the signed APK and synchronize Supabase'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: android-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  android:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
+      XY_MUSIC_API_BASE: ${{ vars.MUSIC_API_BASE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK 34
+        shell: pwsh
+        run: sdkmanager 'platform-tools' 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Prepare version and dependencies
+        shell: pwsh
+        run: |
+          node scripts/android-release.cjs --prepare
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node test/cloud-portable.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test test/media-transfer.cjs test/native-audio.cjs test/phone-network.cjs test/public-api.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/build-android.js --sync-only
+          exit $LASTEXITCODE
+      - name: Prepare signing key when configured
+        id: signing
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          XY_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          XY_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          XY_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          $ready = $env:ANDROID_KEYSTORE_BASE64 -and $env:XY_ANDROID_STORE_PASSWORD -and $env:XY_ANDROID_KEY_ALIAS -and $env:XY_ANDROID_KEY_PASSWORD
+          if ($ready) {
+            $keyFile = Join-Path $env:RUNNER_TEMP 'xiaoyang-android-release.keystore'
+            [IO.File]::WriteAllBytes($keyFile, [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+            "XY_ANDROID_KEYSTORE=$keyFile" >> $env:GITHUB_ENV
+            'ready=true' >> $env:GITHUB_OUTPUT
+          } else {
+            'ready=false' >> $env:GITHUB_OUTPUT
+            Write-Host '::notice::Android signing Secrets are missing. Only a debug artifact will be built; no APK will be officially published.'
+          }
+      - name: Build debug APK
+        if: steps.signing.outputs.ready != 'true'
+        run: npm run build:android
+      - name: Build signed release APK
+        if: steps.signing.outputs.ready == 'true'
+        working-directory: android
+        run: ./gradlew.bat assembleRelease
+        env:
+          XY_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          XY_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          XY_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Verify and name signed APK
+        if: steps.signing.outputs.ready == 'true'
+        shell: pwsh
+        run: |
+          $apk = 'android/app/build/outputs/apk/release/app-release.apk'
+          node scripts/android-release.cjs --check-apk $apk
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:ANDROID_HOME/build-tools/34.0.0/apksigner.bat" verify $apk
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = $env:RELEASE_TAG.Substring(1)
+          Copy-Item -LiteralPath $apk -Destination "android/app/build/outputs/apk/release/xiaoyang-music-$version-android.apk"
+      - name: Save APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaoyang-android-${{ env.RELEASE_TAG }}
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/xiaoyang-music-*.apk
+          if-no-files-found: error
+      - name: Publish signed APK
+        if: steps.signing.outputs.ready == 'true' && (github.event_name == 'push' || inputs.publish)
+        shell: pwsh
+        run: |
+          gh release view "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" --verify-tag --title "$env:RELEASE_TAG" --notes '小杨音乐新版本'
+            if ($LASTEXITCODE -ne 0) {
+              gh release view "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" *> $null
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+          $version = $env:RELEASE_TAG.Substring(1)
+          gh release upload "$env:RELEASE_TAG" "android/app/build/outputs/apk/release/xiaoyang-music-$version-android.apk" --repo "$env:RELEASE_REPOSITORY" --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" --draft=false --prerelease=false
+          exit $LASTEXITCODE
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Sync formally published Android version to Supabase
+        if: steps.signing.outputs.ready == 'true' && (github.event_name == 'push' || inputs.publish)
+        run: node scripts/android-release.cjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}

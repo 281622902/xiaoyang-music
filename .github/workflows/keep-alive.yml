@@ -1,0 +1,19 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # 每 3 天运行一次 (UTC 时间中午12点)
+    - cron: '0 12 */3 * *'
+  workflow_dispatch: # 允许在网页上手动点一下立即执行
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database via REST API
+        run: |
+          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/keepalive?select=*&limit=1" \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+          --fail --silent --show-error
+          echo "✅ Supabase 保活请求成功"
