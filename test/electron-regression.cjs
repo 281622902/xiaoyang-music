@@ -23,7 +23,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     env: { ...process.env, MOCK: '1', PORT: String(blockedPort), UZZ_NO_AUTOPLAY_FLAG: '1' }, timeout: 30000,
   });
   const page = await app.firstWindow();
-  await page.route('https://cdn.jsdelivr.net/**', route => route.abort());
+  await page.route('**/vendor/supabase.min.js', route => route.abort());
   await page.waitForURL('http://localhost:*/', { timeout: 20000 });
   await page.waitForFunction(() => window.Player && window.uzzBridge);
   await page.route('**/api/**', route => {

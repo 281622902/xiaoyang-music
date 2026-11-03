@@ -16,7 +16,7 @@ test('foreign websites cannot create or access accounts',async()=>{const r=await
 test('account UI and settings layouts work at multiple window widths',async()=>{
   let pw;try{pw=require('playwright');}catch{pw=require('../electron/node_modules/playwright');}
   const browser=await pw.chromium.launch({executablePath:process.env.BROWSER_PATH||undefined});const page=await browser.newPage({viewport:{width:1180,height:820}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.route('https://cdn.jsdelivr.net/**',route=>route.abort());
+  await page.route('**/vendor/supabase.min.js',route=>route.abort());
   await page.route('**/api/**',route=>{if(/\/api\/(local|account)\//.test(route.request().url()))return route.continue();return route.fulfill({json:{code:200,tracks:[],list:[],charts:[],hot:[],info:{}}});});
   try{
     await page.goto(base);await page.click('#accountOpen');await page.locator('#legacyAccount summary').click();await page.click('#accountRegisterTab');await page.fill('#accountUsername','ui_user');await page.fill('#accountPassword','ui-test-password');await page.click('#accountSubmit');await page.waitForFunction(()=>!document.getElementById('accountMember').classList.contains('hidden'));assert.equal(await page.locator('#accountName').textContent(),'ui_user');

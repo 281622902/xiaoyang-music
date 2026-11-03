@@ -1,0 +1,12 @@
+**
+!server/
+!server/**
+!deploy/
+!deploy/Dockerfile
+server/node_modules/
+server/.localdata/
+**/.env
+**/.env.*
+**/*.log
+**/*.jks
+**/*.keystore

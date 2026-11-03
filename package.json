@@ -16,8 +16,8 @@
     "publish:lan": "node tools/publish-lan.js",
     "cap:init": "npx cap init",
     "cap:add": "npx cap add android",
-    "cap:sync": "npx cap sync",
-    "build:android": "npx cap build android",
+    "cap:sync": "npm run prepare:android && npx cap sync",
+    "build:android": "node scripts/build-android.js",
     "test": "node test/regression.cjs",
     "test:flow": "node test/flow.js",
     "test:electron": "node test/electron-regression.cjs",
@@ -25,15 +25,30 @@
     "test:studio": "node --test test/studio.test.cjs",
     "test:cloud": "node test/cloud-functions.cjs && node test/cloud-integration.cjs",
     "test:release": "node --test test/release.test.cjs",
-    "release:sync": "node scripts/update-supabase.js"
+    "release:sync": "node scripts/update-supabase.js",
+    "prepare:android": "node scripts/prepare-android.cjs",
+    "test:android": "node test/android-regression.cjs",
+    "test:mobile": "node test/mobile-app.cjs",
+    "test:portable": "node test/cloud-portable.cjs",
+    "test:android-release": "node --test test/android-release.cjs",
+    "test:recovery": "node --test test/media-transfer.cjs test/native-audio.cjs",
+    "test:phone-network": "node --test test/phone-network.cjs",
+    "test:public-api": "node --test test/public-api.cjs",
+    "android:sync": "node scripts/build-android.js --sync-only",
+    "android:install": "node scripts/build-android.js --install"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.3",
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/browser": "^6.0.6",
+    "@capacitor/core": "^6.2.3",
+    "@capacitor/keyboard": "^6.0.4",
+    "@capacitor/status-bar": "^6.0.3",
     "@supabase/supabase-js": "^2.118.0"
   },
   "devDependencies": {
-    "@capacitor/android": "^6.1.0",
     "@capacitor/cli": "^6.1.0",
-    "@capacitor/core": "^6.1.0"
+    "esbuild": "^0.28.2"
   },
   "license": "MIT"
 }

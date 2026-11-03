@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const { getReleaseConfig, prepareRelease, verifyGitHubAsset, syncRelease, safeMessage } = require('../scripts/update-supabase');
+const { releaseVersion } = require('../scripts/release');
 const pkg = require('../package.json');
 const desktop = require('../electron/package.json');
 const env = { RELEASE_REPOSITORY: 'example-owner/music-player', RELEASE_TAG: 'v' + pkg.version,
@@ -188,4 +189,63 @@ test('database failures propagate and secret values are redacted in CLI messages
   const createClient = () => ({ from: () => ({ upsert: async () => ({ error: { message: 'database unavailable' } }) }) });
   await assert.rejects(syncRelease({ env, createClient, fetchImpl: mockGitHub(), logger }), /database unavailable/);
   assert.equal(safeMessage(new Error('bad ' + env.GH_TOKEN + '\n' + env.SUPABASE_SERVICE_ROLE_KEY), env), 'bad [REDACTED] [REDACTED]');
+});
+
+function releaseHarness({ localExists = false, remoteExists = false, remoteFailure = false, detached = false, diff = 1, failCommand = '' } = {}) {
+  const calls = []; let prepared;
+  const runGit = args => {
+    calls.push(args);
+    if (args[0] === failCommand) return { status: 1, stderr: 'mock failure' };
+    if (args[0] === 'rev-parse') return { status: 0, stdout: root };
+    if (args[0] === 'symbolic-ref') return { status: detached ? 1 : 0, stdout: 'main' };
+    if (args[0] === 'show-ref') return { status: localExists ? 0 : 1 };
+    if (args[0] === 'ls-remote') return { status: remoteFailure ? 128 : remoteExists ? 0 : 2 };
+    if (args[0] === 'diff') return { status: diff };
+    return { status: 0, stdout: '' };
+  };
+  const options = { projectRoot: root, repository: '281622902/xiaoyang-music', runGit, logger,
+    prepare(value) { prepared = value; } };
+  return { calls, options, get prepared() { return prepared; } };
+}
+test('release.bat passes unexpanded input to Node and rejects malformed versions', () => {
+  const batch = fs.readFileSync(path.join(root, 'release.bat'), 'utf8');
+  assert.match(batch, /DisableDelayedExpansion/); assert.match(batch, /set \/p "XY_RELEASE_VERSION=/);
+  assert.ok(!batch.includes('%XY_RELEASE_VERSION%'));
+  for (const input of ['', 'v3.0.6', '3.0', '03.0.6', '3.0.6 & echo injected']) {
+    const h = releaseHarness(); assert.throws(() => releaseVersion(input, h.options), /X.Y.Z/); assert.equal(h.calls.length, 0);
+  }
+});
+test('release command prepares, stages, commits, tags and atomically pushes code plus tag', () => {
+  const h = releaseHarness(); const result = releaseVersion('3.0.6', h.options);
+  assert.equal(h.prepared.env.RELEASE_TAG, 'v3.0.6');
+  assert.deepEqual(h.calls.filter(a => ['add', 'commit', 'tag', 'push'].includes(a[0])), [
+    ['add', '.'], ['commit', '-m', 'release: v3.0.6'], ['tag', 'v3.0.6'],
+    ['push', '--atomic', 'origin', 'HEAD:refs/heads/main', 'refs/tags/v3.0.6']
+  ]);
+  assert.equal(result.tag, 'v3.0.6');
+});
+test('existing local tag prevents metadata changes and git add', () => {
+  const h = releaseHarness({ localExists: true }); assert.throws(() => releaseVersion('3.0.6', h.options), /本地 Tag.*已存在/);
+  assert.equal(h.prepared, undefined); assert.ok(!h.calls.some(a => a[0] === 'add'));
+});
+test('existing remote tag prevents metadata changes and git add', () => {
+  const h = releaseHarness({ remoteExists: true }); assert.throws(() => releaseVersion('3.0.6', h.options), /远端 Tag.*已存在/);
+  assert.equal(h.prepared, undefined); assert.ok(!h.calls.some(a => a[0] === 'add'));
+});
+test('remote check failure or detached HEAD stops before any release writes', () => {
+  for (const options of [{ remoteFailure: true }, { detached: true }]) {
+    const h = releaseHarness(options); assert.throws(() => releaseVersion('3.0.6', h.options)); assert.equal(h.prepared, undefined);
+  }
+});
+test('failed commit never creates or pushes a release tag', () => {
+  const h = releaseHarness({ failCommand: 'commit' }); assert.throws(() => releaseVersion('3.0.6', h.options), /git commit.*失败/);
+  assert.ok(!h.calls.some(a => ['tag', 'push'].includes(a[0])));
+});
+test('failed push leaves local history intact and explains the partial result', () => {
+  const h = releaseHarness({ failCommand: 'push' }); assert.throws(() => releaseVersion('3.0.6', h.options), /本地提交和 Tag 已保留/);
+  assert.equal(h.calls.filter(a => a[0] === 'push').length, 1); assert.ok(!h.calls.some(a => a.includes('--force') || a.includes('--delete')));
+});
+test('unchanged staged content skips an empty commit and still pushes the new tag', () => {
+  const h = releaseHarness({ diff: 0 }); releaseVersion('3.0.6', h.options);
+  assert.ok(!h.calls.some(a => a[0] === 'commit')); assert.ok(h.calls.some(a => a[0] === 'push'));
 });

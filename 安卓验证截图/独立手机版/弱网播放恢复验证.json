@@ -1,0 +1,54 @@
+{
+  "source": "generated 120s WAV, controlled HTTP outage, no cloud writes",
+  "failure": {
+    "message": "音源暂时不可用，请重试或切换歌曲",
+    "nativeCode": "ERROR_CODE_IO_BAD_HTTP_STATUS",
+    "position": 105,
+    "recoveryVisible": true,
+    "detectedMs": 207
+  },
+  "recovered": {
+    "id": "990000000001",
+    "position": 105.001,
+    "queue": 2,
+    "error": null,
+    "recoveryHidden": true
+  },
+  "reopened": {
+    "id": "990000000001",
+    "position": 105.419,
+    "paused": false
+  },
+  "resolutions": [
+    "990000000001",
+    "990000000001",
+    "990000000002"
+  ],
+  "requests": [
+    {
+      "range": "",
+      "failed": false
+    },
+    {
+      "range": "bytes=1680044-",
+      "failed": true
+    },
+    {
+      "range": "bytes=1049644-",
+      "failed": true
+    },
+    {
+      "range": "",
+      "failed": false
+    },
+    {
+      "range": "bytes=1680044-",
+      "failed": false
+    },
+    {
+      "range": "",
+      "failed": false
+    }
+  ],
+  "exceptions": []
+}

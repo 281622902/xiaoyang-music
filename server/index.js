@@ -10,6 +10,7 @@ const { upstreamFetch: fetch, runRequest } = require('./request-context');
 const http = require('http');
 const fs = require('fs');
 const { Readable } = require('stream');
+const { pipeline } = require('node:stream/promises');
 const path = require('path');
 
 const netease = require('./providers/netease');
@@ -22,6 +23,7 @@ const gds = require('./providers/gds');
 const localLib = require('./local-lib');
 const localAccess = require('./local-access');
 const { audioExtension } = require('./audio-format');
+const { transferAudio } = require('./media-transfer');
 const accounts = require('./accounts');
 
 const USE_MOCK = process.env.MOCK === '1';
@@ -44,6 +46,8 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
 };
+const publicMode=process.env.XY_PUBLIC_API==='1';
+const publicGate=publicMode?require('./public-api').createGate():null;
 
 function getProvider(v) {
   return PROVIDERS[v] || PROVIDERS[DEFAULT_VENDOR] || netease;
@@ -242,7 +246,7 @@ async function handleApi(req, res, reqUrl) {
   const pathname = reqUrl.pathname;
 
   try {
-    if (pathname === '/api/health') return sendJson(res, 200, { code: 200, msg: 'ok' });
+    if (pathname === '/api/health') return sendJson(res, 200, { code: 200, msg: 'ok', ...(publicMode?{service:'xiaoyang-music-api',publicMode:true}:{}) });
 
     if (pathname === '/api/search') {
       const kw = q(reqUrl, 'keyword') || '';
@@ -510,11 +514,13 @@ const server = http.createServer((req, res) => runRequest(req, res, () => {
   let reqUrl;
   try { reqUrl = new URL(req.url, 'http://localhost'); }
   catch { res.writeHead(400); return res.end('Bad request'); }
+  if(publicGate&&!publicGate(req,res,reqUrl))return;
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
       'Access-Control-Allow-Headers': '*',
+      ...(req.headers.origin === 'https://localhost' ? { 'Access-Control-Allow-Private-Network': 'true' } : {}),
     });
     return res.end();
   }
@@ -585,36 +591,10 @@ async function handleStream(req, res, reqUrl) {
       Accept: '*/*',
     };
     if (req.headers.range) headers.Range = req.headers.range;
-    const upstream = await fetch(u.toString(), { headers, redirect: 'follow' });
-    if (!upstream.ok && upstream.status !== 206) {
-      res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('upstream ' + upstream.status);
-    }
-    const out = {
-      'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
-      'Access-Control-Allow-Origin': '*',
-      'Accept-Ranges': upstream.headers.get('accept-ranges') || 'bytes',
-    };
-    const cr = upstream.headers.get('content-range');
-    if (cr) out['Content-Range'] = cr;
-    const cl = upstream.headers.get('content-length');
-    if (cl) out['Content-Length'] = cl;
-    res.writeHead(upstream.status, out);
-    if (req.method === 'HEAD') return res.end();
-    // Web ReadableStream -> Node 流
-    const reader = upstream.body.getReader();
-    res.on('close', () => { try { reader.cancel(); } catch (e) {} });
-    (async () => {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!res.write(Buffer.from(value))) {
-          await new Promise((r) => res.once('drain', r));
-        }
-      }
-      res.end();
-    })().catch(() => { try { res.end(); } catch (e) {} });
+    await transferAudio(req, res, u.toString(), { headers });
   } catch (e) {
+    if (res.destroyed) return;
+    if (res.headersSent) return res.destroy();
     if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('stream error');
   }
@@ -650,8 +630,10 @@ async function handleDownload(req, res, reqUrl) {  const vendor = q(reqUrl, 'ven
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'no-store',
     });
-    Readable.fromWeb(r.body).pipe(res);
+    await pipeline(Readable.fromWeb(r.body), res);
   } catch (e) {
+    if (res.destroyed) return;
+    if (res.headersSent) return res.destroy();
     console.error('[download error]', e && e.message);
     if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('download error: ' + ((e && e.message) || ''));

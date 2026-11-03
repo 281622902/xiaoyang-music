@@ -6,7 +6,9 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const audio = $('audio');
+  const audio = global.XYAudio || $('audio');
+  let headless = false;
+  const emit = kind => document.dispatchEvent(new CustomEvent('xy:player', { detail: { kind } }));
 
   const STATE = {
     queue: [],          // [{id,name,artist,album,pic,vendor,url,lyric,duration}]
@@ -308,6 +310,7 @@
   function transOn() { return localStorage.getItem('uzz.lyricTrans') === '1'; }
 
   function renderLyric() {
+    if (headless) { emit('lyrics'); return; }
     const box = $('fpLyric');
     if (!STATE.lyrics.length) {
       box.innerHTML = '<p class="lr-empty">暂无歌词</p>';
@@ -368,6 +371,7 @@
     }
     pushLyric(idx);
     const box = $('fpLyric');
+    if (!box) return;
     if (idx < 0) return;
     const ps = box.querySelectorAll('p');
     if (ps.length <= idx) return;
@@ -382,6 +386,7 @@
   function renderNowPlaying() {
     const t = STATE.current;
     if (!t) return;
+    if (headless) { syncFavBtn(); notifyTrackChanged(); emit('track'); return; }
     // SMTC：把当前播放信息同步给 Windows 媒体控制中心（设置里开启后生效）
     try {
       if (localStorage.getItem('uzz.smtc') === '1' && navigator.mediaSession) {
@@ -431,6 +436,7 @@
   }
 
   function syncFavBtn() {
+    if (headless) { emit('favorites'); return; }
     const t = STATE.current;
     const on = !!(t && favorites.some((f) => f.id === t.id && f.vendor === t.vendor));
     const btn = $('fpFav');
@@ -448,6 +454,7 @@
   }
 
   function setPlayIcon(playing) {
+    if (headless) { document.body.classList.toggle('is-playing', !!playing); emit('play'); return; }
     const mp = $('miniPlay');
     if (mp) mp.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
     $('fpPlay').innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
@@ -567,7 +574,8 @@
     // 获取完整信息（url / lyric）— 传完整 track 以启用多音源兜底
     let full = STATE.current;
     try {
-      full = await UzzApi.getSong(track, undefined, signal);
+      full = (track.vendor === 'cloud' && /^https?:\/\//i.test(track.url || '')) || (track.vendor === 'device' && audio.nativeQueue && /^content:\/\//i.test(track.url || ''))
+        ? track : await UzzApi.getSong(track, undefined, signal);
       if (!seqAlive(seq)) return;   // 已被新的点击取代 → 丢弃本次结果
       const keep = { name: STATE.current.name, artist: STATE.current.artist, album: STATE.current.album, pic: STATE.current.pic };
       // 兜底来源只描述音频地址，不能改写原歌曲 ID 所属平台。
@@ -591,7 +599,7 @@
     // 歌词（含翻译，供「翻译歌词」开关使用）
     let lyric = STATE.current.lyric || '';
     let tlyric = '';
-    if (!lyric) {
+    if (!lyric && track.vendor !== 'device') {
       try {
         if (UzzApi.getLyricEx) {
           const lf = await UzzApi.getLyricEx(track.id, track.vendor, signal);
@@ -602,7 +610,7 @@
       } catch (e) { /* 歌词失败不阻塞播放 */ }
       if (!seqAlive(seq)) return;   // 歌词期间用户又点了别的歌
       STATE.current.lyric = lyric;
-    } else if (UzzApi.getLyricEx) {
+    } else if (track.vendor !== 'device' && UzzApi.getLyricEx) {
       UzzApi.getLyricEx(track.id, track.vendor, signal).then((f) => {
         // 令牌校验：防止旧歌的翻译歌词串到新歌上
         if (seqAlive(seq) && STATE.current && STATE.current.id === track.id) {
@@ -736,6 +744,7 @@
   }
 
   function next(auto) {
+    if (headless && audio.nativeQueue && STATE.queue.length) { audio.next(); return; }
     if (!STATE.queue.length) {
       if (!auto) toast('播放列表是空的，先去添加歌曲');   // 自动切歌不打扰，手动点击才提示
       return;
@@ -766,6 +775,7 @@
   }
 
   function prev() {
+    if (headless && audio.nativeQueue && STATE.queue.length) { audio.previous(); return; }
     if (!STATE.queue.length) { toast('播放列表是空的，先去添加歌曲'); return; }
     // 已经到第一首时回到当前（常见播放器行为），并给个提示
     if (STATE.index <= 0 && STATE.current) {
@@ -782,11 +792,13 @@
     const order = ['list', 'single', 'random', 'sequential'];
     const i = (order.indexOf(STATE.mode) + 1) % order.length;
     STATE.mode = order[i];
+    if (headless && audio.nativeQueue) audio.setMode(STATE.mode);
     syncModeBtn();
     toast('播放模式：' + MODE_TEXT[STATE.mode]);
   }
   // 播放模式按钮：SVG 图标 + 悬停提示当前模式名
   function syncModeBtn() {
+    if (headless) { emit('mode'); return; }
     const b = $('fpMode');
     if (b) {
       b.innerHTML = MODE_SVG[STATE.mode] || MODE_SVG.list;
@@ -916,6 +928,7 @@
 
   /* ---------- 队列渲染 ---------- */
   function renderQueue() {
+    if (headless) { emit('queue'); return; }
     const ul = $('queueList');
     if (!ul) return;
     $('queueCount').textContent = STATE.queue.length;
@@ -1045,9 +1058,11 @@
       const c = audio.currentTime || 0;
       // CUE：到达分轨结束点则切下一首
       if (STATE.cueEnd && c >= STATE.cueEnd - 0.05) { next(true); return; }
-      $('curTime').textContent = fmt(c);
-      $('durTime').textContent = fmt(d);
-      if (d) $('seek').value = Math.floor((c / d) * 1000);
+      if (!headless) {
+        $('curTime').textContent = fmt(c);
+        $('durTime').textContent = fmt(d);
+        if (d) $('seek').value = Math.floor((c / d) * 1000);
+      }
       syncLyric(c);
       // mini 模式歌词列表用：当前时间 + 当前歌词行索引
       window.__mmCurT = c;
@@ -1076,13 +1091,14 @@
       }
     });
     audio.addEventListener('loadedmetadata', () => {
-      $('durTime').textContent = fmt(audio.duration);
+      if (!headless) $('durTime').textContent = fmt(audio.duration);
       if (STATE.pendingSeek && audio.duration && STATE.pendingSeek < audio.duration) {
         try { audio.currentTime = STATE.pendingSeek; } catch (e) {}
       }
       STATE.pendingSeek = 0;
     });
     audio.addEventListener('ended', () => {
+      if (audio.nativeQueue) return;
       // 换源瞬间旧流可能补发 ended，若期间已切过歌则忽略，否则会连锁跳歌
       if (STATE.lastSrcSet && Date.now() - STATE.lastSrcSet < 600) return;
       if (STATE.mode === 'single') { audio.currentTime = 0; audio.play(); }
@@ -1119,6 +1135,7 @@
       toast(STATE.current?.vendor === 'local' ? '文件解码失败或已移动，请检查文件；少见格式需额外解码支持' : '播放出错，尝试下一个音源或刷新');
     });
 
+    if (headless) return;
     $('seek').addEventListener('input', (e) => {
       const d = audio.duration || 0;
       if (d) audio.currentTime = (e.target.value / 1000) * d;
@@ -1130,11 +1147,12 @@
   /* ---------- 抽屉 / 全屏切换 ---------- */
   function openFull() {
     if (!STATE.current) { toast('先选一首歌'); return; }
+    if (headless) { emit('openFull'); return; }
     $('fullPlayer').classList.remove('hidden');
     resizeVinylViz();
     startVinylViz();
   }
-  function closeFull() { $('fullPlayer').classList.add('hidden'); stopVinylViz(); }
+  function closeFull() { if (headless) { emit('closeFull'); return; } $('fullPlayer').classList.add('hidden'); stopVinylViz(); }
   // 播放列表：开关式（再点一次或点外部即关闭），不遮挡主界面
   function openQueue() {
     renderQueue();
@@ -1236,7 +1254,30 @@
   }
 
   /* ---------- 初始化 UI 事件 ---------- */
-  function init() {
+  function init(options = {}) {
+    if (options.headless) {
+      headless = true;
+      audio.addEventListener('nativeTrack', event => {
+        const s = event.state, t = s.queue?.[s.index]; if (!t?.id) return;
+        const changed = !STATE.current || STATE.current.id !== t.id || STATE.current.vendor !== t.vendor;
+        const metadataChanged = changed || STATE.current?.url !== t.url || STATE.current?.name !== t.name || STATE.current?.artist !== t.artist;
+        if (changed) bumpPlaySeq();
+        STATE.queue = s.queue; STATE.index = s.index; STATE.current = t; STATE.mode = s.mode || STATE.mode;
+        if (changed || (t.lyric && STATE.nativeLyric !== t.lyric)) {
+          STATE.nativeLyric = t.lyric; STATE.lyrics = parseLrc(t.lyric || ''); renderLyric();
+          renderNowPlaying(); syncModeBtn();
+        }
+        else if (metadataChanged) renderNowPlaying();
+        if (changed) {
+          history = history.filter(h => !(h.id === t.id && h.vendor === t.vendor));
+          history.unshift({ ...t, at: Date.now() }); history = history.slice(0,200); saveJSON('uzz.history',history);
+        }
+      });
+      audio.replayState?.();
+      bindProgress(); bindResumeSave();
+      if (localStorage.getItem('uzz.volume') != null) audio.volume = Math.max(0, Math.min(1, Number(localStorage.getItem('uzz.volume')) || 0));
+      return;
+    }
     bindProgress();
     bindLyricGoto();
 
@@ -1392,7 +1433,7 @@
     init, loadAndPlay, enqueueTrack, playQueue, clearQueue, toggle, next, prev, openFull, closeFull,
     downloadTrack, downloadCurrent, pushLyricStyle, dlEnabled,
     refreshLyric: renderLyric, reloadQuality,
-    setVolume,
+    setVolume, cycleMode, removeFromQueue,
     parseLrcSafe: (text) => { try { return parseLrc(text || ''); } catch (e) { return []; } },
     setLyricOffset,
     getQueue: () => STATE.queue, getFavorites: () => favorites, getHistory: () => history,

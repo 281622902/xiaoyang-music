@@ -38,7 +38,8 @@ async function openPage({ sdk = true, android = false, nativeUpdater = false } =
   const page = await context.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
   page.setDefaultTimeout(7000);
   page.on('pageerror', e => console.error('PAGEERROR', e.message));
-  await page.route('https://**/*', route => route.request().url().includes('cdn.jsdelivr.net') && sdk
+  await page.route('https://**/*', route => route.abort());
+  await page.route('**/vendor/supabase.min.js', route => sdk
     ? route.fulfill({ contentType: 'text/javascript', body: stub }) : route.abort());
   await page.route('**/api/local/stream?**', route => route.fulfill({ status: 204 }));
   await page.addInitScript(() => {

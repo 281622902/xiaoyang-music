@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: xiaoyang-music-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: server
+    buildCommand: npm ci --omit=dev --no-audit --no-fund
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: XY_PUBLIC_API
+        value: '1'

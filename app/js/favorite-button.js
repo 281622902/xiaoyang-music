@@ -2,7 +2,7 @@
   'use strict';
   function bindFavoriteButton({ button, status, getSong, onError }) {
     let generation = 0, busy = false, disposed = false;
-    const say = text => { if (status) status.textContent = text; };
+    const say = text => { if (status) status.textContent = /Auth session missing/i.test(String(text)) ? '登录后收藏到云端' : text; };
     function paint(on) {
       button.classList.toggle('is-favorited', on);
       button.setAttribute('aria-pressed', String(on));
@@ -14,6 +14,7 @@
       const song = getSong();
       button.disabled = true;
       if (!song?.url) { paint(false); button.title = song?.unavailableMessage || '请先播放在线歌曲'; say(button.title); return; }
+      say('正在查询收藏…');
       try {
         const on = await global.checkIsFavorited(song.url);
         if (!disposed && ticket === generation) { paint(on); say(on ? '已收藏' : '未收藏'); }

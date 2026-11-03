@@ -89,6 +89,8 @@ node scripts/update-supabase.js --validate
 
 ## 提交与触发
 
+Windows 推荐使用仓库根目录的 `release.bat`：输入版本后自动同步各处版本、执行 git add .、commit、tag，并原子推送当前分支与 Tag。详情见 [一键发布说明](一键发布使用说明.md)。下方保留手动操作方式。
+
 先将整个主项目中的改动放到你的 GitHub 仓库根目录；上传的不是上层 outputs 文件夹。需要包含 `.github/`、`scripts/`、根 package.json、`electron/package.json` 和测试文件。
 
 发布时 CI 的 `--prepare` 自动同步以下版本：根 package.json、electron/package.json、两份 package-lock.json 顶层和 packages[""] 的 version，以及 app/js/supabase-client.js 的 appVersion。锁文件中依赖包自己的版本不变。这些修改只发生在 Runner，不自动提交、不移动 Tag。本机开发仍建议维护正确的版本元数据。
@@ -122,6 +124,6 @@ git push origin v3.0.1
 
 ## 本次验证
 
-已通过 17 项本地测试，覆盖动态 Tag、版本准备、正式版配置、发布步骤顺序、实际附件下载链接、草稿/预发布/未发布拒绝写库、错误链接拒绝写库、重跑幂等及异常处理。没有推送 Tag、创建或发布 GitHub Release、读取仓库 Secrets 或写入正式 Supabase。
+已通过 25 项本地测试，覆盖动态 Tag、版本准备、正式版配置、发布步骤顺序、实际附件下载链接、草稿/预发布/未发布拒绝写库、错误链接拒绝写库、重跑幂等和批处理发布中的 Git 操作顺序与失败处理。另通过隔离的本地 bare Git 仓库验证了真实提交、Tag、原子推送和 cmd.exe 批处理输入流程。没有推送真实 GitHub Tag、创建或发布真实 GitHub Release、读取仓库 Secrets 或写入正式 Supabase。
 
 参考：[electron-builder 发布配置](https://www.electron.build/docs/publish/)、[GitHub Releases API 与草稿可见性](https://docs.github.com/en/rest/releases/releases)、[Supabase SDK 安装](https://supabase.com/docs/reference/javascript/installing)。

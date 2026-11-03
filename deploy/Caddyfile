@@ -1,0 +1,4 @@
+{$MUSIC_DOMAIN} {
+    encode gzip
+    reverse_proxy music-api:3000
+}

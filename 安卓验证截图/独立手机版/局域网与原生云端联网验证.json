@@ -1,0 +1,26 @@
+{
+  "mode": "PC LAN, adb reverse tcp:3000 temporarily removed",
+  "target": "http://192.168.2.36:3000",
+  "diagnostics": {
+    "backend": "http://192.168.2.36:3000",
+    "music": {
+      "ok": true,
+      "message": "音乐服务可达"
+    },
+    "cloud": {
+      "ok": true,
+      "message": "Supabase 账户服务可达（不代表账号密码已验证）"
+    }
+  },
+  "session": {
+    "valid": true,
+    "error": ""
+  },
+  "results": 3,
+  "playback": {
+    "playing": true,
+    "position": 1.202,
+    "duration": 270.768
+  },
+  "exceptions": []
+}

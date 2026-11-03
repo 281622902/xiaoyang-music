@@ -1,0 +1,17 @@
+{
+  "mode": "public API running locally; not deployed",
+  "health": {
+    "code": 200,
+    "msg": "ok",
+    "service": "xiaoyang-music-api",
+    "publicMode": true
+  },
+  "searchResults": 3,
+  "mediaHost": "m801.music.126.net",
+  "media": {
+    "status": 206,
+    "type": "audio/mpeg; charset=UTF-8",
+    "firstChunkBytes": 16384
+  },
+  "localEndpointsBlocked": true
+}

@@ -27,7 +27,9 @@
 
   const localTokens = new Map();
   async function request(path, params, timeout = 12000, externalSignal) {
+    if (global.XYNative?.isAndroid && path.startsWith('/api/local/')) throw new Error('安卓端不访问电脑本地文件库，请使用在线音乐；本机导入需要安卓文件权限支持');
     const base = getApiBase();
+    global.XYNetwork?.requireBackend();
     const url = new URL(base + path, location.origin);
     Object.keys(params || {}).forEach((k) => {
       if (params[k] !== undefined && params[k] !== null && params[k] !== '')
@@ -63,6 +65,9 @@
         throw new Error(msg || ('HTTP ' + res.status));
       }
       return await res.json();
+    } catch (error) {
+      if (externalSignal?.aborted) throw error;
+      throw new Error(global.XYNetwork?.describe(error,'music') || error.message);
     } finally {
       clearTimeout(timer);
       externalSignal?.removeEventListener('abort', cancel);
@@ -71,14 +76,14 @@
   }
 
   // 搜索
-  async function search(keyword, type, page, limit) {
+  async function search(keyword, type, page, limit, signal) {
     const r = await request('/api/search', {
       keyword,
       type: type || 'song',
       page: page || 1,
       limit: limit || DEFAULT_LIMIT,
       vendor: getVendor(),
-    });
+    }, 12000, signal);
     if (!r || r.code !== 200) throw new Error((r && r.msg) || '搜索失败');
     return {
       list: (r.result || []).map(normalizeTrack),

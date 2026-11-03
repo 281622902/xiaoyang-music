@@ -40,6 +40,29 @@
     if (error) throw new Error('查询收藏状态失败：' + error.message);
     return Boolean(data?.length);
   }
+  // Provider page URLs are stable identifiers; expiring CDN URLs are only used for playback.
+  function trackReference(track) {
+    if (!track || ['local','device'].includes(track.vendor)) return '';
+    if (track.cloudUrl) return track.cloudUrl;
+    const id=String(track.id||'');
+    if(track.vendor==='netease'&&/^\d+$/.test(id))return 'https://music.163.com/song?id='+id;
+    if(track.vendor==='tencent'&&/^[A-Za-z0-9]{6,64}$/.test(id))return 'https://y.qq.com/n/ryqq/songDetail/'+id;
+    if(track.vendor==='kugou'&&/^[A-Fa-f0-9]{32}$/.test(id))return 'https://www.kugou.com/song/#hash='+id.toUpperCase();
+    if(track.vendor==='kuwo'&&/^\d+$/.test(id))return 'https://www.kuwo.cn/play_detail/'+id;
+    return /^https?:\/\//i.test(track.url||'')?track.url:'';
+  }
+  function favoriteToTrack(row) {
+    const base={name:row.song_name,artist:'',album:'',cloudUrl:row.song_url};let u;
+    try{u=new URL(row.song_url);}catch{return null;}
+    let vendor,id;
+    if(u.hostname==='music.163.com'&&u.pathname==='/song'){vendor='netease';id=u.searchParams.get('id');}
+    if(u.hostname==='y.qq.com'&&u.pathname.startsWith('/n/ryqq/songDetail/')){vendor='tencent';id=u.pathname.split('/').pop();}
+    if(u.hostname==='www.kugou.com'&&u.pathname==='/song/'){vendor='kugou';id=new URLSearchParams(u.hash.slice(1)).get('hash');}
+    if(u.hostname==='www.kuwo.cn'&&u.pathname.startsWith('/play_detail/')){vendor='kuwo';id=u.pathname.split('/').pop();}
+    if(vendor&&id&&trackReference({vendor,id})===u.href)return {...base,id,vendor,url:''};
+    return /^https?:$/.test(u.protocol)?{...base,id:'cloud:'+row.id,vendor:'cloud',url:u.href}:null;
+  }
+  Object.assign(global.XYCloud || (global.XYCloud={}),{trackReference,favoriteToTrack});
 
   function parseVersion(version) {
     const text = String(version ?? '').trim();
@@ -100,7 +123,9 @@
       if (count == null && rows.length < pageSize) break;
     }
     if (!latest || compareVersions(latest.version, currentVersion) <= 0) return null;
-    return { ...latest, download_url: favoriteUrl(latest.download_url) };
+    const downloadUrl = favoriteUrl(latest.download_url);
+    if (platform === 'android' && !new URL(downloadUrl).pathname.toLowerCase().endsWith('.apk')) throw new Error('安卓版本记录需要提供 .apk 安装包下载链接');
+    return { ...latest, download_url: downloadUrl };
   }
   Object.assign(global, { removeFavorite, checkIsFavorited, checkAppUpdate, compareVersions });
 })(window);

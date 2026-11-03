@@ -1,0 +1,97 @@
+{
+  "backgroundBefore": {
+    "position": 1.322,
+    "playing": true,
+    "paused": false,
+    "index": 0,
+    "name": "后台验证音频 1",
+    "id": "880000000001",
+    "duration": 30,
+    "hidden": false
+  },
+  "backgroundAfter": {
+    "position": 3.809,
+    "playing": true,
+    "paused": false,
+    "index": 0,
+    "name": "后台验证音频 1",
+    "id": "880000000001",
+    "duration": 30,
+    "hidden": true
+  },
+  "mediaPause": {
+    "position": 3.842,
+    "playing": false,
+    "paused": true,
+    "index": 0,
+    "name": "后台验证音频 1",
+    "id": "880000000001",
+    "duration": 30,
+    "hidden": true
+  },
+  "mediaPlay": {
+    "position": 3.847,
+    "playing": true,
+    "paused": false,
+    "index": 0,
+    "name": "后台验证音频 1",
+    "id": "880000000001",
+    "duration": 30,
+    "hidden": true
+  },
+  "mediaNext": {
+    "position": 0.386,
+    "playing": true,
+    "paused": false,
+    "index": 1,
+    "name": "后台验证音频 2",
+    "id": "880000000002",
+    "duration": 30,
+    "hidden": true
+  },
+  "automaticNext": {
+    "position": 0.586,
+    "playing": true,
+    "paused": false,
+    "index": 2,
+    "name": "后台验证音频 3",
+    "id": "880000000003",
+    "duration": 30,
+    "hidden": true
+  },
+  "seekAndTransitionMs": 3650,
+  "screenOffBefore": {
+    "position": 0.621,
+    "playing": true,
+    "paused": false,
+    "index": 2,
+    "name": "后台验证音频 3",
+    "id": "880000000003",
+    "duration": 30,
+    "hidden": true
+  },
+  "screenOffAfter": {
+    "position": 3.12,
+    "playing": true,
+    "paused": false,
+    "index": 2,
+    "name": "后台验证音频 3",
+    "id": "880000000003",
+    "duration": 30,
+    "hidden": true
+  },
+  "foreground": {
+    "native": true,
+    "current": "880000000003",
+    "adapterPosition": 3.22,
+    "shown": true
+  },
+  "foregroundService": true,
+  "source": "Local generated WAV fixture via real HTTP and native resolver, no external CDN",
+  "resolutionRequests": [
+    "880000000001",
+    "880000000002",
+    "880000000003"
+  ],
+  "seekReusesResolvedSource": true
+}

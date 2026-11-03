@@ -1,0 +1,17 @@
+{
+  "durableAccess": true,
+  "appOwnedCopy": true,
+  "playedWithUnreachableBackend": true,
+  "playback": {
+    "playing": true,
+    "time": 1.017,
+    "duration": 30,
+    "vendor": "device",
+    "name": "xy-music-test.wav"
+  },
+  "restored": {
+    "count": 1,
+    "source": "device",
+    "time": 2.504
+  }
+}

@@ -1,0 +1,33 @@
+services:
+  music-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      NODE_ENV: production
+      XY_PUBLIC_API: '1'
+      PORT: '3000'
+    expose:
+      - '3000'
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+  https:
+    image: caddy:2-alpine
+    environment:
+      MUSIC_DOMAIN: ${MUSIC_DOMAIN:?Set MUSIC_DOMAIN to a public DNS hostname}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      music-api:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  caddy_data:
+  caddy_config:

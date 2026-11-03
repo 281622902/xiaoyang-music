@@ -4,6 +4,53 @@
 
 推送 Tag 自动构建并正式发布 GitHub Release，校验正式版附件后同步 Supabase，见 [自动发布说明](GitHub自动发布说明.md)。
 
+Windows 日常发版可双击仓库根目录的 `release.bat`，输入版本号后自动同步版本、提交、创建 Tag 并推送，见 [一键发布说明](一键发布使用说明.md)。
+
+安卓已采用独立移动界面，包含原生后台播放、本地音频导入与手动云端合并基础。见 [启动步骤](明早安卓启动说明.md)、[改造与测试说明](安卓工程改造说明.md)、[Android 发布配置](安卓发布配置说明.md)。执行 `build_android.bat --install` 可同步、编译并安装到 MuMu。
+
+普通真机请先阅读 [联网修复与连接步骤](真机联网修复与操作说明.md)，选择同一路由器的电脑地址或公网 HTTPS 音乐后端；模拟器的 localhost/ADB 路径不等于真机联网。
+
+使用移动数据或其他 Wi-Fi 的部署入口见 [公网音乐后端部署说明](公网音乐后端部署说明.md)。已准备 Render、Docker/Caddy 配置和公网隔离模式，尚未实际部署或生成公网地址。
+
+## 当前开发方式：MuMu + 本机 Node.js
+
+本轮已完成 Capacitor Android 工程同步、JDK 17 / SDK 34 配置、x86_64 + arm64-v8a 构建，并安装启动到 MuMu。当前电脑后端已运行，直接打开 MuMu 中的“小杨音乐”即可，测试音频已暂停。
+
+电脑重启后的恢复步骤（在项目根目录执行，已有后端运行时跳过第一步）：
+
+```powershell
+.\start_android_backend.bat
+.\connect_mumu.bat
+# 修改网页/原生代码后，需要同步、编译并重新安装：
+.\build_android.bat --install
+```
+
+| 连接方式 | App 中的地址 | 条件 |
+| --- | --- | --- |
+| 当前推荐的 MuMu 调试连接 | http://localhost:3000 | connect_mumu.bat 已建立 adb reverse tcp:3000 tcp:3000 |
+| 已验证的电脑局域网直连 | http://192.168.2.36:3000 | 电脑地址未变化、网络可达；不依赖 ADB reverse |
+
+无需强制改成 10.0.2.2；本机 MuMu 已用以上两种方式验收。普通真机的 localhost 指向手机自身，不能照搬模拟器连接方式。设置入口是“我的 → 播放与连接设置”，诊断入口是“我的 → 网络诊断”。
+
+本地验收结果：音乐与 Supabase 均可达，搜索返回 3 首并实际播放；已有登录会话有效。用合成无效手机号检查密码请求入口，返回 400 / invalid_credentials，现有会话保持不变。这只验证请求入口可达，没有使用用户真实密码验证密码正确性。
+
+## 以后免费云托管参考（本轮不需要）
+
+优先参考 Render Node Web Service；根目录已提供 render.yaml，也可在平台手动配置：
+
+| 配置 | 值 |
+| --- | --- |
+| Root Directory | server |
+| Build Command | npm ci --omit=dev --no-audit --no-fund |
+| Start Command | node index.js |
+| 环境变量 | NODE_VERSION=22、NODE_ENV=production、XY_PUBLIC_API=1 |
+| Health Check | /api/health |
+| 验证阶段实例 | Free |
+
+Render 免费实例会休眠/冷启动，且有流量与构建额度，适合先验证连通性，不作为稳定音乐服务承诺。详见 [Render 免费实例限制](https://render.com/docs/free)。拿到平台实际分配的 HTTPS 地址后，填入现有 App 的后端设置即可；后续可通过仓库变量 MUSIC_API_BASE 写入新安装包默认值。现在没有创建云资源或公网地址。
+
+完整点击步骤、Docker/Caddy 备选方案与检查命令见 [公网部署说明](公网音乐后端部署说明.md)。不要把 Supabase Project URL 当作音乐解析后端。
+
 3.0.0 的设计与基础升级见 [升级与工程建议](v3.0.0升级与工程建议.md)。3.0.1 已在此基础上接入 Supabase 云端账户、收藏和版本检测。
 
 # 小杨音乐（uzz 复刻增强版）
@@ -56,7 +103,7 @@ uzz-player/
 - **前端**：原生 JS + HTML5 Audio，移动优先、暗色调，UZZ 风格。无任何前端框架依赖。
 - **后端**：Node.js 内置 `http` + `crypto`，零第三方依赖。网易云用社区公开 `weapi` 加密（RSA 公钥内置）；QQ/酷狗/酷我走各自公开接口。
 - **桌面**：Electron + electron-builder → Windows `.exe` 安装程序（NSIS）。
-- **安卓**：Capacitor → Android APK。同一套前端代码复用。
+- **安卓**：独立原生 HTML/CSS/JS 界面 → Capacitor APK；共享播放和云端模块，音频由 Android Media3 服务运行。
 - **PWA**：前端自带 manifest，安卓/iOS/桌面 Chrome 均可「添加到主屏幕」当 App 用。
 
 ---
@@ -107,22 +154,19 @@ npm run dist       # 产出 dist/uzz 音乐播放器 Setup *.exe（NSIS）
 
 ## 三、构建 Android APK
 
-> 不想手敲命令？双击根目录的 `build_android.bat` 自动完成「装依赖 → 初始化 → 添加安卓平台 → 同步前端」四步；最后一步（签名出 APK）需在 Android Studio 内完成。
+> 双击 `build_android.bat` 自动准备独立网页、同步工程并编译 debug APK；加 `--install` 安装运行。正式签名与 CI 见 [Android 发布配置](安卓发布配置说明.md)。
 
 安卓 App 不能内嵌 Node 后端，因此手机端需在「设置」里填写你**远程部署的后端地址**（https 推荐）。
 
 ```bash
 cd uzz-player
-npm install                         # 安装 @capacitor/cli / core / android
-npx cap add android                # 生成 android/ 原生工程
-npx cap sync                       # 把 app/ 同步进原生工程
-npx cap build android              # 需本机安装 Android Studio + Android SDK
-# 或：npx cap open android 用 Android Studio 打开，Build → Generate Signed Bundle / APK
+build_android.bat --install         # 需 SDK 34、JDK 17/21；当前本机已配置
+build_android.bat --sync-only       # 生成 capacitor/www 并同步，供 Studio Run
 ```
 
-构建产物：`android/app/build/outputs/apk/release/app-release.apk`。
+默认产物：`android/app/build/outputs/apk/debug/app-debug.apk`；签名工作流产物为 release APK。
 
-> 若没有 Android SDK，可在 Android Studio 内用「Build → Generate Signed Bundle or APK」完成签名出包。
+> 新机器先安装 SDK 34 与 Build-Tools 34.0.0。不要直接编辑生成目录 capacitor/www。
 
 ---
 

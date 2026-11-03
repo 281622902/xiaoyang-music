@@ -2371,6 +2371,11 @@
     if ($('updInstall')) $('updInstall').addEventListener('click', async () => {
       if (!updInfo || !updInfo.url) { toast('请先检查更新'); return; }
       if (!br?.downloadAndInstall) {
+        if (window.XYNative?.isAndroid) {
+          try { await window.XYNative.openUpdate(updInfo.url); }
+          catch (error) { toast(error.message || '无法打开下载浏览器'); }
+          return;
+        }
         window.open(updInfo.url, '_blank', 'noopener,noreferrer');
         return;
       }

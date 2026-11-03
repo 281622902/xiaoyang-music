@@ -4,11 +4,11 @@
   const cloud = global.XYCloud = { appVersion: '3.0.1', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
-      if (typeof global.supabase?.createClient !== 'function') throw new Error('云端 SDK 加载失败，请检查网络后重新打开页面');
+      if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
       global.supabase = global.supabase.createClient(
         'https://codianpoqhqilkwviota.supabase.co',
         'sb_publishable__DRTgpxPfdR67tsFEJ_EDQ_gvZ8VvdM',
-        { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
+        { ...(global.XYNetwork ? {global:{fetch:global.XYNetwork.cloudFetch}} : {}), auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
           storage: global.localStorage, storageKey: 'xiaoyang.supabase.auth.v1' } }
       );
     }
@@ -30,12 +30,12 @@
   }
   async function registerUser(phone, password) {
     const { data, error } = await client().auth.signUp({ phone: normalizePhone(phone), password: passwordValue(password) });
-    if (error) throw error;
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message);
     return data;
   }
   async function loginUser(phone, password) {
     const { data, error } = await client().auth.signInWithPassword({ phone: normalizePhone(phone), password: passwordValue(password) });
-    if (error) throw error;
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message);
     return data;
   }
   async function logoutUser() {
@@ -81,7 +81,8 @@
   cloud.getUpdateInfo = async function () {
     client();
     const native = await global.uzzBridge?.getAppVersion?.();
-    const current = native?.version || cloud.appVersion;
+    const androidInfo = global.XYNative?.isAndroid ? await global.XYNative.App.getInfo().catch(() => null) : null;
+    const current = androidInfo?.version || native?.version || cloud.appVersion;
     const platform = global.Capacitor?.getPlatform?.() === 'android' || /Android/i.test(navigator.userAgent) ? 'android' : 'windows';
     const update = await global.checkAppUpdate(current, platform);
     return { ok: true, hasUpdate: !!update, latest: update?.version, url: update?.download_url,

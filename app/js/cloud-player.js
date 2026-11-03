@@ -25,7 +25,7 @@
       if (track && track.vendor !== 'local' && track.url) {
         try { const parsed = new URL(track.url); if (['http:', 'https:'].includes(parsed.protocol)) url = parsed.href; } catch {}
       }
-      cloud.currentSong = track ? { name: track.name || '未知歌曲', url,
+      cloud.currentSong = track ? { name: track.name || '未知歌曲', url, favoriteUrl: cloud.trackReference(track),
         unavailableMessage: track.vendor === 'local' ? '本地音乐请使用本机收藏，音频不会上传' : '正在等待有效的在线播放地址' } : null;
       if (heart) heart.refresh();
     }
@@ -82,6 +82,15 @@
       finally { $('cloudLogout').disabled = false; }
     });
     $('cloudRefresh').addEventListener('click', refreshList);
+    for(const [direction,label] of [['push','上传并合并歌单'],['pull','从云端合并歌单']]){
+      const sync=document.createElement('button');sync.type='button';sync.className='xy-secondary';sync.textContent=label;
+      let confirmedUser=null;sync.onclick=async()=>{sync.disabled=true;try{
+        if(!cloud.user)throw Error('请先登录云端账户');
+        if(confirmedUser!==cloud.user.id){const uid=cloud.user.id,p=await global.XYSync.preview();if(uid!==cloud.user?.id)throw Error('账户已切换，请重试');confirmedUser=uid;sync.textContent='确认合并';say('本机 '+p.localPlaylists+' 张歌单，云端 '+p.cloudPlaylists+' 张。合并保留双方歌曲，不同步删除；本地音频不会上传。');return;}
+        const result=await global.XYSync[direction]();say('已合并 '+result.playlists+' 张歌单');confirmedUser=null;sync.textContent=label;
+      }catch(e){say(e.message);confirmedUser=null;sync.textContent=label;}finally{sync.disabled=false;}};
+      $('cloudMember').querySelector('.account-buttons').appendChild(sync);
+    }
     renderAuth();
     if (!cloud.available) {
       button.disabled = true; status.textContent = cloud.error; say(cloud.error); $('cloudSubmit').disabled = true;
@@ -91,7 +100,7 @@
     button.addEventListener('click', event => {
       if (!cloud.user) { event.stopImmediatePropagation(); $('accountOpen').click(); $('cloudPhone').focus(); say('请先登录云端账户'); }
     });
-    heart = global.bindFavoriteButton({ button, status, getSong: () => cloud.currentSong, onError: error => notify(error.message) });
+    heart = global.bindFavoriteButton({ button, status, getSong: () => cloud.currentSong ? {...cloud.currentSong,url:cloud.currentSong.favoriteUrl || cloud.currentSong.url} : null, onError: error => notify(error.message) });
     cloud.heart = heart;
     document.addEventListener('xy:trackChanged', syncCurrent);
     button.addEventListener('favoritechange', event => { notify(event.detail.favorited ? '已收藏到云端 ♥' : '已取消云端收藏'); refreshList(); });

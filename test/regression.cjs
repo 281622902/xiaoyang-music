@@ -89,6 +89,32 @@ async function check(name, fn) {
       await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('upstream still running')), 2000); })]);
     } finally { clearTimeout(timer); client.destroy(); slow.closeAllConnections(); await new Promise(r => slow.close(r)); }
   });
+  await check('disconnecting an active audio body keeps backend alive and closes upstream', async () => {
+    let upstreamClosed;
+    const closed = new Promise(resolve => { upstreamClosed = resolve; });
+    const source = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+      res.write(Buffer.alloc(65536));
+      const interval = setInterval(() => res.write(Buffer.alloc(65536)), 5);
+      res.once('close', () => { clearInterval(interval); upstreamClosed(); });
+    });
+    source.listen(0, '127.0.0.1'); await once(source, 'listening');
+    let client, timer;
+    try {
+      await new Promise((resolve, reject) => {
+        client = http.get(base + '/api/stream?url=' + encodeURIComponent('http://127.0.0.1:' + source.address().port), response => {
+          response.once('data', () => { response.destroy(); client.destroy(); resolve(); });
+          response.on('error', () => {});
+        });
+        client.once('error', reject);
+        timer = setTimeout(() => reject(new Error('audio body did not arrive')), 2000);
+      });
+      clearTimeout(timer);
+      await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('audio upstream was not canceled')), 2000); })]);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      assert.equal((await fetch(base + '/api/health')).status, 200);
+    } finally { clearTimeout(timer); client?.destroy(); source.closeAllConnections(); await new Promise(resolve => source.close(resolve)); }
+  });
   let pw; try { pw = require('playwright'); } catch { pw = require(path.join(ROOT, 'electron/node_modules/playwright')); }
   const browser = await pw.chromium.launch({ executablePath: process.env.BROWSER_PATH || undefined, headless: true });
   try {
@@ -157,7 +183,7 @@ async function check(name, fn) {
     }
     const page = await browser.newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.route('https://cdn.jsdelivr.net/**', route => route.abort());
+    await page.route('**/vendor/supabase.min.js', route => route.abort());
     await page.route('**/api/**', route => route.fulfill({ json: { code: 200, tracks: [], list: [], hot: [], charts: [], info: {} } }));
     await page.goto(base); await page.waitForFunction(() => window.Player && window.UzzApi);
     await page.evaluate(() => {

@@ -1,9 +1,23 @@
 {
-  "appId": "com.uzz.musicplayer",
-  "appName": "uzz 音乐播放器",
-  "webDir": "app",
+  "appId": "com.xiaoyang.musicplayer",
+  "appName": "小杨音乐",
+  "webDir": "capacitor/www",
+  "loggingBehavior": "none",
   "server": {
     "androidScheme": "https"
   },
-  "plugins": {}
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#f7faf8"
+  },
+  "plugins": {
+    "Keyboard": {
+      "resizeOnFullScreen": true
+    },
+    "StatusBar": {
+      "overlaysWebView": false,
+      "style": "DARK",
+      "backgroundColor": "#f7faf8"
+    }
+  }
 }

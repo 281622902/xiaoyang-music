@@ -8,6 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="css/style.css" /><link rel="stylesheet" href="css/studio.css" />
   <link rel="stylesheet" href="css/cloud.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
 </head>
 <body>
   <div id="app">
@@ -1170,14 +1171,17 @@
   </div>
 
   <audio id="audio" preload="metadata"></audio>
+  <script defer src="vendor/native-platform.js"></script>
+  <script defer src="js/mobile.js"></script>
   <script defer src="js/api.js"></script>
   <script defer src="js/player.js"></script>
   <script defer src="js/eq.js"></script>
   <script defer src="js/app.js"></script>
   <script defer src="js/studio.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="vendor/supabase.min.js"></script>
   <script defer src="js/supabase-client.js"></script>
   <script defer src="js/cloud-features.js"></script>
+  <script defer src="js/cloud-state.js"></script>
   <script defer src="js/favorite-button.js"></script>
   <script defer src="js/cloud-player.js"></script>
 </body>
