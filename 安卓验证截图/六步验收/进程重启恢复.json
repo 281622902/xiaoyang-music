@@ -1,0 +1,73 @@
+{
+  "device": "127.0.0.1:16416",
+  "isolatedInstance": true,
+  "online": {
+    "before": {
+      "position": 12.231,
+      "index": 1
+    },
+    "restored": {
+      "connected": true,
+      "restored": true,
+      "epoch": 3,
+      "paused": true,
+      "playing": false,
+      "position": 12.23,
+      "duration": 0,
+      "readyState": 1,
+      "ended": false,
+      "index": 1,
+      "mode": "single",
+      "queue": [
+        {
+          "id": "resume-1",
+          "vendor": "netease",
+          "name": "恢复验证 1",
+          "duration": 30
+        },
+        {
+          "id": "resume-2",
+          "vendor": "netease",
+          "name": "恢复验证 2",
+          "artist": "",
+          "album": "",
+          "pic": "",
+          "duration": 0
+        }
+      ]
+    },
+    "resolvedAgainOnPlay": true
+  },
+  "local": {
+    "restored": {
+      "connected": true,
+      "restored": true,
+      "epoch": 6,
+      "paused": true,
+      "playing": false,
+      "position": 8.221,
+      "duration": 30,
+      "readyState": 1,
+      "ended": false,
+      "index": 0,
+      "mode": "single",
+      "queue": [
+        {
+          "id": "device:resume-test",
+          "vendor": "device",
+          "name": "本地恢复 WAV",
+          "artist": "",
+          "album": "",
+          "pic": "",
+          "duration": 30,
+          "persistent": true,
+          "storedCopy": true,
+          "url": "content://com.xiaoyang.musicplayer.fileprovider/imported_music/resume.wav"
+        }
+      ]
+    },
+    "playedWithoutBackend": true
+  },
+  "clearDoesNotResurrect": true,
+  "passed": true
+}

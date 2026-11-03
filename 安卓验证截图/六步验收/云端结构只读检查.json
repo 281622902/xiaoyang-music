@@ -1,0 +1,7 @@
+{
+  "userPresent": true,
+  "authError": null,
+  "schemaError": "PGRST205",
+  "schemaMessage": "Could not find the table 'public.user_music_state' in the schema cache",
+  "stateRows": 0
+}

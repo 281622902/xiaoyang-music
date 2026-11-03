@@ -1,0 +1,14 @@
+{
+  "isolatedInstance": true,
+  "toVersion": "3.0.2",
+  "sameCertificate": true,
+  "fromVersion": "3.0.1",
+  "originalUserInstanceUntouched": true,
+  "installCommand": "adb install -r",
+  "nonDebuggable": true,
+  "device": "127.0.0.1:16448",
+  "certificateSha256": "660f3e4b6a9771a2711cd6dc3c05abcb0f09212012c6ffa69439bf2efd3e4cf4",
+  "passed": true,
+  "formallyPublishedOnGitHub": false,
+  "playlistPreserved": "XY-Upgrade-Probe"
+}

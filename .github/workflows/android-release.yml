@@ -74,7 +74,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node test/cloud-portable.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test test/media-transfer.cjs test/native-audio.cjs test/phone-network.cjs test/public-api.cjs
+          node --test test/media-transfer.cjs test/native-audio.cjs test/phone-network.cjs test/public-api.cjs test/android-release.cjs test/android-download.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/build-android.js --sync-only
           exit $LASTEXITCODE
@@ -95,7 +95,10 @@ jobs:
             'ready=true' >> $env:GITHUB_OUTPUT
           } else {
             'ready=false' >> $env:GITHUB_OUTPUT
-            Write-Host '::notice::Android signing Secrets are missing. Only a debug artifact will be built; no APK will be officially published.'
+            if ('${{ github.event_name }}' -eq 'push' -or '${{ inputs.publish }}' -eq 'true') {
+              throw 'Android signing Secrets are missing. Formal publication requires ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD. No unsigned/debug package will be published.'
+            }
+            Write-Host '::notice::Debug-only manual build: signing Secrets are missing; formal publication is disabled.'
           }
       - name: Build debug APK
         if: steps.signing.outputs.ready != 'true'
@@ -153,3 +156,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ANDROID_PUBLIC_DOWNLOAD_MODE: supabase
+          ANDROID_PUBLIC_STORAGE_BUCKET: app-releases

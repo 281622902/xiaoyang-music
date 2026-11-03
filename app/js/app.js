@@ -182,7 +182,7 @@
   let downloads = loadJSON('uzz.downloads', []);
   let searchHistory = loadJSON('uzz.searchHistory', []);
 
-  function savePlaylists() { saveJSON('uzz.playlists', playlists); renderPlaylistNav(); }
+  function savePlaylists() { global.XYSync?.stampPlaylists(playlists); saveJSON('uzz.playlists', playlists); renderPlaylistNav(); }
   function saveDownloads() { saveJSON('uzz.downloads', downloads.slice(0, 200)); renderDownloads(); }
 
   /* ============================================================

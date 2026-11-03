@@ -20,6 +20,8 @@ async function sync({env=process.env,createClient,fetchImpl=fetch}={}){
  const release=await verifyGitHubAsset(c,env,fetchImpl);c.row.download_url=release.download_url;
  if(!createClient)({createClient}=require('@supabase/supabase-js'));
  const client=createClient(env.SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+ if(env.ANDROID_PUBLIC_DOWNLOAD_MODE==='supabase')c.row.download_url=await require('./publish-android-download.cjs').publishAndroidDownload({client,config:c,env,fetchImpl});
+ else if(env.ANDROID_PUBLIC_DOWNLOAD_MODE && env.ANDROID_PUBLIC_DOWNLOAD_MODE!=='github')throw Error('Android 下载模式无效');
  const {error}=await client.from('app_versions').upsert(c.row,{onConflict:'platform,version'});if(error)throw Error(error.message);return c.row;
 }
 if(require.main===module)(async()=>{let result;if(process.argv.includes('--prepare'))result=prepare();else if(process.argv.includes('--check-apk'))result=checkApk(process.argv[process.argv.indexOf('--check-apk')+1]);else result=await sync();console.log(JSON.stringify(result));})().catch(e=>{console.error('安卓发布失败：'+safeMessage(e));process.exitCode=1;});

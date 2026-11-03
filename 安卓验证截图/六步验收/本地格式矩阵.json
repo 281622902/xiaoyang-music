@@ -1,0 +1,49 @@
+{
+  "source": "Locally generated sine wave; real Media3 and content URI playback",
+  "device": "127.0.0.1:16416",
+  "formats": [
+    {
+      "extension": "mp3",
+      "codec": "libmp3lame",
+      "playing": true,
+      "duration": 6.034,
+      "position": 0.647
+    },
+    {
+      "extension": "flac",
+      "codec": "flac",
+      "playing": true,
+      "duration": 6,
+      "position": 0.53
+    },
+    {
+      "extension": "m4a",
+      "codec": "aac",
+      "playing": true,
+      "duration": 6,
+      "position": 0.537
+    },
+    {
+      "extension": "ogg",
+      "codec": "libvorbis",
+      "playing": true,
+      "duration": 6,
+      "position": 0.503
+    },
+    {
+      "extension": "wav",
+      "codec": "pcm_s16le",
+      "playing": true,
+      "duration": 6,
+      "position": 0.559
+    },
+    {
+      "extension": "opus",
+      "codec": "libopus",
+      "playing": true,
+      "duration": 6.006,
+      "position": 0.512
+    }
+  ],
+  "passed": true
+}

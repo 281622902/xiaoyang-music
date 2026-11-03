@@ -1,0 +1,23 @@
+{
+  "initial": {
+    "native": true,
+    "entry": true,
+    "desktopSidebar": false,
+    "tabs": 4,
+    "viewport": [
+      1098,
+      594
+    ],
+    "health": "http://localhost:3000"
+  },
+  "playing": {
+    "name": "晴天 (原唱 周杰伦)",
+    "nativeAudio": true,
+    "time": 1.86,
+    "duration": 270.768,
+    "paused": false,
+    "readyState": 4,
+    "playerVisible": true
+  },
+  "exceptions": []
+}

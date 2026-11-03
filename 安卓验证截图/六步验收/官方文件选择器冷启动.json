@@ -1,0 +1,34 @@
+{
+  "restored": {
+    "connected": true,
+    "restored": true,
+    "epoch": 22,
+    "paused": true,
+    "playing": false,
+    "position": 1.015,
+    "duration": 6.034,
+    "readyState": 1,
+    "ended": false,
+    "index": 0,
+    "mode": "list",
+    "queue": [
+      {
+        "id": "device:394cb1133cf8947a5e6ca668536d987c435eb11afa84001895663aa96f98d4d6",
+        "vendor": "device",
+        "name": "xy-saf-test.mp3",
+        "artist": "本地音乐",
+        "album": "",
+        "pic": "",
+        "duration": 6.034,
+        "persistent": true,
+        "storedCopy": true,
+        "url": "content://com.xiaoyang.musicplayer.fileprovider/imported_music/394cb1133cf8947a5e6ca668536d987c435eb11afa84001895663aa96f98d4d6.mp3"
+      }
+    ]
+  },
+  "after": {
+    "playing": true,
+    "position": 2.281
+  },
+  "passed": true
+}

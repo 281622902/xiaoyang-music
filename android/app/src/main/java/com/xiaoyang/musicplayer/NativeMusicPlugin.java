@@ -59,8 +59,8 @@ public class NativeMusicPlugin extends Plugin {
     private JSObject snapshot(){return snapshot(true);}
     private JSObject snapshot(boolean includeQueue){
         JSObject state=new JSObject();if(controller==null){state.put("connected",false);return state;}
-        state.put("connected",true);state.put("epoch",MusicService.epoch);state.put("paused",!controller.getPlayWhenReady() || controller.getPlayerError()!=null || controller.getPlaybackState()==Player.STATE_ENDED);state.put("playing",controller.isPlaying());state.put("position",controller.getCurrentPosition()/1000.0);
-        long duration=controller.getDuration();state.put("duration",duration==C.TIME_UNSET?0:duration/1000.0);state.put("readyState",controller.getPlaybackState()==Player.STATE_READY?4:1);state.put("ended",controller.getPlaybackState()==Player.STATE_ENDED);state.put("index",controller.getCurrentMediaItemIndex());
+        state.put("connected",true);state.put("restored",MusicService.restored);state.put("epoch",MusicService.epoch);state.put("paused",!controller.getPlayWhenReady() || controller.getPlayerError()!=null || controller.getPlaybackState()==Player.STATE_ENDED);state.put("playing",controller.isPlaying());state.put("position",controller.getCurrentPosition()/1000.0);
+        long duration=controller.getDuration();state.put("duration",duration==C.TIME_UNSET?(controller.getCurrentMediaItem()!=null?track(controller.getCurrentMediaItem()).optDouble("duration",0):0):duration/1000.0);state.put("readyState",controller.getPlaybackState()==Player.STATE_READY?4:1);state.put("ended",controller.getPlaybackState()==Player.STATE_ENDED);state.put("index",controller.getCurrentMediaItemIndex());
         state.put("mode",controller.getShuffleModeEnabled()?"random":controller.getRepeatMode()==Player.REPEAT_MODE_ONE?"single":controller.getRepeatMode()==Player.REPEAT_MODE_ALL?"list":"sequential");
         if(includeQueue){JSArray tracks=new JSArray();for(int i=0;i<controller.getMediaItemCount();i++){MediaItem item=controller.getMediaItemAt(i);JSONObject t=track(item);JSONObject full=MusicService.resolved.get(item.mediaId);if(full!=null){try{t.put("url",full.optString("url"));t.put("lyric",full.optString("lyric"));}catch(Exception ignored){}}tracks.put(t);}state.put("queue",tracks);}
         if(controller.getPlayerError()!=null)state.put("error",controller.getPlayerError().getErrorCodeName());
@@ -69,29 +69,11 @@ public class NativeMusicPlugin extends Plugin {
     private void emit(){if(controller!=null){MediaItem item=controller.getCurrentMediaItem();String id=item!=null?item.mediaId:"";JSONObject full=MusicService.resolved.get(id);String signature=MusicService.epoch+"|"+controller.getMediaItemCount()+"|"+controller.getCurrentMediaItemIndex()+"|"+id+"|"+(full!=null?full.hashCode():0);boolean changed=!signature.equals(lastQueueSignature);lastQueueSignature=signature;notifyListeners("state",snapshot(changed));}}
     @PluginMethod public void getState(PluginCall call){ready(call,()->{});}
     @PluginMethod public void getLaunchConfig(PluginCall call){main.post(()->{JSObject result=new JSObject();Intent intent=getActivity().getIntent();String backend=intent.getStringExtra("xy_backend");if((getContext().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0 && "http://localhost:3000".equals(backend))result.put("developmentBackend",backend);intent.removeExtra("xy_backend");call.resolve(result);});}
-    private List<MediaItem> mediaItems(JSONArray tracks,String base,String currentUrl,int index,String quality)throws Exception{
-        List<MediaItem> items=new ArrayList<>();
-        for(int i=0;i<tracks.length();i++){
-            JSONObject t=tracks.getJSONObject(i);String id=t.optString("id"),vendor=t.optString("vendor","netease"),key=vendor+"|"+id;
-            Uri uri;
-            if("device".equals(vendor)){String local=t.optString("url");if(!local.startsWith("content://"))throw new IllegalArgumentException("本地歌曲需要 Android 文件选择器授权");uri=Uri.parse(local);}
-            else if(i==index && currentUrl!=null && (currentUrl.startsWith("http://") || currentUrl.startsWith("https://")))uri=Uri.parse(currentUrl);
-            else if("cloud".equals(vendor))uri=Uri.parse(base+"/api/stream").buildUpon().appendQueryParameter("url",t.optString("url")).build();
-            else {
-                Uri endpoint=Uri.parse(base+"/api/song").buildUpon().appendQueryParameter("id",id).appendQueryParameter("vendor",vendor).appendQueryParameter("name",t.optString("name")).appendQueryParameter("artist",t.optString("artist")).appendQueryParameter("quality",quality).build();
-                uri=new Uri.Builder().scheme("xymusic").authority("song").appendQueryParameter("endpoint",endpoint.toString()).appendQueryParameter("base",base).appendQueryParameter("key",key).appendQueryParameter("epoch",String.valueOf(MusicService.epoch)).build();
-            }
-            Bundle extras=new Bundle();extras.putString("track",t.toString());
-            MediaMetadata.Builder metadata=new MediaMetadata.Builder().setTitle(t.optString("name")).setArtist(t.optString("artist")).setAlbumTitle(t.optString("album")).setExtras(extras);
-            String pic=t.optString("pic");if(pic.startsWith("http://")||pic.startsWith("https://"))metadata.setArtworkUri(Uri.parse(base+"/api/pic").buildUpon().appendQueryParameter("url",pic).build());
-            items.add(new MediaItem.Builder().setMediaId(key).setUri(uri).setMediaMetadata(metadata.build()).setMimeType("audio/mpeg").build());
-        }return items;
-    }
     @PluginMethod public void setQueue(PluginCall call){ready(call,()->{
         JSArray tracks=call.getArray("tracks",new JSArray());int index=call.getInt("index",0);String base=call.getString("base","");String url=call.getString("url","");
-        if(!(base.startsWith("http://")||base.startsWith("https://")))throw new IllegalArgumentException("请配置音乐后端地址");
         String quality=call.getString("quality","standard");if(!java.util.Arrays.asList("standard","ex","lossless","hires").contains(quality))quality="standard";
-        MusicService.epoch=call.getInt("epoch",0);List<MediaItem> items=mediaItems(tracks,base,url,index,quality);
+        MusicService.epoch=call.getInt("epoch",0);List<MediaItem> items=NativeQueue.items(tracks,base,url,index,quality);
+        MusicService.backendBase=base;MusicService.quality=quality;MusicService.restored=false;
         boolean same=items.size()>=controller.getMediaItemCount() && controller.getMediaItemCount()>0;
         for(int i=0;same&&i<controller.getMediaItemCount();i++)if(!controller.getMediaItemAt(i).mediaId.equals(items.get(i).mediaId))same=false;
         if(call.getBoolean("preserve",false)&&same){if(items.size()>controller.getMediaItemCount())controller.addMediaItems(items.subList(controller.getMediaItemCount(),items.size()));}
@@ -99,14 +81,15 @@ public class NativeMusicPlugin extends Plugin {
         String mode=call.getString("mode","list");controller.setShuffleModeEnabled("random".equals(mode));controller.setRepeatMode("single".equals(mode)?Player.REPEAT_MODE_ONE:"sequential".equals(mode)?Player.REPEAT_MODE_OFF:Player.REPEAT_MODE_ALL);
         controller.setPlayWhenReady(call.getBoolean("play",false));emit();
     });}
-    @PluginMethod public void play(PluginCall call){ready(call,()->{if(controller.getPlaybackState()==Player.STATE_IDLE)controller.prepare();controller.play();});}
+    @PluginMethod public void play(PluginCall call){ready(call,()->{if(controller.getPlaybackState()==Player.STATE_IDLE)controller.prepare();MusicService.restored=false;controller.play();});}
     @PluginMethod public void retry(PluginCall call){ready(call,()->{
         int index=controller.getCurrentMediaItemIndex();if(index<0||controller.getMediaItemCount()==0)throw new IllegalArgumentException("请先选择歌曲");
-        String base=call.getString("base","");if(!(base.startsWith("http://")||base.startsWith("https://")))throw new IllegalArgumentException("请配置音乐后端地址");
+        String base=call.getString("base","");
         String quality=call.getString("quality","standard");if(!java.util.Arrays.asList("standard","ex","lossless","hires").contains(quality))quality="standard";
         JSArray tracks=new JSArray();for(int i=0;i<controller.getMediaItemCount();i++)tracks.put(track(controller.getMediaItemAt(i)));
+        MusicService.backendBase=base;MusicService.quality=quality;MusicService.restored=false;
         long position=controller.getCurrentPosition();controller.stop();MusicService.resetSources();
-        controller.setMediaItems(mediaItems(tracks,base,"",index,quality),index,Math.max(0,position));
+        controller.setMediaItems(NativeQueue.items(tracks,base,"",index,quality),index,Math.max(0,position));
         controller.prepare();controller.play();lastQueueSignature="";emit();
     });}
     @PluginMethod public void pause(PluginCall call){ready(call,()->controller.pause());}

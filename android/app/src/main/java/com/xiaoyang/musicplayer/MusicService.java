@@ -32,6 +32,15 @@ import org.json.JSONObject;
 @UnstableApi
 public class MusicService extends MediaSessionService {
     private MediaSession session;
+    private PlaybackStore store;
+    private Player.Listener persistenceListener;
+    private final android.os.Handler persistenceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    static volatile String backendBase = "", quality = "standard";
+    static volatile boolean restored = false;
+    private final Runnable checkpoint = new Runnable() { public void run() {
+        if (session != null && session.getPlayer().isPlaying()) store.save(session.getPlayer());
+        persistenceHandler.postDelayed(this, 5000);
+    }};
     static volatile long epoch = 0;
     static final ConcurrentHashMap<String, JSONObject> resolved = new ConcurrentHashMap<>();
     // Reopening a ranged request must keep the same resolved file, including after a seek.
@@ -84,13 +93,22 @@ public class MusicService extends MediaSessionService {
         });
         PendingIntent launch = PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         session = new MediaSession.Builder(this,player).setSessionActivity(launch).build();
+        store = new PlaybackStore(this);
+        restored = store.restore(player);
+        persistenceListener = new Player.Listener() {
+            @Override public void onEvents(Player p, Player.Events events) { store.save(p); }
+        };
+        player.addListener(persistenceListener);
+        persistenceHandler.postDelayed(checkpoint, 5000);
     }
     @Override @Nullable public MediaSession onGetSession(MediaSession.ControllerInfo info) { return session; }
     @Override public void onTaskRemoved(@Nullable Intent rootIntent) {
+        if (session != null) store.save(session.getPlayer());
         if(session==null || !session.getPlayer().getPlayWhenReady() || session.getPlayer().getMediaItemCount()==0) stopSelf();
     }
     @Override public void onDestroy() {
-        if(session!=null){session.getPlayer().release();session.release();session=null;}
+        persistenceHandler.removeCallbacksAndMessages(null);
+        if(session!=null){store.save(session.getPlayer());session.getPlayer().removeListener(persistenceListener);session.getPlayer().release();session.release();session=null;}
         resetSources(); super.onDestroy();
     }
 }

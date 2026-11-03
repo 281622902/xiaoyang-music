@@ -67,7 +67,7 @@
     if(route==='search') renderSearchWelcome();
   }
   function navigate(value) { if(value!==route) { previousRoute=route==='detail'?previousRoute:route; location.hash=value; } else showRoute(value); }
-  function savePlaylists() { save('uzz.playlists',playlists); renderCounts(); if(route==='library')renderLibrary(); }
+  function savePlaylists() { global.XYSync?.stampPlaylists(playlists); save('uzz.playlists',playlists); renderCounts(); if(route==='library')renderLibrary(); }
   function renderCounts() { $('favCount').textContent=Player.getFavorites().length; $('historyCount').textContent=Player.getHistory().length; $('playlistCount').textContent=playlists.length; }
   function renderSearchWelcome() {
     $('searchHistory').innerHTML=searchHistory.length?searchHistory.slice(0,10).map(t=>'<button data-query="'+escape(t)+'">'+escape(t)+'</button>').join(''): '<span class="muted">最近搜索会出现在这里</span>';
@@ -274,6 +274,7 @@
     global.visualViewport?.addEventListener('resize',viewport);global.visualViewport?.addEventListener('scroll',viewport);global.addEventListener('resize',viewport);document.addEventListener('focusin',e=>{viewport();if(e.target.matches('input,select'))setTimeout(()=>e.target.scrollIntoView({block:'center',behavior:'smooth'}),250);});document.addEventListener('focusout',()=>setTimeout(viewport,80));viewport();
     if(XYNative.isAndroid){XYNative.App.addListener('backButton',back).catch(()=>{});XYNative.NativeMusic.addListener('localFiles',r=>{const first=addLocalTracks(r.tracks);if(first)play(first);}).catch(()=>{});XYNative.App.getInfo().then(info=>$('mobileVersion').textContent=info.version).catch(()=>{});for(const name of ['keyboardDidShow','keyboardDidHide'])XYNative.Keyboard.addListener(name,()=>{keyboardOpen=name==='keyboardDidShow';viewport();}).catch(()=>{});}
     global.XYMobileApp={navigate,openOnline,openLocal,renderLibrary,refreshCloud,getDetail:()=>detail};
+    audio.connection?.then(()=>{if(audio.lastState?.restored&&Player.getState().current){playerChanged('track');progress();toast('已恢复上次队列与进度，点击播放继续');}}).catch(()=>{});
     loadDiscover();loadHot();renderCounts();syncHeart();
   });
 })(window);
