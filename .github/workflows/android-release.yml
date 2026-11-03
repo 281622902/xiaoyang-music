@@ -34,20 +34,43 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - uses: actions/setup-java@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: ''
+      - name: Accept Android SDK licenses
+        shell: pwsh
+        run: |
+          $sdkRoot = $env:ANDROID_HOME
+          if (-not $sdkRoot) { $sdkRoot = $env:ANDROID_SDK_ROOT }
+          if (-not $sdkRoot) { throw 'Android SDK directory was not configured.' }
+          $env:ANDROID_HOME = $sdkRoot
+          $env:ANDROID_SDK_ROOT = $sdkRoot
+          "ANDROID_HOME=$sdkRoot" >> $env:GITHUB_ENV
+          "ANDROID_SDK_ROOT=$sdkRoot" >> $env:GITHUB_ENV
+          $sdkManager = (Get-Command sdkmanager -ErrorAction Stop).Source
+          1..100 | ForEach-Object { 'y' } | & $sdkManager "--sdk_root=$sdkRoot" --licenses
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install SDK 34
         shell: pwsh
-        run: sdkmanager 'platform-tools' 'platforms;android-34' 'build-tools;34.0.0'
+        run: |
+          sdkmanager "--sdk_root=$env:ANDROID_HOME" 'platform-tools' 'platforms;android-34' 'build-tools;34.0.0'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Prepare version and dependencies
         shell: pwsh
         run: |
           node scripts/android-release.cjs --prepare
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix server --omit=dev --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node test/cloud-portable.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
