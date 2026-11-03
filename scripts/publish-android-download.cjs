@@ -16,7 +16,8 @@ async function publishAndroidDownload({client,config,env,fetchImpl=fetch}) {
  if(existing.error) {
   // Only a missing bucket may be created. Permission/network errors must stop publication.
   if(!['404','NoSuchBucket','not_found'].includes(String(existing.error.statusCode||existing.error.code)))throw Error('读取 APK 下载存储桶失败：'+existing.error.message);
-  const created=await client.storage.createBucket(bucket,{public:true,fileSizeLimit:128*1024*1024,allowedMimeTypes:['application/vnd.android.package-archive']});
+  // Inherit the project's global limit; a larger bucket limit is rejected on free projects.
+  const created=await client.storage.createBucket(bucket,{public:true,allowedMimeTypes:['application/vnd.android.package-archive']});
   if(created.error)throw Error('创建 APK 下载存储桶失败：'+created.error.message);
  } else if(existing.data?.public!==true)throw Error('APK 下载存储桶不是公开桶；未修改现有桶权限');
  const object=config.tag+'/'+config.assetName,storage=client.storage.from(bucket);

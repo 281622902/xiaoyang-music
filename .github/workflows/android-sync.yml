@@ -1,0 +1,34 @@
+name: Repair published Android version synchronization
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing formally published Android tag'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: android-release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Download and verify existing formal APK
+        shell: bash
+        run: node scripts/repair-android-sync.cjs
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
