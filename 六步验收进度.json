@@ -30,7 +30,7 @@
     {
       "id": 5,
       "status": "partial",
-      "evidence": "稳定正式签名生成，release lint 已修复；隔离 MuMu 2 的 3.0.1→3.0.2 同证书覆盖保留歌单通过；CI Secrets 未配置（本机无可用 gh），真实正式发布与 Storage 匿名镜像/版本写入未执行"
+      "evidence": "稳定正式签名与 CI 四项 Secrets 已配置，同证书覆盖保留数据通过；准备 v3.0.12 真实云端签名发布/匿名镜像/版本同步"
     },
     {
       "id": 6,
@@ -45,7 +45,7 @@
     "不绕过额度或认证限制",
     "公网部署仍只作为 README 后续方案"
   ],
-  "updatedAt": "2026-11-03T16:11:19.305Z",
+  "updatedAt": "2026-11-03T16:17:09.200Z",
   "blockerAudit": {
     "goalTurnsObserved": 1,
     "doNotMarkGoalBlockedBeforeThreeConsecutiveTurns": true
@@ -55,7 +55,8 @@
     "隔离实例 1 端口16416，实例2端口16448；先重新核对",
     "正式签名 .toolchain/signing/ 已存在；绝不重新生成/提交密钥",
     "Windows Computer Use 本轮因 URL 识别失败停止，不能在同一轮绕过",
-    "需要执行云端 SQL 与配置 CI Secrets；不能读取/外传现有 Secrets 来绕过权限",
-    "未把六步全部验收完成，不可标记 goal complete"
-  ]
+    "未把六步全部验收完成，不可标记 goal complete",
+    "GitHub Secrets 已通过现有 Git 仓库认证配置；work/configure-signing-secrets.cjs 的 github() 可在内存中复用认证，不输出或保存令牌"
+  ],
+  "signingSecretsConfigured": true
 }
