@@ -53,8 +53,18 @@ async function search(vendor, keyword, page = 1, limit = 20) {
   if (!kw) return { list: [], total: 0 };
   try {
     const u = `https://music-api.gdstudio.xyz/api.php?types=search&source=netease&name=${encodeURIComponent(kw)}&count=${limit}&pages=${page}`;
-    const res = await fetch(u, { headers: { 'User-Agent': UA }, redirect: 'follow' });
-    if (!res.ok) return { list: [], total: 0 };
+    // 公共实例对高频 IP 偶发 503/429 限流：失败后小退避重试一次（真机压测实测）
+    let res;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      res = await fetch(u, { headers: { 'User-Agent': UA }, redirect: 'follow' });
+      if (res.ok) break;
+      if ((res.status === 503 || res.status === 429) && attempt === 0) {
+        await sleep(2500);
+        continue;
+      }
+      return { list: [], total: 0 };
+    }
+    if (!res || !res.ok) return { list: [], total: 0 };
     const j = await res.json();
     const arr = Array.isArray(j) ? j : [];
     // GDStudio 字段形态不定：artist/album 可能是字符串、对象 {name} 或数组 [{name}]

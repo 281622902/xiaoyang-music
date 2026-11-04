@@ -173,7 +173,7 @@ async function resolvePlayUrl(track) {
   // 搜网易同曲，再按网易 ID 解析完整版——保证搜得到就能播。
   if (!u && track.vendor !== 'netease' && (track.name || '').trim()) {
     try {
-      const gu = await withTimeout(gdsNeteaseUrl(track.name, track.artist, track.quality), 9000);
+      const gu = await withTimeout(gdsNeteaseUrl(track.name, track.artist, track.quality), 15000);
       if (gu) {
         const len = await probeAudioLen(gu);
         if (isFullAudio(len, expect)) return { url: gu, vendor: 'netease' };
