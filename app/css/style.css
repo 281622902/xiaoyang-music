@@ -670,6 +670,8 @@ input, select { font-family: inherit; }
   white-space: nowrap;
 }
 .pb-quality:hover { color: var(--text); border-color: var(--accent); }
+/* 倍速开启中（非 1.0×）：按钮文字点亮 accent，一眼看出倍速生效 */
+.pb-quality.speed-on { color: var(--accent); border-color: var(--accent); }
 .q-caret { font-size: 9px; opacity: .8; }
 .qmenu {
   position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 70;

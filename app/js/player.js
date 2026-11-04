@@ -903,6 +903,58 @@
       if (!menu.contains(e.target) && e.target !== btn) menu.classList.add('hidden');
     });
   }
+
+  /* ---------- 播放倍速（0.5 / 1.0 / 1.5 / 2.0，切歌保留） ---------- */
+  function fmtSpeed(v) {
+    const r = Math.round(v * 100) / 100;
+    return (Number.isInteger(r * 10) ? r.toFixed(1) : String(r)) + '×';
+  }
+  function setSpeedActive(v) {
+    const menu = $('speedMenu');
+    if (menu) menu.querySelectorAll('button[data-speed]').forEach((b) => b.classList.toggle('active', parseFloat(b.dataset.speed) === v));
+    const btn = $('pbSpeed');
+    if (btn) {
+      const label = $('pbSpeedLabel');
+      if (label) label.textContent = fmtSpeed(v);
+      btn.classList.toggle('speed-on', Math.abs(v - 1) > 1e-6);   // 非 1.0× 点亮 accent
+    }
+  }
+  function applyPlaybackRate(v) {
+    // defaultPlaybackRate 一并设置：audio.load()（切歌 / 换源 reloadQuality）会把
+    // playbackRate 重置回 defaultPlaybackRate，这样倍速在切歌后自动保留，无需补丁
+    if (audio) {
+      audio.defaultPlaybackRate = v;
+      audio.playbackRate = v;
+    }
+  }
+  function setPlaybackRate(v) {
+    const r = Math.min(2, Math.max(0.5, parseFloat(v) || 1));
+    setSpeedActive(r);
+    applyPlaybackRate(r);
+    localStorage.setItem('uzz.speed', String(r));
+  }
+  function bindSpeed() {
+    const btn = $('pbSpeed');
+    const menu = $('speedMenu');
+    if (!btn || !menu) return;
+    const saved = parseFloat(localStorage.getItem('uzz.speed'));
+    const cur = (saved >= 0.5 && saved <= 2) ? saved : 1;   // 兼容音效面板滑块的连续值（如 1.25×）
+    setSpeedActive(cur);
+    applyPlaybackRate(cur);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+    menu.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-speed]');
+      if (!b) return;
+      setPlaybackRate(b.dataset.speed);
+      menu.classList.add('hidden');
+    });
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && !btn.contains(e.target)) menu.classList.add('hidden');
+    });
+  }
   // 切换音质：重新取播放地址（带音质档位），不中断播放进度
   async function reloadQuality(level) {
     const t = STATE.current;
@@ -1318,6 +1370,7 @@
     lastVolume = audio.volume > 0 ? audio.volume : 1;
     bindVolume();
     bindQuality();
+    bindSpeed();
     syncVolBtn();
     bindResumeSave();
 
@@ -1433,6 +1486,7 @@
     init, loadAndPlay, enqueueTrack, playQueue, clearQueue, toggle, next, prev, openFull, closeFull,
     downloadTrack, downloadCurrent, pushLyricStyle, dlEnabled,
     refreshLyric: renderLyric, reloadQuality,
+    setPlaybackRate,
     setVolume, cycleMode, removeFromQueue,
     parseLrcSafe: (text) => { try { return parseLrc(text || ''); } catch (e) { return []; } },
     setLyricOffset,

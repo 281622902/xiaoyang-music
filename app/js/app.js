@@ -2697,8 +2697,9 @@
       speed.addEventListener('input', () => {
         const v = parseFloat(speed.value);
         $('speedVal').textContent = v.toFixed(2) + '×';
-        localStorage.setItem('uzz.speed', v);
-        if (audio) audio.playbackRate = v;
+        // 走 Player.setPlaybackRate：同步底部倍速菜单 + defaultPlaybackRate（切歌后 load() 不丢倍速）
+        if (window.Player && Player.setPlaybackRate) Player.setPlaybackRate(v);
+        else if (audio) { audio.playbackRate = v; audio.defaultPlaybackRate = v; localStorage.setItem('uzz.speed', v); }
       });
     }
 
@@ -3145,9 +3146,12 @@
         if (!btn) return;
         pbMenu.classList.add('hidden');
         const act = btn.dataset.act;
-        if (act === 'fx' || act === 'speed' || act === 'sleep') {
+        if (act === 'fx' || act === 'sleep') {
           const fx = $('fxPanel');
           if (fx) fx.classList.remove('hidden');
+        } else if (act === 'speed') {
+          const sb = $('pbSpeed');
+          if (sb) sb.click();   // 直接弹出底部播放倍速菜单
         } else if (act === 'lyric') {
           const bl = $('btnLyric');
           if (bl) bl.click();
