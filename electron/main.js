@@ -6,11 +6,12 @@
  *   3) 下载管理（保存到 下载/小杨音乐，可在设置中更改目录）
  *   4) 桌面歌词置顶窗口（透明、可拖动、可开关）
  * ============================================================ */
-const { app, BrowserWindow, ipcMain, session, shell, screen, dialog, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, screen, dialog, globalShortcut, Tray, Menu, nativeImage, net } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { launchInstaller } = require('./installer-launcher');
 const { listenAvailable } = require('./backend-start');
 const RENDERER_ORIGIN = 'http://localhost:35211';
@@ -1108,28 +1109,145 @@ function bindIpc() {
       url: '', notes: '',
     };
   });
+  // ── 升级包下载器：Chromium net 栈（自动跟随系统代理）+ 4 线程分段并行 + 状态落盘断点续传 + 可取消 ──
+  const updDownload = { active: false, aborted: false, inFlight: new Set() };
+
+  // 断点文件路径：userData/update-cache/，按 URL 哈希命名
+  function updPaths(fileUrl) {
+    const dir = path.join(app.getPath('userData'), 'update-cache');
+    fs.mkdirSync(dir, { recursive: true });
+    const key = crypto.createHash('md5').update(fileUrl).digest('hex').slice(0, 12);
+    return { part: path.join(dir, 'update-' + key + '.part'), state: path.join(dir, 'update-' + key + '.json') };
+  }
+
+  // Chromium 网络栈请求：自动应用系统代理、自动跟随 302（GitHub Release → CDN）
+  function updRequest(url, headers) {
+    return new Promise((resolve, reject) => {
+      const req = net.request({ url, redirect: 'follow' });
+      const rec = { req };
+      updDownload.inFlight.add(rec);
+      const settle = (fn, arg) => { updDownload.inFlight.delete(rec); fn(arg); };
+      for (const [k, v] of Object.entries(headers || {})) req.setHeader(k, v);
+      req.on('response', (res) => settle(resolve, res));
+      req.on('error', (err) => settle(reject, err));
+      req.end();
+    });
+  }
+
+  const h1 = (v) => (Array.isArray(v) ? String(v[0]) : v == null ? '' : String(v));
+
+  // 探测：是否支持分段（206）+ 总大小 + 资产一致性指纹（etag / last-modified）
+  async function updProbe(url) {
+    const res = await updRequest(url, { Range: 'bytes=0-0' });
+    const info = { ranges: false, total: 0, etag: h1(res.headers.etag), lastModified: h1(res.headers['last-modified']) };
+    if (res.statusCode === 206) {
+      const m = /\/(\d+)\s*$/.exec(h1(res.headers['content-range']));
+      info.total = m ? parseInt(m[1], 10) : 0;
+      info.ranges = info.total > 0;
+    } else if (res.statusCode === 200) {
+      info.total = parseInt(h1(res.headers['content-length']) || '0', 10);
+    } else {
+      res.resume();
+      throw new Error('下载失败 HTTP ' + res.statusCode);
+    }
+    res.resume();
+    return info;
+  }
+
+  // 单段下载：把 [start+received, end] 流式写入 part 文件对应偏移（边收边写，不占内存）
+  function updChunk(url, fd, chunk, signal, onDelta) {
+    return new Promise((resolve, reject) => {
+      const req = net.request({ url, redirect: 'follow' });
+      req.setHeader('Range', 'bytes=' + (chunk.start + chunk.received) + '-' + chunk.end);
+      const rec = { req };
+      updDownload.inFlight.add(rec);
+      let settled = false;
+      const settle = (fn, arg) => { if (!settled) { settled = true; updDownload.inFlight.delete(rec); fn(arg); } };
+      req.on('response', (res) => {
+        // 服务器不支持 Range（返回 200 全量）：仅当该段=整个文件时接受，从头覆盖写
+        const fullBody = res.statusCode === 200 && chunk.full === true;
+        if (res.statusCode !== 206 && !fullBody) {
+          res.resume();
+          return settle(reject, new Error('分段下载返回 HTTP ' + res.statusCode));
+        }
+        let pos = fullBody ? 0 : chunk.start + chunk.received;
+        if (fullBody) chunk.received = 0;
+        res.on('data', (buf) => {
+          if (signal.aborted) { req.abort(); return; }
+          fs.writeSync(fd, buf, 0, buf.length, pos);
+          pos += buf.length;
+          chunk.received += buf.length;
+          onDelta();
+        });
+        res.on('end', () => settle(resolve));
+        res.on('error', (err) => settle(reject, err));
+      });
+      req.on('error', (err) => settle(reject, err));
+      req.end();
+    });
+  }
+
   // 下载新安装包 → 静默覆盖安装（NSIS /S 直接升级，无需卸载，配置保留）
   ipcMain.handle('upd:downloadInstall', async (e, fileUrl) => {
+    let fd = null;
     try {
-      const res = await fetch(fileUrl, { signal: AbortSignal.timeout(600000) });
-      if (!res.ok) throw new Error('下载失败 HTTP ' + res.status);
-      const total = Number(res.headers.get('content-length') || 0);
-      const chunks = [];
-      let received = 0;
-      let lastPct = -1;
-      for await (const chunk of res.body) {
-        chunks.push(Buffer.from(chunk));
-        received += chunk.length;
-        if (total) {
-          const pct = Math.floor((received / total) * 100);
-          if (pct !== lastPct) {
-            lastPct = pct;
-            if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { pct, received, total });
-          }
-        }
+      updDownload.active = true; updDownload.aborted = false; updDownload.inFlight.clear();
+      const paths = updPaths(fileUrl);
+      const probe = await updProbe(fileUrl);
+      if (!probe.total) throw new Error('无法获取升级包大小');
+
+      // 断点续传：同 URL + 同大小 + 同资产指纹 → 复用上次进度
+      let st = null;
+      try {
+        const old = JSON.parse(fs.readFileSync(paths.state, 'utf8'));
+        const same = old.url === fileUrl && old.total === probe.total
+          && (!probe.etag || !old.etag || old.etag === probe.etag)
+          && (!probe.lastModified || !old.lastModified || old.lastModified === probe.lastModified)
+          && Array.isArray(old.chunks) && fs.existsSync(paths.part);
+        if (same) st = old;
+      } catch (_) {}
+      if (!st) {
+        const threads = probe.ranges ? 4 : 1;
+        const seg = Math.floor(probe.total / threads);
+        st = {
+          url: fileUrl, total: probe.total, threads, etag: probe.etag || '', lastModified: probe.lastModified || '',
+          chunks: Array.from({ length: threads }, (_, i) => ({
+            start: i * seg, end: i === threads - 1 ? probe.total - 1 : (i + 1) * seg - 1, received: 0, full: threads === 1,
+          })),
+        };
+        fs.writeFileSync(paths.part, '');
       }
+
+      updDownload.active = true; updDownload.aborted = false;
+      const signal = { get aborted() { return updDownload.aborted; } };
+      fd = fs.openSync(paths.part, 'r+');
+      let lastTick = 0;
+      const saveState = () => { try { fs.writeFileSync(paths.state + '.tmp', JSON.stringify(st)); fs.renameSync(paths.state + '.tmp', paths.state); } catch (_) {} };
+      // 进度即断点：每次上报都把分块状态落盘（节流 800ms）
+      const tick = (force) => {
+        const now = Date.now();
+        if (!force && now - lastTick < 800) return;
+        lastTick = now;
+        const received = st.chunks.reduce((s, c) => s + c.received, 0);
+        const pct = Math.min(Math.floor((received / st.total) * 100), 99);
+        if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { pct, received, total: st.total });
+        saveState();
+      };
+
+      await Promise.all(st.chunks.map((c) => (async () => {
+        while (c.received < c.end - c.start + 1) {
+          await updChunk(fileUrl, fd, c, signal, () => tick(false));
+        }
+        tick(false); saveState();
+      })()));
+
+      // 校验大小并交付
+      const size = fs.fstatSync(fd).size;
+      fs.closeSync(fd); fd = null;
+      if (size !== st.total) throw new Error('升级包大小校验失败（' + size + ' / ' + st.total + '）');
+      fs.rmSync(paths.state, { force: true });
       const dest = path.join(os.tmpdir(), '小杨音乐-升级包-' + Date.now() + '.exe');
-      fs.writeFileSync(dest, Buffer.concat(chunks));
+      try { fs.renameSync(paths.part, dest); } catch (_) { fs.copyFileSync(paths.part, dest); fs.rmSync(paths.part, { force: true }); }
       if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { pct: 100, phase: 'installing' });
       const conf = await dialog.showMessageBox(win, {
           type: 'question',
@@ -1142,8 +1260,21 @@ function bindIpc() {
       await runInstallerDelayed(dest);
       return { ok: true, dest };
     } catch (err) {
+      if (updDownload.aborted) {
+        if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { phase: 'canceled' });
+        return { ok: false, canceled: true, msg: '已取消（已下载部分已保留，可续传）' };
+      }
       return { ok: false, msg: ((err && err.message) || String(err)) };
+    } finally {
+      updDownload.active = false;
+      if (fd !== null) { try { fs.closeSync(fd); } catch (_) {} }
     }
+  });
+  // 取消下载：中止在途请求；断点已落盘，下次「一键升级」自动续传
+  ipcMain.on('upd:cancelDownload', () => {
+    if (!updDownload.active) return;
+    updDownload.aborted = true;
+    for (const rec of updDownload.inFlight) { try { rec.req.abort(); } catch (_) {} }
   });
   // 手动升级：选择已下载的新版安装包 → 静默覆盖安装
   ipcMain.handle('upd:pickInstall', async () => {

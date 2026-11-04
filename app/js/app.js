@@ -2385,15 +2385,36 @@
       const r = await br.downloadAndInstall(updInfo.url).catch((e) => ({ ok: false, msg: String(e) }));
       if (!r || !r.ok) {
         $('updInstall').disabled = false;
-        if ($('updProgRow')) $('updProgRow').classList.add('hidden');
-        toast('升级失败：' + ((r && r.msg) || '未知错误'));
+        if (r && r.canceled) {
+          // 已取消：断点保留，按钮变「继续下载」，下次点击自动续传
+          if ($('updInstall')) $('updInstall').textContent = '继续下载';
+          if ($('updProgText')) $('updProgText').textContent = '已取消（进度已保留，可继续）';
+          toast('已取消下载，进度已保留');
+        } else {
+          if ($('updProgRow')) $('updProgRow').classList.add('hidden');
+          toast('升级失败：' + ((r && r.msg) || '未知错误'));
+        }
+        return;
       }
       // 成功：主进程会启动安装器并退出应用
     });
+    if ($('updCancel')) $('updCancel').addEventListener('click', () => {
+      br?.cancelUpdateDownload?.();
+      if ($('updCancel')) $('updCancel').disabled = true;
+    });
     br?.onUpdateProgress?.((p) => {
       if (!p) return;
-      if (p.phase === 'installing') { if ($('updProgText')) $('updProgText').textContent = '下载完成，正在启动安装…'; return; }
+      if (p.phase === 'installing') {
+        if ($('updCancel')) $('updCancel').disabled = true;
+        if ($('updProgText')) $('updProgText').textContent = '下载完成，正在启动安装…'; return;
+      }
+      if (p.phase === 'canceled') {
+        if ($('updCancel')) $('updCancel').disabled = false;
+        if ($('updProgText')) $('updProgText').textContent = '已取消（进度已保留，可继续）';
+        return;
+      }
       if (typeof p.pct === 'number') {
+        if ($('updCancel')) $('updCancel').disabled = false;
         if ($('updBarFill')) $('updBarFill').style.width = p.pct + '%';
         const mb = (n) => (n / 1048576).toFixed(1);
         if ($('updProgText')) $('updProgText').textContent = `下载中 ${p.pct}%（${mb(p.received)} / ${mb(p.total)} MB）`;

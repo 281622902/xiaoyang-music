@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('uzzBridge', {
   setUpdateUrl: (url) => ipcRenderer.send('upd:setUrl', url),
   checkUpdate: () => ipcRenderer.invoke('upd:check'),
   downloadAndInstall: (fileUrl) => ipcRenderer.invoke('upd:downloadInstall', fileUrl),
+  cancelUpdateDownload: () => ipcRenderer.send('upd:cancelDownload'),
   pickAndInstall: () => ipcRenderer.invoke('upd:pickInstall'),
   scanLocalPackages: () => ipcRenderer.invoke('upd:scanLocal'),
   installLocalPath: (p) => ipcRenderer.invoke('upd:installPath', p),
