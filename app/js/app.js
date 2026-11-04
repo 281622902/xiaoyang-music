@@ -2385,6 +2385,7 @@
       const r = await br.downloadAndInstall(updInfo.url).catch((e) => ({ ok: false, msg: String(e) }));
       if (!r || !r.ok) {
         $('updInstall').disabled = false;
+        setUpdSpeed('');
         if (r && r.canceled) {
           // 已取消：断点保留，按钮变「继续下载」，下次点击自动续传
           if ($('updInstall')) $('updInstall').textContent = '继续下载';
@@ -2402,22 +2403,26 @@
       br?.cancelUpdateDownload?.();
       if ($('updCancel')) $('updCancel').disabled = true;
     });
+    const setUpdSpeed = (text) => { if ($('updSpeed')) $('updSpeed').textContent = text || ''; };
     br?.onUpdateProgress?.((p) => {
       if (!p) return;
       if (p.phase === 'installing') {
         if ($('updCancel')) $('updCancel').disabled = true;
-        if ($('updProgText')) $('updProgText').textContent = '下载完成，正在启动安装…'; return;
+        if ($('updProgText')) $('updProgText').textContent = '下载完成，正在启动安装…';
+        setUpdSpeed(''); return;
       }
       if (p.phase === 'canceled') {
         if ($('updCancel')) $('updCancel').disabled = false;
         if ($('updProgText')) $('updProgText').textContent = '已取消（进度已保留，可继续）';
-        return;
+        setUpdSpeed(''); return;
       }
       if (typeof p.pct === 'number') {
         if ($('updCancel')) $('updCancel').disabled = false;
         if ($('updBarFill')) $('updBarFill').style.width = p.pct + '%';
         const mb = (n) => (n / 1048576).toFixed(1);
         if ($('updProgText')) $('updProgText').textContent = `下载中 ${p.pct}%（${mb(p.received)} / ${mb(p.total)} MB）`;
+        // 实时速度：主进程每秒采样一次字节增量
+        setUpdSpeed(p.speed ? (p.speed / 1048576).toFixed(1) + ' MB/s' : '');
       }
     });
     // 手动选包入口已在关于页绑定。

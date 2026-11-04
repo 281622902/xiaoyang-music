@@ -1,4 +1,4 @@
-// 将通用红心组件绑定到 Player 的真实播放状态；本机收藏仍由原播放器管理。
+// 将通用红心组件绑定到 Player 的真实播放状态；红心双写联动：云端与本机 uzz.fav 同步增删。
 (function (global) {
   'use strict';
   document.addEventListener('DOMContentLoaded', () => {
@@ -101,9 +101,54 @@
     button.addEventListener('click', event => {
       if (!cloud.user) { event.stopImmediatePropagation(); $('accountOpen').click(); $('cloudPhone').focus(); say('请先登录云端账户'); }
     });
-    heart = global.bindFavoriteButton({ button, status, getSong: () => cloud.currentSong ? {...cloud.currentSong,url:cloud.currentSong.favoriteUrl || cloud.currentSong.url} : null, onError: error => notify(error.message) });
+    // ── 双写联动钩子：云端红心点击时，本机 uzz.fav 同步增删（确定性 set，非切换） ──
+    const currentTrack = () => {
+      const t = global.Player.getState().current;
+      return (t && typeof t.id === 'string' && t.vendor) ? t : null;
+    };
+    heart = global.bindFavoriteButton({
+      button, status,
+      getSong: () => cloud.currentSong ? {...cloud.currentSong,url:cloud.currentSong.favoriteUrl || cloud.currentSong.url} : null,
+      onError: error => notify(error.message),
+      localState: () => { const t = currentTrack(); return !!(t && global.Player.isFavorite(t)); },
+      localSet: (_song, on) => { const t = currentTrack(); if (t) global.Player.setFavorite(t, on); },
+    });
     cloud.heart = heart;
     document.addEventListener('xy:trackChanged', syncCurrent);
+    // ── 反向联动：本机红心（fpFav）点在当前歌上 → 云端同步增删 ──
+    document.addEventListener('uzz:favCurrent', async event => {
+      if (!cloud.user || !heart) return;
+      const d = event.detail || {};
+      const song = cloud.currentSong;
+      const url = song && (song.favoriteUrl || song.url);
+      if (!url) return;
+      try {
+        const cur = await global.checkIsFavorited(url);
+        if (cur === d.added) { heart.refresh(); return; } // 云端已一致，免写
+        if (d.added) await global.addFavorite(song.name, url);
+        else await global.removeFavorite(url);
+        heart.refresh(); refreshList();
+      } catch (error) { notify('云端同步失败：' + error.message); }
+    });
+    // ── 账号切换数据隔离：换号即用云端收藏重置本机列表（全量拉取，防串号） ──
+    async function syncLocalFromCloud() {
+      const uid = cloud.user?.id;
+      if (!uid) return;
+      try {
+        const rows = await global.getFavorites();
+        if (uid !== cloud.user?.id) return; // 等待期间账号又切了，放弃这次结果
+        const seen = new Set(), tracks = [];
+        for (const row of rows) {
+          const t = cloud.favoriteToTrack(row);
+          if (t && t.id && t.vendor) {
+            const key = t.vendor + '|' + t.id;
+            if (!seen.has(key)) { seen.add(key); tracks.push({ ...t, at: Date.now() }); }
+          }
+        }
+        global.Player.replaceFavorites(tracks);
+        say('已用云端收藏重置本机喜欢（' + tracks.length + ' 首）');
+      } catch (_) { /* 拉取失败保持本机现状，不清空 */ }
+    }
     // 云端收藏列表乐观更新：不等网络，按 favoritechange 事件直接增删列表项；
     // refreshList() 随后后台对账，以服务端全量列表为准。
     function optimisticFavorites(d) {
@@ -123,6 +168,7 @@
     button.addEventListener('favoritechange', event => {
       const d = event.detail || {};
       optimisticFavorites(d);
+      if (d.localOnly) return; // 纯本机收藏，云端列表不参与
       if (d.pending) notify(d.favorited ? '正在收藏到云端…' : '正在取消云端收藏…');
       else if (!d.rollback) notify(d.favorited ? '已收藏到云端 ♥' : '已取消云端收藏');
       refreshList();
@@ -134,7 +180,7 @@
       if (changed) { authGeneration++; listGeneration++; $('cloudFavorites').replaceChildren(); $('cloudRefresh').disabled = false; }
       renderAuth();
       // Auth 回调只改界面；数据库查询离开回调后再执行。
-      if (changed || _event === 'INITIAL_SESSION') setTimeout(() => refreshList(), 0);
+      if (changed || _event === 'INITIAL_SESSION') setTimeout(() => { refreshList(); if (changed && next) syncLocalFromCloud(); }, 0);
     });
     global.addEventListener('pagehide', () => { heart.destroy(); subscription.unsubscribe(); }, { once: true });
   });

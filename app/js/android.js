@@ -186,7 +186,11 @@
     history:()=>chooseLibrary('history'),favorites:()=>chooseLibrary('favorites'),openCloud:()=>{closeAccount();chooseLibrary('cloud');},
     clearSearch:()=>{searchHistory=[];save('uzz.searchHistory',[]);renderSearchWelcome();},theme:()=>{localStorage.setItem('xy.android.theme',localStorage.getItem('xy.android.theme')==='dark'?'light':'dark');applyTheme();},
     charts:()=>{navigate('discover');$('chartCards').scrollIntoView({behavior:'smooth',block:'center'});},
-    enqueue:()=>{Player.enqueueTrack(selectedTrack);closeSheet();toast('已加入播放队列');},deviceFavorite:()=>{const on=Player.toggleFav(selectedTrack);closeSheet();toast(on?'已保存到本机喜欢':'已取消本机喜欢');if(route==='library')renderLibrary();},
+    enqueue:()=>{Player.enqueueTrack(selectedTrack);closeSheet();toast('已加入播放队列');},
+    // 本机收藏（双写）：本机列表确定性增删 + 登录态下同步云端（失败不回滚本机）
+    deviceFavorite:async()=>{const t=selectedTrack;if(!t||typeof t.id!=='string'||!t.vendor){closeSheet();toast('该来源暂不支持收藏');return;}
+      const on=!Player.isFavorite(t);Player.setFavorite(t,on);closeSheet();toast(on?'已保存到本机喜欢':'已取消本机喜欢');if(route==='library')renderLibrary();
+      if(XYCloud.user){const ref=XYCloud.trackReference(t);if(ref){try{const cur=await checkIsFavorited(ref);if(cur!==on){if(on)await addFavorite(t.name,ref);else await removeFavorite(ref);}heart?.refresh();}catch(e){toast('云端同步失败：'+e.message);}}}},
     removeFromPlaylist:()=>{const p=playlists.find(p=>p.id===detail?.localId);if(!p)return;p.tracks=p.tracks.filter(t=>keyOf(t)!==keyOf(selectedTrack));detail.tracks=p.tracks;savePlaylists();paintDetail();closeSheet();},
     removeFromQueue:()=>{Player.removeFromQueue(Player.getQueue().findIndex(t=>keyOf(t)===keyOf(selectedTrack)));showQueue();},
     clearQueue:()=>{Player.clearQueue();closeSheet();toast('播放队列已清空');},
@@ -264,12 +268,29 @@
     for(const name of ['play','pause','ended','error','emptied'])audio.addEventListener(name,()=>playerChanged('play'));
     document.addEventListener('xy:player',e=>playerChanged(e.detail.kind));document.addEventListener('xy:trackChanged',syncHeart);document.addEventListener('uzz:libChanged',()=>{renderCounts();if(route==='library'&&libraryTab!=='cloud')renderLibrary();});
     document.addEventListener('xy:libraryRestore',()=>{playlists=read('uzz.playlists',[]);renderCounts();if(route==='library')renderLibrary();});
-    $('favoriteBtn').addEventListener('click',e=>{if(!XYCloud.user){e.stopImmediatePropagation();openAccount();$('mobileAuthStatus').textContent='登录后可收藏到云端；也可通过歌曲更多菜单保存至本机。';}});
-    if(XYCloud.available)heart=bindFavoriteButton({button:$('favoriteBtn'),status:$('favoriteStatus'),getSong:()=>{const t=Player.getState().current;return XYCloud.currentSong?{...XYCloud.currentSong,url:XYCloud.trackReference(t)||XYCloud.currentSong.url}:null;},onError:e=>toast(e.message)});
-    $('favoriteBtn').addEventListener('favoritechange',e=>{const d=e.detail||{};if(d.pending)toast(d.favorited?'正在收藏到云端…':'正在取消云端收藏…');else if(!d.rollback)toast(d.favorited?'已收藏到云端':'已取消云端收藏');if(route==='library'&&libraryTab==='cloud')refreshCloud();});
+    // 未登录点红心：不再强制跳登录，直接本机收藏兜底（这就是安卓"本机红心"）
+    $('favoriteBtn').addEventListener('click',e=>{
+      if(XYCloud.user)return; // 登录态交给云端红心（双写联动）
+      e.stopImmediatePropagation();
+      const t=Player.getState().current;
+      if(!t||typeof t.id!=='string'||!t.vendor){toast('先播放一首歌再收藏');return;}
+      const on=!Player.isFavorite(t);Player.setFavorite(t,on);
+      const b=$('favoriteBtn');b.classList.toggle('is-favorited',on);b.setAttribute('aria-pressed',String(on));
+      toast(on?'已保存到本机喜欢（登录后可同步云端）':'已取消本机喜欢');
+    });
+    // 云端红心（登录态）：双写联动钩子——点击时本机 uzz.fav 同步增删
+    const currentTrack=()=>{const t=Player.getState().current;return (t&&typeof t.id==='string'&&t.vendor)?t:null;};
+    if(XYCloud.available)heart=bindFavoriteButton({button:$('favoriteBtn'),status:$('favoriteStatus'),getSong:()=>{const t=Player.getState().current;return XYCloud.currentSong?{...XYCloud.currentSong,url:XYCloud.trackReference(t)||XYCloud.currentSong.url}:null;},onError:e=>toast(e.message),
+      localState:()=>{const t=currentTrack();return !!(t&&Player.isFavorite(t));},
+      localSet:(_s,on)=>{const t=currentTrack();if(t)Player.setFavorite(t,on);}});
+    $('favoriteBtn').addEventListener('favoritechange',e=>{const d=e.detail||{};if(d.localOnly)return;if(d.pending)toast(d.favorited?'正在收藏到云端…':'正在取消云端收藏…');else if(!d.rollback)toast(d.favorited?'已收藏到云端':'已取消云端收藏');if(route==='library'&&libraryTab==='cloud')refreshCloud();});
+    // 反向联动：本机收藏（更多菜单等）变化在当前歌上 → 云端同步
+    document.addEventListener('uzz:favCurrent',async e=>{if(!XYCloud.user||!heart)return;const t=e.detail?.track;const ref=t&&XYCloud.trackReference(t);if(!ref)return;try{const cur=await checkIsFavorited(ref);if(cur===e.detail.added){heart.refresh();return;}if(e.detail.added)await addFavorite(t.name,ref);else await removeFavorite(ref);heart.refresh();if(route==='library'&&libraryTab==='cloud')refreshCloud();}catch(err){toast('云端同步失败：'+err.message);}});
+    // 账号切换数据隔离：换号即用云端收藏重置本机喜欢（全量拉取，防串号）
+    async function syncLocalFromCloud(){const uid=XYCloud.user?.id;if(!uid)return;try{const rows=await getFavorites();if(uid!==XYCloud.user?.id)return;const seen=new Set(),tracks=[];for(const row of rows){const t=XYCloud.favoriteToTrack(row);if(t&&t.id&&t.vendor){const key=t.vendor+'|'+t.id;if(!seen.has(key)){seen.add(key);tracks.push({...t,at:Date.now()});}}}Player.replaceFavorites(tracks);renderCounts();toast('已同步云端收藏到本机（'+tracks.length+' 首）');}catch(_){/*拉取失败保持本机现状*/}}
     $('mobileLoginForm').onsubmit=async e=>{e.preventDefault();$('mobileLoginSubmit').disabled=true;$('mobileAuthStatus').textContent='正在连接…';try{const data=await global[authMode==='login'?'loginUser':'registerUser']($('mobilePhone').value,$('mobilePassword').value);$('mobilePassword').value='';$('mobileAuthStatus').textContent=data.session?'登录成功':'注册完成，请检查手机号确认配置后登录';}catch(error){$('mobileAuthStatus').textContent=error.message;}finally{$('mobileLoginSubmit').disabled=!XYCloud.available;}};
     $('mobileLogout').onclick=async()=>{$('mobileLogout').disabled=true;try{await logoutUser();$('mobilePassword').value='';$('mobileAuthStatus').textContent='已退出登录';}catch(e){$('mobileAuthStatus').textContent=e.message;}finally{$('mobileLogout').disabled=false;}};
-    if(XYCloud.available){const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{const user=session?.user||null;if(XYCloud.user?.id!==user?.id){authGeneration++;cloudGeneration++;cloudRows=[];}XYCloud.user=user;renderAuth();setTimeout(()=>{if(route==='library'&&libraryTab==='cloud')renderLibrary();},0);});global.addEventListener('pagehide',()=>{subscription.unsubscribe();heart?.destroy();},{once:true});}renderAuth();
+    if(XYCloud.available){const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{const user=session?.user||null;const changed=XYCloud.user?.id!==user?.id;if(changed){authGeneration++;cloudGeneration++;cloudRows=[];}XYCloud.user=user;renderAuth();setTimeout(()=>{if(changed&&user)syncLocalFromCloud();if(route==='library'&&libraryTab==='cloud')renderLibrary();},0);});global.addEventListener('pagehide',()=>{subscription.unsubscribe();heart?.destroy();},{once:true});}renderAuth();
     let longPress;document.addEventListener('pointerdown',e=>{const b=e.target.closest('[data-track-list]');if(!b)return;const x=e.clientX,y=e.clientY;clearTimeout(longPress);longPress=setTimeout(()=>{click.suppressUntil=Date.now()+800;trackMenu(trackSets.get(b.dataset.trackList)?.[Number(b.dataset.trackIndex)],b.dataset.trackList);},550);const move=ev=>{if(Math.abs(ev.clientX-x)+Math.abs(ev.clientY-y)>12){clearTimeout(longPress);document.removeEventListener('pointermove',move);}};document.addEventListener('pointermove',move);document.addEventListener('pointerup',()=>{clearTimeout(longPress);document.removeEventListener('pointermove',move);},{once:true});});document.addEventListener('pointercancel',()=>clearTimeout(longPress));
     global.visualViewport?.addEventListener('resize',viewport);global.visualViewport?.addEventListener('scroll',viewport);global.addEventListener('resize',viewport);document.addEventListener('focusin',e=>{viewport();if(e.target.matches('input,select'))setTimeout(()=>e.target.scrollIntoView({block:'center',behavior:'smooth'}),250);});document.addEventListener('focusout',()=>setTimeout(viewport,80));viewport();
     if(XYNative.isAndroid){XYNative.App.addListener('backButton',back).catch(()=>{});XYNative.NativeMusic.addListener('localFiles',r=>{const first=addLocalTracks(r.tracks);if(first)play(first);}).catch(()=>{});XYNative.App.getInfo().then(info=>$('mobileVersion').textContent=info.version).catch(()=>{});for(const name of ['keyboardDidShow','keyboardDidHide'])XYNative.Keyboard.addListener(name,()=>{keyboardOpen=name==='keyboardDidShow';viewport();}).catch(()=>{});}

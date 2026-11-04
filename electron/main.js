@@ -1223,14 +1223,24 @@ function bindIpc() {
       fd = fs.openSync(paths.part, 'r+');
       let lastTick = 0;
       const saveState = () => { try { fs.writeFileSync(paths.state + '.tmp', JSON.stringify(st)); fs.renameSync(paths.state + '.tmp', paths.state); } catch (_) {} };
+      // 速度采样：每 ≥1 秒统计一次字节增量 → MB/s（随进度节流一并下发）
+      let speedSample = null, speedBps = 0;
       // 进度即断点：每次上报都把分块状态落盘（节流 800ms）
       const tick = (force) => {
         const now = Date.now();
         if (!force && now - lastTick < 800) return;
         lastTick = now;
         const received = st.chunks.reduce((s, c) => s + c.received, 0);
+        if (!speedSample) speedSample = { ts: now, received };
+        else {
+          const dt = (now - speedSample.ts) / 1000;
+          if (dt >= 1) {
+            speedBps = Math.max(0, (received - speedSample.received) / dt);
+            speedSample = { ts: now, received };
+          }
+        }
         const pct = Math.min(Math.floor((received / st.total) * 100), 99);
-        if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { pct, received, total: st.total });
+        if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { pct, received, total: st.total, speed: Math.round(speedBps) });
         saveState();
       };
 

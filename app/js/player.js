@@ -1051,6 +1051,31 @@
   }
 
   /* ---------- 收藏 ---------- */
+  // isFavorite(track?)：不传则查询当前播放歌曲。
+  function isFavorite(track) {
+    const t = (track && typeof track.id === 'string') ? track : STATE.current;
+    return !!(t && t.id && favorites.some((f) => f.id === t.id && f.vendor === t.vendor));
+  }
+  // setFavorite(track, on)：确定性增删（非切换），供双写联动调用。返回实际是否发生变化。
+  function setFavorite(track, on) {
+    if (!track || typeof track.id !== 'string' || !track.vendor) return false;
+    const i = favorites.findIndex((f) => f.id === track.id && f.vendor === track.vendor);
+    const has = i !== -1;
+    if (on === has) return false;
+    if (on) favorites.unshift({ ...track, at: Date.now() });
+    else favorites.splice(i, 1);
+    saveJSON('uzz.fav', favorites);
+    syncFavBtn();
+    document.dispatchEvent(new CustomEvent('uzz:libChanged', { detail: { kind: on ? 'fav-add' : 'fav-del' } }));
+    return true;
+  }
+  // replaceFavorites(tracks)：整表替换（账号切换时用云端收藏重置本机列表）。
+  function replaceFavorites(tracks) {
+    favorites = (Array.isArray(tracks) ? tracks : []).filter((t) => t && typeof t.id === 'string' && t.vendor);
+    saveJSON('uzz.fav', favorites);
+    syncFavBtn(); renderQueue();
+    document.dispatchEvent(new CustomEvent('uzz:libChanged', { detail: { kind: 'fav-reset' } }));
+  }
   // toggleFav(track?)：不传则作用于当前播放歌曲。
   // 返回 true = 已收藏，false = 已取消（供列表红心 / 「收藏全部」判断）
   function toggleFav(track) {
@@ -1059,16 +1084,17 @@
     if (track && typeof track.id !== 'string') track = null;
     const t = track || STATE.current;
     if (!t || !t.id) { toast('还没有播放内容，无法收藏'); return false; }
-    const i = favorites.findIndex((f) => f.id === t.id && f.vendor === t.vendor);
-    const added = i === -1;
-    if (added) {
-      favorites.unshift({ ...t, at: Date.now() });
-    } else {
-      favorites.splice(i, 1);
+    const added = !isFavorite(t);
+    if (!setFavorite(t, added)) return !added;
+    hitFavButtons();
+    if (!track) {
+      toast(added ? '已收藏 ♥' : '已取消收藏');
+      // 双写联动：本机红心点在当前歌上 → 通知云端侧同步（cloud-player / android 监听）
+      document.dispatchEvent(new CustomEvent('uzz:favCurrent', { detail: { added, track: { ...t } } }));
     }
-    saveJSON('uzz.fav', favorites);
-    syncFavBtn();
-    // 弹跳动效：明确告诉用户"这次点击收到了"
+    return added;
+  }
+  function hitFavButtons() {
     const fb = $('fpFav'), fpbB = $('fpbFav');
     [fb, fpbB].forEach((b) => {
       if (!b) return;
@@ -1077,10 +1103,6 @@
       b.classList.add('hit');
       setTimeout(() => b.classList.remove('hit'), 360);
     });
-    if (!track) toast(added ? '已收藏 ♥' : '已取消收藏');
-    // 通知 app.js 刷新「我喜欢的音乐 / 最近播放」等列表，避免收藏后列表还是旧的
-    document.dispatchEvent(new CustomEvent('uzz:libChanged', { detail: { kind: added ? 'fav-add' : 'fav-del' } }));
-    return added;
   }
 
   /* ---------- 下载 ---------- */
@@ -1496,6 +1518,7 @@
     getResume, resumeFrom, clearResume, saveResume,
     updateSeekTip,
     toggleFav,
+    isFavorite, setFavorite, replaceFavorites,
     reloadLibrary: () => { favorites=loadJSON('uzz.fav',[]); history=loadJSON('uzz.history',[]); syncFavBtn(); renderQueue(); },
   };
 })(window);
