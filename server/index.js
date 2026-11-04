@@ -185,6 +185,17 @@ async function resolvePlayUrl(track) {
   return { url: '', vendor: '' };
 }
 
+// 解析结果缓存包装：同一首歌短时间内反复解析（切歌回听/重试/多端）直接命中缓存，
+// 不再打上游。地址 10 分钟过期，避免拿到已失效的 CDN token。
+async function resolvePlayUrlCached(track) {
+  const key = 'r:' + (track.vendor || '') + ':' + track.id + ':' + (track.quality || 'standard');
+  const cached = cacheGet(key);
+  if (cached) return cached;
+  const r = await resolvePlayUrl(track);
+  if (r && r.url) cacheSet(key, r, RESOLVE_CACHE_MS);
+  return r;
+}
+
 // 单音源搜索超时保护，避免某个音源卡死拖垮 auto（海外部署经 XY_SEARCH_TIMEOUT 放宽）
 const SEARCH_TIMEOUT = Number(process.env.XY_SEARCH_TIMEOUT) || 3500;
 function withTimeout(promise, ms) {
@@ -193,17 +204,45 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, t]).finally(() => clearTimeout(timer));
 }
 
+// ── 海外部署防风控缓存 ──────────────────────────────────────
+// 数据中心 IP（Render/Vercel 等）直连国内音源，突发高频请求极易被临时封禁
+// （真机 4G + 压测实测：连续矩阵测试后上游对本 IP 全部瞬时拒绝）。
+// 对「搜索结果」与「解析出的播放地址」加内存 LRU+TTL，命中率高的场景
+// 上游 QPS 可降一到两个数量级，显著降低被风控概率。
+const upstreamCache = new Map(); // key -> { value, expires }
+const UPSTREAM_CACHE_MAX = 600;
+const SEARCH_CACHE_MS = 10 * 60e3;   // 搜索结果 10 分钟
+const RESOLVE_CACHE_MS = 10 * 60e3;  // 播放地址 10 分钟（163 直链 token 带时效，不宜久存）
+function cacheGet(key) {
+  const hit = upstreamCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expires <= Date.now()) { upstreamCache.delete(key); return undefined; }
+  // LRU 触碰：删了重插排到队尾
+  upstreamCache.delete(key); upstreamCache.set(key, hit);
+  return hit.value;
+}
+function cacheSet(key, value, ttl) {
+  if (upstreamCache.size >= UPSTREAM_CACHE_MAX) {
+    const oldest = upstreamCache.keys().next().value;
+    upstreamCache.delete(oldest);
+  }
+  upstreamCache.set(key, { value, expires: Date.now() + ttl });
+}
+
 // 多音源搜索兜底：vendor=auto 时依次尝试各音源，返回第一个有结果的；
 // 未知 vendor 也走 auto 逻辑，保证总有搜索能力。
 // 歌手/专辑/歌单类型只有网易可靠支持 → 固定走网易，避免其他音源返回空/脏数据。
 async function searchMulti(vendor, kw, type, page, limit) {
+  const key = 's:' + vendor + ':' + type + ':' + kw + ':' + page + ':' + limit;
+  const cached = cacheGet(key);
+  if (cached) return cached;
   if (type && type !== 'song') {
     // 非单曲类型只有网易可靠支持。海外部署时网易接口偶发超时/风控，
     // 首次失败后隔 1s 重试一次，尽量不让"歌手/专辑/歌单"整个搜不出东西。
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const r = await withTimeout(netease.search(kw, type, page, limit), SEARCH_TIMEOUT * 3);
-        if (r && r.list && r.list.length) return r;
+        if (r && r.list && r.list.length) { cacheSet(key, r, SEARCH_CACHE_MS); return r; }
       } catch (e) { /* 重试 */ }
       if (attempt === 0) await new Promise((r2) => setTimeout(r2, 1000));
     }
@@ -214,7 +253,7 @@ async function searchMulti(vendor, kw, type, page, limit) {
       if (!PROVIDERS[v]) continue;
       try {
         const r = await withTimeout(PROVIDERS[v].search(kw, type, page, limit), SEARCH_TIMEOUT);
-        if (r && r.list && r.list.length) return r;
+        if (r && r.list && r.list.length) { cacheSet(key, r, SEARCH_CACHE_MS); return r; }
       } catch (e) {
         console.warn('[search fail]', v, e && e.message);
       }
@@ -223,6 +262,7 @@ async function searchMulti(vendor, kw, type, page, limit) {
   }
   try {
     const r = await getProvider(vendor).search(kw, type, page, limit);
+    if (r && r.list && r.list.length) cacheSet(key, r, SEARCH_CACHE_MS);
     return r || { list: [], total: 0 };
   } catch (e) {
     return { list: [], total: 0 };
@@ -310,7 +350,7 @@ async function handleApi(req, res, reqUrl) {
         // 超时后返回「暂无地址」让前端快速给可读提示，而不是一直转圈。
         try {
           const fb = await withTimeout(
-            resolvePlayUrl({ vendor, id, name: data.name || name, artist: data.artist || artist, duration: data.duration || 0, quality }),
+            resolvePlayUrlCached({ vendor, id, name: data.name || name, artist: data.artist || artist, duration: data.duration || 0, quality }),
             RESOLVE_TOTAL_TIMEOUT,
           );
           if (fb && fb.url) { data.url = fb.url; data.vendor = fb.vendor; data.trial = false; }
@@ -330,7 +370,7 @@ async function handleApi(req, res, reqUrl) {
       const artist = q(reqUrl, 'artist') || '';
       const duration = parseInt(q(reqUrl, 'duration') || '0', 10) || 0;
       const quality = q(reqUrl, 'quality') || 'standard';
-      const fb = await withTimeout(resolvePlayUrl({ vendor, id, name, artist, duration, quality }), RESOLVE_TOTAL_TIMEOUT);
+      const fb = await withTimeout(resolvePlayUrlCached({ vendor, id, name, artist, duration, quality }), RESOLVE_TOTAL_TIMEOUT);
       return sendJson(res, 200, { code: 200, url: forceHttps(fb.url), vendor: fb.vendor });
     }
 
@@ -631,7 +671,7 @@ async function handleDownload(req, res, reqUrl) {  const vendor = q(reqUrl, 'ven
     const artist = q(reqUrl, 'artist') || '';
     const duration = parseInt(q(reqUrl, 'duration') || '0', 10) || 0;
     const quality = q(reqUrl, 'quality') || 'standard';
-    const { url } = await withTimeout(resolvePlayUrl({ vendor, id, name, artist, duration, quality }), RESOLVE_TOTAL_TIMEOUT);
+    const { url } = await withTimeout(resolvePlayUrlCached({ vendor, id, name, artist, duration, quality }), RESOLVE_TOTAL_TIMEOUT);
     if (!url) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('no playable url');
