@@ -10,7 +10,7 @@
     {
       "id": 1,
       "status": "complete",
-      "evidence": "v3.0.11 CI run 41664594946，原始 artifact 13246720944 在隔离 MuMu 1 安装，真实搜索/播放/歌词通过；产物为 debug，不等同正式发布"
+      "evidence": "v3.0.13 GitHub Actions run 41735575086 正式签名构建、发布、Supabase 同步成功，云端产物已在 MuMu 安装并搜索播放；匿名下载摘要与正式附件一致"
     },
     {
       "id": 2,
@@ -29,8 +29,8 @@
     },
     {
       "id": 5,
-      "status": "partial",
-      "evidence": "v3.0.12 正式 APK 已发布，匿名下载 SHA-256 与正式 GitHub 附件一致；v3.0.13 本地正式签名构建已通过，尚未提交发布"
+      "status": "complete",
+      "evidence": "正式签名升级保留歌单；Android9+ 官方签名轮换迁移旧 debug 到正式版，真实持久歌单及原实例账号/文件保留；原生更新打开浏览器并完成摘要匹配下载；v3.0.13 CI 正式产物验证通过"
     },
     {
       "id": 6,
@@ -45,7 +45,7 @@
     "不绕过额度或认证限制",
     "公网部署仍只作为 README 后续方案"
   ],
-  "updatedAt": "2026-11-03T22:53:08.152Z",
+  "updatedAt": "2026-11-04T05:06:56.127Z",
   "blockerAudit": {
     "goalTurnsObserved": 1,
     "doNotMarkGoalBlockedBeforeThreeConsecutiveTurns": true
@@ -54,12 +54,11 @@
     "原实例 0 数据/会话保留；勿卸载或清空",
     "隔离实例 1 端口16416，实例2端口16448；先重新核对",
     "正式签名 .toolchain/signing/ 已存在；绝不重新生成/提交密钥",
-    "Windows Computer Use 本轮因 URL 识别失败停止，不能在同一轮绕过",
     "未把六步全部验收完成，不可标记 goal complete",
     "GitHub Secrets 已通过现有 Git 仓库认证配置；work/configure-signing-secrets.cjs 的 github() 可在内存中复用认证，不输出或保存令牌",
-    "2026-11-04 06:52 本地只读复核：v3.0.13 修复仍在工作树未提交，勿覆盖；先完成提交和真实发布",
     "真实密码验收已通过，无须索要用户密码；测试账户 cleanup run41675361628 成功",
-    "不能将六步标记完成：歌单 SQL DDL 与 ARM64 物理硬件尚缺"
+    "不能将六步标记完成：歌单 SQL DDL 与 ARM64 物理硬件尚缺",
+    "3.0.14 本地正式包已覆盖原实例，登录账号哈希/数量/本地文件保留；待提交 Tag 并验证 CI 正式产物"
   ],
   "signingSecretsConfigured": true,
   "backupBranch": "codex/android-acceptance-20261103"

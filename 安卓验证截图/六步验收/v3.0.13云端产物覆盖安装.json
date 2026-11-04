@@ -1,0 +1,13 @@
+{
+  "device": "127.0.0.1:16448",
+  "source": "GitHub Actions official v3.0.13 via anonymous Supabase mirror",
+  "version": "3.0.13",
+  "versionCode": 3000013,
+  "certificateSha256": "660f3e4b6a9771a2711cd6dc3c05abcb0f09212012c6ffa69439bf2efd3e4cf4",
+  "nonDebuggable": true,
+  "installedWithReplace": true,
+  "existingPlaylistPreserved": "XY-Upgrade-Probe",
+  "firstInstallTimeUnchanged": "2026-11-04 00:07:04",
+  "originalUserInstanceUntouched": true,
+  "passed": true
+}

@@ -1,0 +1,11 @@
+{
+  "device": "127.0.0.1:16448",
+  "installedVersion": "3.0.2",
+  "detectedVersion": "3.0.12",
+  "source": "live Supabase app_versions",
+  "nativeBrowserActivity": "com.android.chromium/org.chromium.chrome.browser.customtabs.CustomTabActivity",
+  "downloadedFile": "xiaoyang-music-3.0.12-android.apk",
+  "browserDownloadCompleted": true,
+  "expectedSha256": "2a702f36883ba2ce5368060074b7dbfafa3921db11f11f2f81db383e8173ce86",
+  "passed": true
+}

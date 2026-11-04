@@ -12,7 +12,22 @@ function config(env=process.env,root=ROOT){
  return{tag,version,repository,assetName,rootVersion:pkg.version,row:{platform:'android',version,download_url:'https://github.com/'+repository+'/releases/download/'+tag+'/'+assetName,release_notes:'安卓新版：独立手机界面、原生后台播放与本地音乐'}};
 }
 function prepare(env=process.env,root=ROOT){const c=config(env,root);for(const file of ['package.json','package-lock.json']){const target=path.join(root,file);if(!fs.existsSync(target))continue;const p=JSON.parse(fs.readFileSync(target,'utf8'));p.version=c.version;if(p.packages?.[''])p.packages[''].version=c.version;fs.writeFileSync(target,JSON.stringify(p,null,2)+'\n');}const client=path.join(root,'app/js/supabase-client.js');const text=fs.readFileSync(client,'utf8').replace(/(appVersion:\s*)'[^']*'/,"$1'"+c.version+"'");fs.writeFileSync(client,text);return c;}
-function checkApk(file,env=process.env){const c=config(env);const sdk=env.ANDROID_HOME||env.ANDROID_SDK_ROOT;const aapt=path.join(sdk||'', 'build-tools/34.0.0',process.platform==='win32'?'aapt.exe':'aapt');const output=cp.execFileSync(aapt,['dump','badging',path.resolve(file)],{encoding:'utf8'});const line=output.split('\n').find(l=>l.startsWith('package:'))||'';if(!line.includes("name='com.xiaoyang.musicplayer'")||!line.includes("versionName='"+c.version+"'"))throw Error('APK 包名或版本与发布标签不符');return c;}
+function checkApk(file,env=process.env){
+ const c=config(env),sdk=env.ANDROID_HOME||env.ANDROID_SDK_ROOT;
+ const aapt=path.join(sdk||'', 'build-tools/34.0.0',process.platform==='win32'?'aapt.exe':'aapt');
+ // Windows SDK aapt cannot reliably decode a Unicode APK argument. Inspect an ASCII basename.
+ const temporaryRoot=path.resolve(require('node:os').tmpdir()),directory=fs.mkdtempSync(path.join(temporaryRoot,'xy-apk-inspect-'));
+ try {
+  fs.copyFileSync(path.resolve(file),path.join(directory,'app.apk'));
+  const output=cp.execFileSync(aapt,['dump','badging','app.apk'],{cwd:directory,encoding:'utf8'});
+  const line=output.split('\n').find(l=>l.startsWith('package:'))||'';
+  if(!line.includes("name='com.xiaoyang.musicplayer'")||!line.includes("versionName='"+c.version+"'"))throw Error('APK 包名或版本与发布标签不符');
+  return c;
+ } finally {
+  if(path.dirname(directory)!==temporaryRoot||!path.basename(directory).startsWith('xy-apk-inspect-'))throw Error('Unexpected APK inspection temporary directory');
+  fs.rmSync(directory,{recursive:true,force:true});
+ }
+}
 async function sync({env=process.env,createClient,fetchImpl=fetch}={}){
  const c=config(env);if(c.rootVersion!==c.version)throw Error('请先按标签准备安卓版本再打包');
  if(!env.SUPABASE_URL||!env.SUPABASE_SERVICE_ROLE_KEY)throw Error('缺少 Supabase 发布 Secrets');

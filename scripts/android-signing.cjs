@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const ROOT=path.resolve(__dirname,'..'),directory=path.join(ROOT,'.toolchain/signing');
 const credentials=path.join(directory,'credentials.json'),keystore=path.join(directory,'xiaoyang-release.keystore');
 function signingEnvironment(){
- if(!fs.existsSync(credentials)||!fs.existsSync(keystore))throw Error('正式签名文件尚未生成；运行 node scripts/android-signing.cjs --create');
+ if(!fs.existsSync(credentials)||!fs.existsSync(keystore))throw Error('正式签名备份缺失；请恢复原 .toolchain/signing 目录。仅首次建立发布身份时才使用 --create');
  const data=JSON.parse(fs.readFileSync(credentials,'utf8'));
  return {...process.env,XY_ANDROID_KEYSTORE:keystore,XY_ANDROID_STORE_PASSWORD:data.storePassword,XY_ANDROID_KEY_ALIAS:data.alias,XY_ANDROID_KEY_PASSWORD:data.keyPassword};
 }
@@ -26,7 +26,7 @@ function configureGitHub(){
  for(const [name,value] of Object.entries(values)){const result=cp.spawnSync('gh',['secret','set',name,'--repo',repo],{input:value,encoding:'utf8',windowsHide:true});if(result.error||result.status!==0)throw Error('设置 '+name+' 失败；修复权限后可安全重试（沿用同一签名）');console.log('已配置 '+name);}
 }
 function build(){
- create();const {javaHome,sdkDirectory}=require('./build-android');const env={...signingEnvironment(),JAVA_HOME:javaHome(),ANDROID_HOME:sdkDirectory()};
+ const signing=signingEnvironment();const {javaHome,sdkDirectory}=require('./build-android');const env={...signing,JAVA_HOME:javaHome(),ANDROID_HOME:sdkDirectory()};
  if(!env.JAVA_HOME||!env.ANDROID_HOME)throw Error('需要 JDK 17 和 Android SDK 34');
  const run=(exe,args,cwd=ROOT)=>{const result=cp.spawnSync(exe,args,{cwd,env,stdio:'inherit',windowsHide:true});if(result.error||result.status!==0)throw Error('正式构建命令失败：'+path.basename(exe));};
  run(process.execPath,['scripts/build-android.js','--sync-only']);

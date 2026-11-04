@@ -1,0 +1,12 @@
+{
+  "version": "3.0.13",
+  "anonymousDownload": true,
+  "download_url": "https://codianpoqhqilkwviota.supabase.co/storage/v1/object/public/app-releases/v3.0.13/xiaoyang-music-3.0.13-android.apk",
+  "size": 5476838,
+  "sha256": "8eec061a1c3f112bf6fb14ded3ac7247c930b953312662644e29657a5cb78f85",
+  "matchesFormalGitHubAsset": true,
+  "realCheckAppUpdatePassed": true,
+  "currentVersionReturnsNull": true,
+  "cloudPlaylistSchemaError": "PGRST205",
+  "passed": true
+}

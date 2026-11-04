@@ -1,0 +1,15 @@
+{
+  "device": "127.0.0.1:16480",
+  "fromVersion": "3.0.1 debug",
+  "toVersion": "3.0.13 release",
+  "legacyCertificate": "9784e36065b5ad69d2a81fd45166d39e1a9eb41d31f1e8ecd1688c008c5afedc",
+  "releaseCertificate": "660f3e4b6a9771a2711cd6dc3c05abcb0f09212012c6ffa69439bf2efd3e4cf4",
+  "verifiedDurableBeforeMigration": true,
+  "createdThroughActualUi": true,
+  "playlistPreserved": "XY-Legacy-Durable",
+  "noUninstall": true,
+  "usesOfficialProofOfRotation": true,
+  "migrationMinimumAndroidApi": 28,
+  "normalReleaseReinstallAfterMigrationPassed": true,
+  "passed": true
+}

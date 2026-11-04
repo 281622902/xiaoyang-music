@@ -1,0 +1,14 @@
+{
+  "fromVersion": "3.0.1 debug",
+  "viaVersion": "3.0.13 official signing rotation",
+  "toVersion": "3.0.14 release",
+  "firstInstallTime": "2026-11-03 07:23:59",
+  "noUninstall": true,
+  "maskedAccountHashMatchedBeforeUpgrade": true,
+  "originalFavoritesCount": 0,
+  "originalPlaylistsCount": 0,
+  "originalLocalFileCount": 1,
+  "allOriginalLocalNamesPresent": true,
+  "passed": true,
+  "checkedAt": "2026-11-04T05:06:08.182Z"
+}
