@@ -98,6 +98,12 @@ function isFullAudio(len, expect) {
 const VENDOR_ORDER = ['netease', 'tencent', 'kugou', 'kuwo'];
 // 音质档位 → GDStudio br 映射（netease level 档位无法直连时用聚合源兜底）
 const QUALITY_BR = { standard: '128', ex: '320', lossless: '999', hires: '999' };
+// 防御性加固：上游任何环节返回 http:// 明文音频地址时统一重写为 https://，
+// 避免安卓 WebView / 原生播放层因明文策略静默拦截（网易云等音乐 CDN 均支持 https）
+function forceHttps(u) {
+  return typeof u === 'string' ? u.replace(/^http:\/\//i, 'https://') : u;
+}
+
 async function resolvePlayUrl(track) {
   const primary = getProvider(track.vendor);
   if (USE_MOCK) return { url: await primary.url(track.id), vendor: track.vendor };
@@ -300,6 +306,7 @@ async function handleApi(req, res, reqUrl) {
           data.resolveTimeout = true;
         }
       }
+      data.url = forceHttps(data.url);
       return sendJson(res, 200, { code: 200, data });
     }
 
@@ -311,7 +318,7 @@ async function handleApi(req, res, reqUrl) {
       const duration = parseInt(q(reqUrl, 'duration') || '0', 10) || 0;
       const quality = q(reqUrl, 'quality') || 'standard';
       const fb = await withTimeout(resolvePlayUrl({ vendor, id, name, artist, duration, quality }), RESOLVE_TOTAL_TIMEOUT);
-      return sendJson(res, 200, { code: 200, url: fb.url, vendor: fb.vendor });
+      return sendJson(res, 200, { code: 200, url: forceHttps(fb.url), vendor: fb.vendor });
     }
 
     if (pathname === '/api/lyric') {

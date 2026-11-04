@@ -239,12 +239,27 @@
     };
     window.addEventListener('pointerup', endDrag);
   }
-  function toast(msg) {
+  function toast(msg, ms) {
     const t = $('toast');
     t.textContent = msg;
     t.classList.remove('hidden');
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => t.classList.add('hidden'), 1800);
+    toast._t = setTimeout(() => t.classList.add('hidden'), ms || 1800);
+  }
+  // 播放错误详情：错误码含义 + 原生错误码 + 音频源片段，直接上屏帮助远程定位
+  function errDetail(err, src) {
+    const map = { 1: '操作中止', 2: '网络错误', 3: '解码失败', 4: '格式或地址不支持' };
+    const bits = [];
+    if (err && err.nativeCode) bits.push('native=' + err.nativeCode);
+    if (err && err.code != null) bits.push('code=' + err.code + (map[err.code] ? '(' + map[err.code] + ')' : ''));
+    if (err && err.message && !err.nativeCode) bits.push(String(err.message).slice(0, 60));
+    if (src) {
+      let frag = src;
+      const m = /url=([^&]+)/.exec(src);
+      if (m) { try { frag = decodeURIComponent(m[1]); } catch (e) { frag = m[1]; } }
+      bits.push('src=' + frag.slice(0, 80));
+    }
+    return bits.join(' ');
   }
   function picUrl(t) {
     if (t.pic) return UzzApi.picProxy ? UzzApi.picProxy(t.pic) : t.pic;
@@ -700,7 +715,7 @@
     } catch (e) {
       if (!seqAlive(seq)) return;   // 已被新歌接管，静默退出
       setPlayIcon(false);
-      toast('自动播放被拦截，点一下播放键');
+      toast(e.name === 'NotAllowedError' ? '自动播放被拦截，点一下播放键' : '播放启动失败：' + (e.name || '') + ' ' + (e.message || e), 6000);
     }
     if (!seqAlive(seq)) return;
 
@@ -1239,10 +1254,17 @@
       setPlayIcon(false); syncDlPlayState(false);
     });
     audio.addEventListener('error', () => {
-      // 只有当前这次播放才提示，避免旧歌的解码失败串台到新歌
-      if (STATE.lastSrcSet && Date.now() - STATE.lastSrcSet < 300) return;
+      // 切歌时换 src 引起的瞬时中止噪音（code=1）才忽略；其余错误一律上屏，
+      // 绝不再静默吞掉——安卓原生播放失败经常在 300ms 内回调，此前被盲区吞掉导致"点了没反应"
+      const err = audio.error;
+      if (err?.code === 1 && STATE.lastSrcSet && Date.now() - STATE.lastSrcSet < 300) return;
       if (audio.paused && !STATE.current) return;
-      toast(STATE.current?.vendor === 'local' ? '文件解码失败或已移动，请检查文件；少见格式需额外解码支持' : '播放出错，尝试下一个音源或刷新');
+      const detail = errDetail(err, audio.currentSrc || audio.src || '');
+      if (STATE.current?.vendor === 'local') {
+        toast('文件解码失败或已移动' + (detail ? '：' + detail : ''), 6000);
+      } else {
+        toast('播放失败' + (detail ? '：' + detail : '，可点重试或换音源'), 6000);
+      }
     });
 
     if (headless) return;
