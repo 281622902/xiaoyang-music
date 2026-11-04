@@ -290,20 +290,20 @@ async function searchMulti(vendor, kw, type, page, limit) {
     return { list: [], total: 0 };
   }
   if (vendor === 'auto' || !PROVIDERS[vendor]) {
-    for (const v of VENDOR_ORDER) {
-      if (!PROVIDERS[v]) continue;
+    // 顺序：网易 → GDStudio网易（海外可达，结果=可播的网易曲目）→ 其他直连源。
+    // 网易直连在海外被风控时，先走 GDStudio 而不是酷狗：酷狗曲目解析需要
+    // 二次跨源（慢且受 GDStudio 限流影响），网易曲目可直连+聚合+GDStudio 三路解析。
+    const ORDER = ['netease', '__gds__', 'tencent', 'kugou', 'kuwo'];
+    for (const v of ORDER) {
       try {
-        const r = await withTimeout(PROVIDERS[v].search(kw, type, page, limit), SEARCH_TIMEOUT);
+        const r = v === '__gds__'
+          ? await withTimeout(gds.search('netease', kw, page, limit), SEARCH_TIMEOUT * 2)
+          : (PROVIDERS[v] ? await withTimeout(PROVIDERS[v].search(kw, type, page, limit), SEARCH_TIMEOUT) : null);
         if (r && r.list && r.list.length) { cacheSet(key, r, SEARCH_CACHE_MS); return r; }
       } catch (e) {
         console.warn('[search fail]', v, e && e.message);
       }
     }
-    // 全部直连源失败/超时 → GDStudio 网易搜索兜底（海外可达，返回网易曲目可直接解析）
-    try {
-      const r = await withTimeout(gds.search('netease', kw, page, limit), SEARCH_TIMEOUT * 2);
-      if (r && r.list && r.list.length) { cacheSet(key, r, SEARCH_CACHE_MS); return r; }
-    } catch (e) { /* 忽略 */ }
     return { list: [], total: 0 };
   }
   try {
