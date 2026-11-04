@@ -7,6 +7,14 @@ function writeIfChanged(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== text) fs.writeFileSync(file, text);
 }
+function copyDir(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, entry.name), to = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDir(from, to);
+    else if (entry.isFile()) fs.copyFileSync(from, to);
+  }
+}
 function androidVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version);
   if (!match) throw new Error('项目版本不是有效的 X.Y.Z 版本');
@@ -63,7 +71,9 @@ function prepareAssets(root = ROOT) {
     const target = path.join(mobileWeb, file === 'android.html' ? 'index.html' : file);
     fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(path.join(root, 'app', file), target);
   }
-  fs.cpSync(vendor, path.join(mobileWeb, 'vendor'), { recursive: true });
+  // Windows 上 fs.cpSync 递归拷贝会在进程内触发原生崩溃（0xC0000409，无法 try/catch），
+  // 改用手动递归拷贝；CI(Linux) 行为不变。
+  copyDir(vendor, path.join(mobileWeb, 'vendor'));
   console.log('安卓独立页面已生成：capacitor/www/index.html');
 }
 if (require.main === module) {

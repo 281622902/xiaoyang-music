@@ -39,6 +39,7 @@
         const fragment = document.createDocumentFragment();
         for (const row of rows) {
           const li = document.createElement('li'), name = document.createElement('span');
+          li.dataset.url = row.song_url; // 乐观更新按 URL 增删列表项
           name.textContent = row.song_name; li.appendChild(name);
           const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '取消收藏';
           remove.addEventListener('click', async () => {
@@ -103,7 +104,29 @@
     heart = global.bindFavoriteButton({ button, status, getSong: () => cloud.currentSong ? {...cloud.currentSong,url:cloud.currentSong.favoriteUrl || cloud.currentSong.url} : null, onError: error => notify(error.message) });
     cloud.heart = heart;
     document.addEventListener('xy:trackChanged', syncCurrent);
-    button.addEventListener('favoritechange', event => { notify(event.detail.favorited ? '已收藏到云端 ♥' : '已取消云端收藏'); refreshList(); });
+    // 云端收藏列表乐观更新：不等网络，按 favoritechange 事件直接增删列表项；
+    // refreshList() 随后后台对账，以服务端全量列表为准。
+    function optimisticFavorites(d) {
+      const ul = $('cloudFavorites');
+      if (!ul || !d?.songUrl) return;
+      const items = [...ul.children];
+      if (d.favorited) {
+        if (items.some(li => li.dataset.url === d.songUrl)) return;
+        const li = document.createElement('li'), name = document.createElement('span');
+        li.dataset.url = d.songUrl;
+        name.textContent = cloud.currentSong?.name || '未知歌曲';
+        li.appendChild(name); ul.insertBefore(li, ul.firstChild);
+      } else {
+        items.filter(li => li.dataset.url === d.songUrl).forEach(li => li.remove());
+      }
+    }
+    button.addEventListener('favoritechange', event => {
+      const d = event.detail || {};
+      optimisticFavorites(d);
+      if (d.pending) notify(d.favorited ? '正在收藏到云端…' : '正在取消云端收藏…');
+      else if (!d.rollback) notify(d.favorited ? '已收藏到云端 ♥' : '已取消云端收藏');
+      refreshList();
+    });
     const { data: { subscription } } = global.supabase.auth.onAuthStateChange((_event, session) => {
       const next = session?.user ?? null;
       const changed = cloud.user?.id !== next?.id;
