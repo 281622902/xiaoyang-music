@@ -53,6 +53,7 @@
   function clearQueue() {
     resetPlayback(); STATE.loading = false;
     STATE.queue = []; STATE.index = -1; STATE.current = null;
+    try { localStorage.removeItem(QSNAP_KEY); } catch (e) { /* 忽略 */ }
     notifyTrackChanged();
     renderQueue();
   }
@@ -92,15 +93,44 @@
      记下退出时正在听的歌与播放进度，下次启动可一键接着听。
      注意：只记「听到一定程度」的（>5s且不超过结尾5s），避免误记刚点开就退出的歌。 */
   const RESUME_KEY = 'uzz.resume';
+  // 队列快照：进程被杀/重启后，点「继续播放」能回到整条队列（含上一首/下一首上下文），
+  // 而不是只剩单曲。安卓端由原生 PlaybackStore 承担同样的职责，这里补齐桌面端。
+  const QSNAP_KEY = 'uzz.queueSnapshot';
+  function stripForSnapshot(q) {
+    // 只留还原队列所需字段：在线歌曲的 url 会过期，恢复时重新解析；
+    // 本机/云端直链歌曲保留 url（不会过期）。lyric 等大字段一律剥离。
+    const base = { id: q.id, vendor: q.vendor, name: q.name || '', artist: q.artist || '',
+      album: q.album || '', pic: q.pic || '', duration: q.duration || 0, quality: q.quality || '' };
+    if ((q.vendor === 'device' || q.vendor === 'cloud') && q.url) base.url = q.url;
+    return base;
+  }
+  function saveQueueSnapshot() {
+    const t = STATE.current;
+    if (!t || !t.id || !STATE.queue.length) return;
+    try {
+      localStorage.setItem(QSNAP_KEY, JSON.stringify({
+        queue: STATE.queue.slice(0, 300).map(stripForSnapshot),
+        index: STATE.index, mode: STATE.mode, at: Date.now(),
+      }));
+    } catch (e) { /* 容量满等异常忽略 */ }
+  }
+  function loadQueueSnapshot() {
+    try {
+      const s = JSON.parse(localStorage.getItem(QSNAP_KEY) || 'null');
+      if (s && Array.isArray(s.queue) && s.queue.length && Date.now() - (s.at || 0) < 7 * 24 * 3600e3) return s;
+      return null;
+    } catch (e) { return null; }
+  }
   function saveResume() {
     try {
       // 「记住上次播放进度」关闭时不再写入
-      if (localStorage.getItem('uzz.play.resume') === '0') { localStorage.removeItem(RESUME_KEY); return; }
+      if (localStorage.getItem('uzz.play.resume') === '0') { localStorage.removeItem(RESUME_KEY); localStorage.removeItem(QSNAP_KEY); return; }
+      saveQueueSnapshot();
       const t = STATE.current;
       if (!t || !t.id) { localStorage.removeItem(RESUME_KEY); return; }
       const c = audio.currentTime || 0;
       const d = audio.duration || t.duration || 0;
-      // 开头 5 秒内或已接近结尾的不记录（从头听更自然）
+      // 开头 5 秒内或已接近结尾的不记录（从头听更自然）；队列快照不受此限制
       if (c < 5 || (d && c > d - 8)) { localStorage.removeItem(RESUME_KEY); return; }
       localStorage.setItem(RESUME_KEY, JSON.stringify({
         id: t.id, name: t.name || '', artist: t.artist || '', album: t.album || '',
@@ -119,11 +149,22 @@
     } catch (e) { return null; }
   }
   function clearResume() { try { localStorage.removeItem(RESUME_KEY); } catch (e) { /* 忽略 */ } }
-  // 恢复：载入该歌并跳到上次进度（不自动播放，等用户点）
+  // 恢复：载入该歌并跳到上次进度（不自动播放，等用户点）；队列快照可用时整条队列一起还原
   async function resumeFrom(r) {
     if (!r || !r.id) return;
     try {
       clearResume();
+      // 队列上下文还原：快照里包含这首歌时，先重建整条队列再播，
+      // 这样恢复后上一首/下一首/队列面板都是完整的老队列。
+      const snap = loadQueueSnapshot();
+      if (snap) {
+        const qi = snap.queue.findIndex((t) => t && t.id === r.id && t.vendor === r.vendor);
+        if (qi !== -1) {
+          const seen = new Set();
+          STATE.queue = snap.queue.filter((t) => { const k = t.vendor + '|' + t.id; if (!t || !t.id || seen.has(k)) return false; seen.add(k); return true; });
+          if (snap.mode && MODE_TEXT[snap.mode]) { STATE.mode = snap.mode; syncModeBtn(); }
+        }
+      }
       await loadAndPlay({ ...r, resumeAt: r.time });
       if (r.time > 5) {
         // 等元数据就绪后再跳转，避免 duration 未定导致 seek 无效
@@ -439,13 +480,8 @@
     if (headless) { emit('favorites'); return; }
     const t = STATE.current;
     const on = !!(t && favorites.some((f) => f.id === t.id && f.vendor === t.vendor));
-    const btn = $('fpFav');
-    if (btn) {
-      // 用 class 控制填充态（SVG 空心/实心），比替换♡♥ 字符更醒目
-      btn.classList.toggle('on', on);
-      btn.classList.toggle('fav-hit', on);
-      btn.title = on ? '已收藏，点击取消' : '收藏这首歌';
-    }
+    // 迷你条红心已合并到云端红心（favoriteBtn，由 cloud-player.js 的红心引擎管理状态），
+    // 这里只同步全屏播放器的本机红心 fpbFav。
     const fpb = $('fpbFav');
     if (fpb) {
       fpb.classList.toggle('on', on);
@@ -1095,8 +1131,8 @@
     return added;
   }
   function hitFavButtons() {
-    const fb = $('fpFav'), fpbB = $('fpbFav');
-    [fb, fpbB].forEach((b) => {
+    const fpbB = $('fpbFav');
+    [fpbB].forEach((b) => {
       if (!b) return;
       b.classList.remove('hit');
       void b.offsetWidth;      // 强制重排，让动画能重复触发
@@ -1410,7 +1446,7 @@
     $('fpPrev').addEventListener('click', prev);
     $('fpMode').addEventListener('click', cycleMode);
     // 同上：必须用箭头函数忽略事件对象
-    $('fpFav').addEventListener('click', () => toggleFav());
+    // （迷你条本机红心 fpFav 已移除，收藏统一走云端红心 favoriteBtn 与全屏 fpbFav）
     $('fpDownload').addEventListener('click', downloadCurrent);
     $('fpQueue').addEventListener('click', toggleQueue);
 

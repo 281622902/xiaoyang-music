@@ -1198,7 +1198,7 @@
     if (mmPrev) mmPrev.addEventListener('click', () => window.Player && window.Player.prev());
     if (mmNext) mmNext.addEventListener('click', () => window.Player && window.Player.next());
     const mmFav = $('mmFav');
-    if (mmFav) mmFav.addEventListener('click', () => { const f = $('fpFav'); if (f) f.click(); });
+    if (mmFav) mmFav.addEventListener('click', () => { Player.toggleFav(); });
     const mmVol = $('mmVol');
     if (mmVol) mmVol.addEventListener('click', () => { const v = $('btnVol'); if (v) v.click(); });
     // Mini 音量滑条：拖动实时调音量（悬停图标弹出）
@@ -2655,7 +2655,7 @@
           volUp: () => { const a = document.getElementById('audio'); if (a && P && P.setVolume) P.setVolume(a.volume + 0.05); },
           volDown: () => { const a = document.getElementById('audio'); if (a && P && P.setVolume) P.setVolume(a.volume - 0.05); },
           mini: () => { const t = $('tbMini'); if (t) t.click(); },
-          like: () => { const b = $('fpFav'); if (b) b.click(); },
+          like: () => { P && P.toggleFav(); },
           lyric: () => { const b = $('btnLyric'); if (b) b.click(); },
           trans: () => { const b = $('lyTrans'); if (b) b.click(); },
         };
