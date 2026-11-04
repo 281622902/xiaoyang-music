@@ -713,7 +713,7 @@
       setPlayIcon(false);
       toast(resolveTimeout || STATE.current.resolveTimeout
         ? '网络较慢，解析超时。可点「重试」或换一个音源'
-        : '该音源暂无可播放地址，可换一个音源试试');
+        : '该歌曲受版权保护或暂无可用音源，可换一个音源试试');
       return;
     }
 
@@ -1267,14 +1267,32 @@
       } catch (e) { /* 忽略 */ }
       setPlayIcon(false); syncDlPlayState(false);
     });
-    audio.addEventListener('error', () => {
+    audio.addEventListener('error', async () => {
       // 切歌时换 src 引起的瞬时中止噪音（code=1）才忽略；其余错误一律上屏，
       // 绝不再静默吞掉——安卓原生播放失败经常在 300ms 内回调，此前被盲区吞掉导致"点了没反应"
       const err = audio.error;
       if (err?.code === 1 && STATE.lastSrcSet && Date.now() - STATE.lastSrcSet < 300) return;
       if (audio.paused && !STATE.current) return;
+      const cur = STATE.current;
+      // 在线歌流加载失败（真机实测：解析给的酷狗地址上游 403 → 原生 IO_BAD_HTTP_STATUS）：
+      // 自动强制换源重解析一次（fresh=1 绕过解析缓存），拿到新地址直接续播
+      if (cur && cur.vendor !== 'local' && cur.vendor !== 'device' && !cur.__streamRetried &&
+          (err?.code === 2 || err?.code === 4 || /IO|HTTP|NETWORK|TIMEOUT/i.test(err?.nativeCode || ''))) {
+        cur.__streamRetried = true;
+        toast('音源连接失败，正在自动换源…', 4000);
+        try {
+          const full = await UzzApi.getSong(cur, cur.vendor, playbackRequest.signal, { fresh: 1 });
+          if (seqAlive(STATE.playSeq) && STATE.current === cur && full && full.url) {
+            Object.assign(cur, { url: full.url, vendor: full.vendor || cur.vendor });
+            audio.src = sameOriginStream(full.url);
+            STATE.lastSrcSet = Date.now();
+            await audio.play().catch(() => {});
+            return;
+          }
+        } catch (e) { /* 重试失败，落到下面的错误提示 */ }
+      }
       const detail = errDetail(err, audio.currentSrc || audio.src || '');
-      if (STATE.current?.vendor === 'local') {
+      if (cur?.vendor === 'local') {
         toast('文件解码失败或已移动' + (detail ? '：' + detail : ''), 6000);
       } else {
         toast('播放失败' + (detail ? '：' + detail : '，可点重试或换音源'), 6000);

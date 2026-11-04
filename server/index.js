@@ -108,6 +108,31 @@ function forceHttps(u) {
   return typeof u === 'string' ? u.replace(/^http:\/\//i, 'https://') : u;
 }
 
+// 用 GDStudio（海外可达）按「歌名」找网易同曲并解析完整版地址。
+// 只用歌名搜索（GDStudio 对"歌名+歌手"整串搜索分词质量差，易漏原版），
+// 拿到候选后按歌手过滤；先严格匹配，3 个候选内无合格者则放宽取第一个歌名命中的
+// （重名翻唱也远好于"播不了"）。最多试 3 次 url 解析，控制整体耗时。
+async function gdsNeteaseUrl(name, artist, quality) {
+  const nm = (name || '').trim();
+  if (!nm) return '';
+  const { list } = await gds.search('netease', nm, 1, 10);
+  if (!list.length) return '';
+  const an = (artist || '').trim().toLowerCase();
+  const pick = list.filter((c) => c.name.includes(nm) || nm.includes(c.name));
+  const strict = an ? pick.filter((c) => {
+    const cn = (c.artist || '').toLowerCase();
+    return cn.split('/').some((part) => part && (an.includes(part) || part.includes(an)));
+  }) : pick;
+  const candidates = [...(strict.length ? strict : pick)].slice(0, 3);
+  for (const c of candidates) {
+    try {
+      const cu = await gds.url('netease', c.id, QUALITY_BR[quality] || '320');
+      if (cu) return cu;
+    } catch (e) { /* 试下一候选 */ }
+  }
+  return '';
+}
+
 async function resolvePlayUrl(track) {
   const primary = getProvider(track.vendor);
   if (USE_MOCK) return { url: await primary.url(track.id), vendor: track.vendor };
@@ -142,6 +167,19 @@ async function resolvePlayUrl(track) {
       if (isFullAudio(len, expect)) return { url: au, vendor: track.vendor };
     }
   } catch (e) { /* 忽略 */ }
+  // 2.5) GDStudio 跨源兜底（海外部署关键路径）：酷狗/酷我/QQ 曲目的解析接口
+  // 在海外常被上游直接拒绝（真机实测：酷狗地址 → /api/stream 上游 403 →
+  // 安卓原生 IO_BAD_HTTP_STATUS）。用海外可达的 GDStudio 按「歌名+歌手」
+  // 搜网易同曲，再按网易 ID 解析完整版——保证搜得到就能播。
+  if (!u && track.vendor !== 'netease' && (track.name || '').trim()) {
+    try {
+      const gu = await withTimeout(gdsNeteaseUrl(track.name, track.artist, track.quality), 9000);
+      if (gu) {
+        const len = await probeAudioLen(gu);
+        if (isFullAudio(len, expect)) return { url: gu, vendor: 'netease' };
+      }
+    } catch (e) { /* 忽略，走后续兜底 */ }
+  }
   // 3) GDStudio 完整版解析（按 netease ID 直出完整版，按音质档位选 br）
   if (track.vendor === 'netease') {
     try {
@@ -187,10 +225,13 @@ async function resolvePlayUrl(track) {
 
 // 解析结果缓存包装：同一首歌短时间内反复解析（切歌回听/重试/多端）直接命中缓存，
 // 不再打上游。地址 10 分钟过期，避免拿到已失效的 CDN token。
-async function resolvePlayUrlCached(track) {
+// fresh=1 时跳过缓存读（流加载 403 后前端强制换源重解析用），结果仍回写缓存。
+async function resolvePlayUrlCached(track, opts) {
   const key = 'r:' + (track.vendor || '') + ':' + track.id + ':' + (track.quality || 'standard');
-  const cached = cacheGet(key);
-  if (cached) return cached;
+  if (!(opts && opts.fresh)) {
+    const cached = cacheGet(key);
+    if (cached) return cached;
+  }
   const r = await resolvePlayUrl(track);
   if (r && r.url) cacheSet(key, r, RESOLVE_CACHE_MS);
   return r;
@@ -258,6 +299,11 @@ async function searchMulti(vendor, kw, type, page, limit) {
         console.warn('[search fail]', v, e && e.message);
       }
     }
+    // 全部直连源失败/超时 → GDStudio 网易搜索兜底（海外可达，返回网易曲目可直接解析）
+    try {
+      const r = await withTimeout(gds.search('netease', kw, page, limit), SEARCH_TIMEOUT * 2);
+      if (r && r.list && r.list.length) { cacheSet(key, r, SEARCH_CACHE_MS); return r; }
+    } catch (e) { /* 忽略 */ }
     return { list: [], total: 0 };
   }
   try {
@@ -348,9 +394,10 @@ async function handleApi(req, res, reqUrl) {
       if (!data.url || data.trial) {
         // 兜底链整体限时：跨音源逐个 search+url+probe 可能拖很久，
         // 超时后返回「暂无地址」让前端快速给可读提示，而不是一直转圈。
+        // fresh=1：流加载 403 后前端强制换源重解析，跳过解析缓存读。
         try {
           const fb = await withTimeout(
-            resolvePlayUrlCached({ vendor, id, name: data.name || name, artist: data.artist || artist, duration: data.duration || 0, quality }),
+            resolvePlayUrlCached({ vendor, id, name: data.name || name, artist: data.artist || artist, duration: data.duration || 0, quality }, { fresh: q(reqUrl, 'fresh') === '1' }),
             RESOLVE_TOTAL_TIMEOUT,
           );
           if (fb && fb.url) { data.url = fb.url; data.vendor = fb.vendor; data.trial = false; }
@@ -360,6 +407,8 @@ async function handleApi(req, res, reqUrl) {
         }
       }
       data.url = forceHttps(data.url);
+      // 全部音源都试过仍无地址（非超时）：给前端明确标记 → 提示「受版权保护或暂无音源」
+      if (!data.url && !data.resolveTimeout) data.exhausted = true;
       return sendJson(res, 200, { code: 200, data });
     }
 
@@ -370,7 +419,10 @@ async function handleApi(req, res, reqUrl) {
       const artist = q(reqUrl, 'artist') || '';
       const duration = parseInt(q(reqUrl, 'duration') || '0', 10) || 0;
       const quality = q(reqUrl, 'quality') || 'standard';
-      const fb = await withTimeout(resolvePlayUrlCached({ vendor, id, name, artist, duration, quality }), RESOLVE_TOTAL_TIMEOUT);
+      const fb = await withTimeout(
+        resolvePlayUrlCached({ vendor, id, name, artist, duration, quality }, { fresh: q(reqUrl, 'fresh') === '1' }),
+        RESOLVE_TOTAL_TIMEOUT,
+      );
       return sendJson(res, 200, { code: 200, url: forceHttps(fb.url), vendor: fb.vendor });
     }
 

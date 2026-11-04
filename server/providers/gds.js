@@ -43,4 +43,44 @@ async function url(vendor, id, br) {
   return '';
 }
 
-module.exports = { name: 'gds', url };
+// GDStudio 搜索（netease 源）：海外可达，直连网易搜索被风控/超时时的兜底。
+// 真机 4G 实测：海外后端直连网易搜索经常失败，导致搜索结果全是酷狗曲目
+// （酷狗解析在海外又被拒 → 必然「该音源暂无可播放地址」）。
+// GDStudio 走 Cloudflare 全球节点，搜索+解析全链路海外可用。
+async function search(vendor, keyword, page = 1, limit = 20) {
+  if (vendor && vendor !== 'netease') return { list: [], total: 0 };
+  const kw = String(keyword || '').trim();
+  if (!kw) return { list: [], total: 0 };
+  try {
+    const u = `https://music-api.gdstudio.xyz/api.php?types=search&source=netease&name=${encodeURIComponent(kw)}&count=${limit}&pages=${page}`;
+    const res = await fetch(u, { headers: { 'User-Agent': UA }, redirect: 'follow' });
+    if (!res.ok) return { list: [], total: 0 };
+    const j = await res.json();
+    const arr = Array.isArray(j) ? j : [];
+    // GDStudio 字段形态不定：artist/album 可能是字符串、对象 {name} 或数组 [{name}]
+    const flat = (v) => {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return v.map((x) => (x && x.name) || x).filter(Boolean).join('/');
+      return v.name || '';
+    };
+    const list = arr.map((s) => ({
+      id: String(s.id || ''),
+      name: s.name || s.title || '',
+      artist: flat(s.artist),
+      artistId: (s.artist && s.artist.id) || '',
+      album: flat(s.album),
+      albumId: (s.album && s.album.id) || '',
+      pic: s.pic || s.picUrl || s.cover || '',
+      vendor: 'netease',
+      duration: Number(s.dt || s.duration || 0) || 0,
+    })).filter((x) => x.id && x.name);
+    // GDStudio 分页无精确 total：当前页不满则视为末页
+    const total = (page - 1) * limit + list.length + (list.length >= limit ? 1 : 0);
+    return { list, total };
+  } catch (e) {
+    return { list: [], total: 0 };
+  }
+}
+
+module.exports = { name: 'gds', url, search };

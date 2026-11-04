@@ -92,7 +92,8 @@
   }
 
   // 单曲详情（含播放地址 + 歌词）；可传 track 对象以启用多音源兜底
-  async function getSong(track, vendor, signal) {
+  // opts.fresh=1：绕过服务端解析缓存（流加载 403 后强制换源重解析用）
+  async function getSong(track, vendor, signal, opts) {
     const id = typeof track === 'string' ? track : track.id;
     const name = typeof track === 'string' ? '' : (track.name || '');
     const artist = typeof track === 'string' ? '' : (track.artist || '');
@@ -106,7 +107,8 @@
         name,
         artist,
         quality: localStorage.getItem('uzz.quality') || 'standard',
-      }, 22000, signal);
+        fresh: opts && opts.fresh ? 1 : undefined,
+      }, 26000, signal);
     } catch (e) {
       const msg = String((e && e.message) || e);
       throw new Error(/abort/i.test(msg) ? '解析超时（网络较慢），请重试或换个音源' : msg);
@@ -118,8 +120,8 @@
     return t;
   }
 
-  // 取播放地址：可传 track 对象（含 name/artist 用于多音源兜底）
-  async function getUrl(track, vendor, signal) {
+  // 取播放地址：可传 track 对象（含 name/artist 用于多音源兜底）；opts.fresh 绕过解析缓存
+  async function getUrl(track, vendor, signal, opts) {
     const id = typeof track === 'string' ? track : track.id;
     const name = typeof track === 'string' ? '' : (track.name || '');
     const artist = typeof track === 'string' ? '' : (track.artist || '');
@@ -130,6 +132,7 @@
         name,
         artist,
         quality: localStorage.getItem('uzz.quality') || 'standard',
+        fresh: opts && opts.fresh ? 1 : undefined,
       }, 20000, signal);
       if (r && r.code === 200 && r.url) return r.url;
     } catch (e) {}
