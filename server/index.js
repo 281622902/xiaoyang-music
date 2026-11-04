@@ -130,7 +130,32 @@ async function gdsNeteaseUrl(name, artist, quality) {
       if (cu) return cu;
     } catch (e) { /* 试下一候选 */ }
   }
-  return '';
+  // GDStudio 整体不可用（限流升级为连接拒绝，实测会持续一段时间）时的
+  // 第二重兜底：meting 公共实例（api.injahow.cn，另一套独立基础设施），
+  // 其搜索响应直接携带 mp3 直链，按歌名搜同曲取地址即可。
+  return metingSearchUrl(nm, an);
+}
+
+// meting 搜索同曲并直接返回其携带的 mp3 直链（不落库、不解析，拿来即用）
+async function metingSearchUrl(name, artist) {
+  const nm = (name || '').trim();
+  if (!nm) return '';
+  try {
+    const u = 'https://api.injahow.cn/meting/?format=json&server=netease&type=search&id=' + encodeURIComponent(nm);
+    const res = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Safari/537.36' }, redirect: 'follow' });
+    if (!res.ok) return '';
+    const arr = await res.json();
+    if (!Array.isArray(arr)) return '';
+    const an = (artist || '').trim().toLowerCase();
+    for (const s of arr) {
+      const sa = String(s.author || s.artist || '').toLowerCase();
+      if (an && sa && !sa.includes(an) && !an.includes(sa)) continue; // 歌手不匹配跳过
+      if (s.url && /^https?:\/\//i.test(s.url)) return s.url;
+    }
+    return '';
+  } catch (e) {
+    return '';
+  }
 }
 
 async function resolvePlayUrl(track) {
