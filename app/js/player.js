@@ -274,6 +274,9 @@
     if (url.startsWith('/api/')) return UzzApi.getApiBase() + url;
     if (url.startsWith('blob:') || url.startsWith('data:')) return url;
     if (!/^https?:\/\//i.test(url)) return url;
+    // 安卓原生 Media3 播放无 CORS 概念：直连国内 meting/CDN（实时直链）
+    // 最快最稳，不再经海外后端 /api/stream 绕一圈（海外转流是 IO 错误根源之一）。
+    if (global.XYNative?.isAndroid) return url;
     try {
       if (new URL(url, location.origin).origin === location.origin) return url;
     } catch (e) { return url; }
@@ -625,7 +628,11 @@
     // 获取完整信息（url / lyric）— 传完整 track 以启用多音源兜底
     let full = STATE.current;
     try {
-      full = (track.vendor === 'cloud' && /^https?:\/\//i.test(track.url || '')) || (track.vendor === 'device' && audio.nativeQueue && /^content:\/\//i.test(track.url || ''))
+      // 在线曲目自带实时直链（国内 meting 聚合源搜索即带 url，永不过期）→
+      // 跳过二次解析直接播：海外后端解析常被风控，直链是手机直连国内 CDN 的最快路径。
+      const onlineDirect = track.url && /^https?:\/\//i.test(track.url) &&
+        !['local', 'device', 'cloud'].includes(track.vendor) && !/^https?:\/\/localhost/i.test(track.url);
+      full = onlineDirect || (track.vendor === 'cloud' && /^https?:\/\//i.test(track.url || '')) || (track.vendor === 'device' && audio.nativeQueue && /^content:\/\//i.test(track.url || ''))
         ? track : await UzzApi.getSong(track, undefined, signal);
       if (!seqAlive(seq)) return;   // 已被新的点击取代 → 丢弃本次结果
       const keep = { name: STATE.current.name, artist: STATE.current.artist, album: STATE.current.album, pic: STATE.current.pic };

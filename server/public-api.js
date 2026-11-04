@@ -1,5 +1,5 @@
 const {isIP}=require('node:net');
-const defaults=['163.com','126.net','qq.com','gtimg.cn','gtimg.com','kugou.com','kuwo.cn','kuwo.com','api.injahow.cn','music-api.gdstudio.xyz'];
+const defaults=['163.com','126.net','qq.com','gtimg.cn','gtimg.com','kugou.com','kuwo.cn','kuwo.com','api.injahow.cn','api.qijieya.cn','music-api.gdstudio.xyz'];
 const paths=new Set(['health','search','song','url','lyric','wiki','simi','suggest','playlist','playlists','charts','artist','album','pic','stream'].map(x=>'/api/'+x));
 function mediaURL(value,env=process.env){
  const u=new URL(String(value));

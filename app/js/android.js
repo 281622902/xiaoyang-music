@@ -27,7 +27,7 @@
   const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
   const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
   const keyOf = track => track.vendor + '|' + track.id;
-  const cover = value => { if (!value || value==='icon.svg') return 'icon.svg'; try { const u = new URL(value, location.href); return /^https?:$/.test(u.protocol) ? UzzApi.picProxy(u.href) : 'icon.svg'; } catch { return 'icon.svg'; } };
+  const cover = value => { if (!value || value==='icon.svg') return 'icon.svg'; try { const u = new URL(value, location.href); if (!/^https?:$/.test(u.protocol)) return 'icon.svg'; /* 安卓直连图床（国内 4G 直连快），不经海外后端 /api/pic 转图 */ return XYNative.isAndroid ? u.href : UzzApi.picProxy(u.href); } catch { return 'icon.svg'; } };
   const fmt = n => { n = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0; return Math.floor(n / 60) + ':' + String(n % 60).padStart(2,'0'); };
   const modes = {list:'列表循环',single:'单曲循环',random:'随机播放',sequential:'顺序播放'};
   const trackSets = new Map();

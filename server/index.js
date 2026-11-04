@@ -20,6 +20,7 @@ const kuwo = require('./providers/kuwo');
 const mock = require('./providers/mock');
 const aggregate = require('./providers/aggregate');
 const gds = require('./providers/gds');
+const qmeting = require('./providers/qmeting');
 const localLib = require('./local-lib');
 const localAccess = require('./local-access');
 const { audioExtension } = require('./audio-format');
@@ -108,14 +109,18 @@ function forceHttps(u) {
   return typeof u === 'string' ? u.replace(/^http:\/\//i, 'https://') : u;
 }
 
-// 用 GDStudio（海外可达）按「歌名」找网易同曲并解析完整版地址。
-// 只用歌名搜索（GDStudio 对"歌名+歌手"整串搜索分词质量差，易漏原版），
-// 拿到候选后按歌手过滤；先严格匹配，3 个候选内无合格者则放宽取第一个歌名命中的
-// （重名翻唱也远好于"播不了"）。最多试 3 次 url 解析，控制整体耗时。
+// 跨源找「网易同曲」并解析完整版地址（酷狗/酷我/QQ 曲目的救生艇）。
+// 候选搜索：国内 meting 聚合源（api.qijieya.cn）优先——海外可达且不受 GDStudio 限流影响；
+// 候选解析：meting type=url 实时直链优先（国内基础设施），GDStudio 兜底。
+// 只用歌名搜索（"歌名+歌手"整串搜索分词质量差），按歌手过滤，最多试 3 个候选。
 async function gdsNeteaseUrl(name, artist, quality) {
   const nm = (name || '').trim();
   if (!nm) return '';
-  const { list } = await gds.search('netease', nm, 1, 10);
+  let list = [];
+  try { list = (await qmeting.search('netease', nm, 1, 10)).list || []; } catch (e) { /* 走 GDStudio */ }
+  if (!list.length) {
+    try { list = (await gds.search('netease', nm, 1, 10)).list || []; } catch (e) { /* 空 */ }
+  }
   if (!list.length) return '';
   const an = (artist || '').trim().toLowerCase();
   const pick = list.filter((c) => c.name.includes(nm) || nm.includes(c.name));
@@ -126,13 +131,15 @@ async function gdsNeteaseUrl(name, artist, quality) {
   const candidates = [...(strict.length ? strict : pick)].slice(0, 3);
   for (const c of candidates) {
     try {
+      const mu = await qmeting.url('netease', c.id);
+      if (mu) return mu;
+    } catch (e) { /* 试 GDStudio */ }
+    try {
       const cu = await gds.url('netease', c.id, QUALITY_BR[quality] || '320');
       if (cu) return cu;
     } catch (e) { /* 试下一候选 */ }
   }
-  // GDStudio 整体不可用（限流升级为连接拒绝，实测会持续一段时间）时的
-  // 第二重兜底：meting 公共实例（api.injahow.cn，另一套独立基础设施），
-  // 其搜索响应直接携带 mp3 直链，按歌名搜同曲取地址即可。
+  // 双聚合源都不可用时的最后兜底：injahow meting 搜索直链（精简部署，命中率低但无害）
   return metingSearchUrl(nm, an);
 }
 
@@ -168,6 +175,16 @@ async function resolvePlayUrl(track) {
       const d = await netease.songsDetail([track.id]).catch(() => []);
       if (d[0] && d[0].duration) expect = d[0].duration;
     } catch (e) { /* 忽略 */ }
+  }
+  // 0) 国内 meting 聚合源优先（2026-11-05 终极方案）：按网易 ID 实时直出完整版 mp3。
+  // 海外 IP 直连网易 weapi 已被风控（真机实测 IO_UNSPECIFIED 的根因之一），
+  // meting（api.qijieya.cn，国内基础设施）从海外后端可达且响应快。
+  // meting 直链来自免登录接口、为完整版，跳过字节探测（probe 的海外往返反而会误杀好直链）。
+  if (track.vendor === 'netease' && track.id) {
+    try {
+      const mu = await withTimeout(qmeting.url('netease', track.id), SEARCH_TIMEOUT * 2);
+      if (mu) return { url: mu, vendor: 'netease' };
+    } catch (e) { /* 忽略，走主音源 */ }
   }
   // 1) 主音源直连（带音质档位）；netease 额外用 freeTrialInfo 标记识别试听
   let u = '';
@@ -314,6 +331,19 @@ async function searchMulti(vendor, kw, type, page, limit) {
     }
     return { list: [], total: 0 };
   }
+  if (vendor === 'auto' || vendor === 'netease') {
+    // 网易直连与国内 meting 聚合源「并行竞速」（2026-11-05 终极方案）：
+    // - 国内/后端在本地时：网易直连 ~0.4s 先回且质量好（原版靠前）→ 用网易
+    // - 海外部署被风控时：网易 3.5s 超时，并行的 qmeting（国内 API，海外可达）
+    //   已就绪 → 用 qmeting（自带实时直链，手机直连即播）
+    // 两路同时发，无论哪端环境都拿到当前条件下的最优解，杜绝转圈等待。
+    const neP = withTimeout(netease.search(kw, type, page, limit), SEARCH_TIMEOUT).then((r) => (r && r.list && r.list.length) ? r : null).catch(() => null);
+    const qmP = qmeting.search(vendor, kw, page, limit).then((r) => (r && r.list && r.list.length) ? r : null).catch(() => null);
+    const ne = await neP;
+    if (ne) { cacheSet(key, ne, SEARCH_CACHE_MS); return ne; }
+    const qm = await qmP;
+    if (qm) { cacheSet(key, qm, SEARCH_CACHE_MS); return qm; }
+  }
   if (vendor === 'auto' || !PROVIDERS[vendor]) {
     // 顺序：网易 → GDStudio网易（海外可达，结果=可播的网易曲目）→ 其他直连源。
     // 网易直连在海外被风控时，先走 GDStudio 而不是酷狗：酷狗曲目解析需要
@@ -411,7 +441,11 @@ async function handleApi(req, res, reqUrl) {
       const name = q(reqUrl, 'name') || '';
       const artist = q(reqUrl, 'artist') || '';
       const quality = q(reqUrl, 'quality') || 'standard';
-      const data = await p.song(id, quality);
+      // 主音源元数据查询整体限时：海外 IP 被风控时 weapi 可能长挂，
+      // 超时后落成空壳，交给下方完整版兜底链，不再让前端转圈半天。
+      let data;
+      try { data = await withTimeout(p.song(id, quality), SEARCH_TIMEOUT * 2); }
+      catch (e) { data = { id, url: '', name: '', artist: '', duration: 0 }; }
       // 元数据回填：上游反爬导致空歌名/歌手时，用前端传来的信息补齐，避免播放条显示「未知」
       if (!data.name && name) data.name = name;
       if (!data.artist && artist) data.artist = artist;

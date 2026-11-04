@@ -35,7 +35,8 @@
    if(!s.error)this.error=null;
    const wasPaused=this.paused,oldDuration=this.duration,oldTime=this._time,oldReadyState=this.readyState;
    this._time=s.position||0;this.duration=s.duration||0;this.paused=!!s.paused;this.readyState=s.readyState||0;
-   if(s.queue?.length){const track=s.queue[s.index];const key=track?.vendor+'|'+track?.id;const playable=track?.vendor==='device'?track.url:track?.url?UzzApi.getApiBase()+'/api/stream?url='+encodeURIComponent(track.url):'native:'+key;if(key!==this.mediaId){this.mediaId=key;this._src=playable;}else if(track?.url&&this._src.startsWith('native:'))this._src=playable;const event=new Event('nativeTrack');event.state=s;this.dispatchEvent(event);}
+   if(s.queue?.length){const track=s.queue[s.index];const key=track?.vendor+'|'+track?.id;// 安卓直连国内 meting/CDN 直链（不经海外 /api/stream 转流）
+const playable=track?.vendor==='device'?track.url:track?.url?track.url:'native:'+key;if(key!==this.mediaId){this.mediaId=key;this._src=playable;}else if(track?.url&&this._src.startsWith('native:'))this._src=playable;const event=new Event('nativeTrack');event.state=s;this.dispatchEvent(event);}
    if(this.duration&&this.duration!==oldDuration)this.dispatchEvent(new Event('loadedmetadata'));
    if(wasPaused!==this.paused)this.dispatchEvent(new Event(this.paused?'pause':'play'));
    if(oldTime!==this._time||oldDuration!==this.duration||wasPaused!==this.paused||oldReadyState!==this.readyState||hadError!==!!this.error)this.dispatchEvent(new Event('timeupdate'));
