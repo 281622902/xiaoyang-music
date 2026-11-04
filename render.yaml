@@ -16,3 +16,11 @@ services:
         value: production
       - key: XY_PUBLIC_API
         value: '1'
+      # 海外部署到国内音源的 RTT 大：放宽搜索/探测超时，防误判全超时
+      # （真机 4G 实测：默认 3.5s 导致网易搜索超时 → 单曲掉到酷狗、歌手/专辑/歌单全空）
+      - key: XY_SEARCH_TIMEOUT
+        value: '8000'
+      - key: XY_PROBE_TIMEOUT
+        value: '6000'
+      - key: XY_RESOLVE_TIMEOUT
+        value: '25000'

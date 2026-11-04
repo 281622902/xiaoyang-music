@@ -693,6 +693,20 @@
       }
     }
     if (!seqAlive(seq)) return;   // ← 关键守卫：绝不把旧歌的地址写进 audio.src
+    // 海外部署/上游风控场景解析结果间歇性抖动：拿到空地址时静默重试一次，
+    // 仍为空才放弃。跨音源兜底（网易→QQ→酷狗→酷我）由服务端 resolvePlayUrl 完成，
+    // 此处重试只兜「上游偶发超时」，不重复发起完整解析链。
+    if (!url && !resolveTimeout && !track.__resolveRetried) {
+      track.__resolveRetried = true;
+      await new Promise((r2) => setTimeout(r2, 800));
+      if (!seqAlive(seq)) return;
+      try {
+        url = await UzzApi.getUrl(track, undefined, signal);
+        resolveTimeout = !!(url && url.resolveTimeout);
+        if (resolveTimeout) url = '';
+      } catch (e) { url = ''; }
+    }
+    if (!seqAlive(seq)) return;
     STATE.loading = false;
     if (!url) {
       STATE.failSeq = seq;

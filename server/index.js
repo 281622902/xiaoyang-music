@@ -56,11 +56,15 @@ function getProvider(v) {
 // ── 完整版校验：探测音频字节数，估算时长，拦掉 30s/45s 试听片段──
 // 用 Range: bytes=0-0 请求只拿响应头，几乎零开销。
 // 必须带超时：网络慢/ CDN 不响应时，串行兜底链里每层探测都可能长挂，
-// 叠加起来会让前端「点了播放半天没反应」。3.5s 拿不到就当探测失败。
-const PROBE_TIMEOUT = 3500;
+// 叠加起来会让前端「点了播放半天没反应」。
+// 超时可经环境变量放宽：海外部署（如 Render 美西/新加坡）到国内音源 RTT 大，
+// 默认 3.5s 会把网易搜索/探测全部误判为超时 → 搜索单曲掉到酷狗、
+// 歌手/专辑/歌单搜索全空、解析兜底链全灭（真机 4G 实测踩坑）。
+// render.yaml 已为云端部署设置 XY_SEARCH_TIMEOUT=8000 / XY_PROBE_TIMEOUT=6000。
+const PROBE_TIMEOUT = Number(process.env.XY_PROBE_TIMEOUT) || 3500;
 // 播放地址兜底链整体时限（毫秒）：跨音源逐个 search+url+probe 串行执行，
 // 网络差时可能十几秒。限时后快速失败 → 前端给可读提示，用户可重试或换音源。
-const RESOLVE_TOTAL_TIMEOUT = 18000;
+const RESOLVE_TOTAL_TIMEOUT = Number(process.env.XY_RESOLVE_TIMEOUT) || 18000;
 async function probeAudioLen(u) {
   if (!u) return -1;
   try {
@@ -181,8 +185,8 @@ async function resolvePlayUrl(track) {
   return { url: '', vendor: '' };
 }
 
-// 单音源搜索超时保护，避免某个音源卡死拖垮 auto
-const SEARCH_TIMEOUT = 3500;
+// 单音源搜索超时保护，避免某个音源卡死拖垮 auto（海外部署经 XY_SEARCH_TIMEOUT 放宽）
+const SEARCH_TIMEOUT = Number(process.env.XY_SEARCH_TIMEOUT) || 3500;
 function withTimeout(promise, ms) {
   let timer;
   const t = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), ms); });
@@ -194,11 +198,16 @@ function withTimeout(promise, ms) {
 // 歌手/专辑/歌单类型只有网易可靠支持 → 固定走网易，避免其他音源返回空/脏数据。
 async function searchMulti(vendor, kw, type, page, limit) {
   if (type && type !== 'song') {
-    try {
-      return await withTimeout(netease.search(kw, type, page, limit), SEARCH_TIMEOUT * 3);
-    } catch (e) {
-      return { list: [], total: 0 };
+    // 非单曲类型只有网易可靠支持。海外部署时网易接口偶发超时/风控，
+    // 首次失败后隔 1s 重试一次，尽量不让"歌手/专辑/歌单"整个搜不出东西。
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await withTimeout(netease.search(kw, type, page, limit), SEARCH_TIMEOUT * 3);
+        if (r && r.list && r.list.length) return r;
+      } catch (e) { /* 重试 */ }
+      if (attempt === 0) await new Promise((r2) => setTimeout(r2, 1000));
     }
+    return { list: [], total: 0 };
   }
   if (vendor === 'auto' || !PROVIDERS[vendor]) {
     for (const v of VENDOR_ORDER) {
@@ -212,8 +221,12 @@ async function searchMulti(vendor, kw, type, page, limit) {
     }
     return { list: [], total: 0 };
   }
-  const r = await getProvider(vendor).search(kw, type, page, limit);
-  return r || { list: [], total: 0 };
+  try {
+    const r = await getProvider(vendor).search(kw, type, page, limit);
+    return r || { list: [], total: 0 };
+  } catch (e) {
+    return { list: [], total: 0 };
+  }
 }
 
 // 热搜词：取热歌榜前 12 首歌名，缓存 1 小时（供搜索框推荐 + 热搜榜）
