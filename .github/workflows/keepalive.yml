@@ -1,0 +1,21 @@
+name: Keepalive cloud music backend
+# 保活：Render 免费实例 15 分钟无请求会休眠（冷启动 30-50s，真机实测为
+# 「间歇性播放失败」诱因之一）。每 10 分钟 ping 一次健康检查，744h/月 < 750h 免费额度。
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # UTC，每 10 分钟
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping health endpoint
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" "https://xiaoyang-music-api.onrender.com/api/health" || echo 000)
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then echo "backend alive"; exit 0; fi
+            sleep 20
+          done
+          echo "backend unreachable after 3 attempts"; exit 1
