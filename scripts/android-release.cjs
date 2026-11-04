@@ -33,6 +33,11 @@ async function sync({env=process.env,createClient,fetchImpl=fetch}={}){
  if(!env.SUPABASE_URL||!env.SUPABASE_SERVICE_ROLE_KEY)throw Error('缺少 Supabase 发布 Secrets');
  const project=new URL(env.SUPABASE_URL);if(project.protocol!=='https:'||project.username||project.password||project.search||project.hash||!['','/'].includes(project.pathname))throw Error('Supabase 项目地址无效');
  const release=await verifyGitHubAsset(c,env,fetchImpl);c.row.download_url=release.download_url;
+ // 更新说明：优先用 GitHub Release 正文（打 tag 时写的说明会进手机弹窗），拉不到再回退默认文案
+ try{
+  const res=await fetchImpl('https://api.github.com/repos/'+c.repository+'/releases/tags/'+c.tag,{headers:{Accept:'application/vnd.github+json','User-Agent':'xiaoyang-music-release',...(env.GH_TOKEN?{Authorization:'Bearer '+env.GH_TOKEN}:{})}});
+  if(res.ok){const j=await res.json();const body=j&&typeof j.body==='string'?j.body.trim():'';if(body)c.row.release_notes=body.slice(0,1000);}
+ }catch(e){/* 拉取失败用默认说明 */}
  if(!createClient)({createClient}=require('@supabase/supabase-js'));
  const client=createClient(env.SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
  if(env.ANDROID_PUBLIC_DOWNLOAD_MODE==='supabase')c.row.download_url=await require('./publish-android-download.cjs').publishAndroidDownload({client,config:c,env,fetchImpl});

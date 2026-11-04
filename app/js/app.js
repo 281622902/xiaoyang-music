@@ -2226,9 +2226,17 @@
     });
 
     // ── 关于 ──
-    if (window.uzzBridge && window.uzzBridge.getAppVersion) {
-      window.uzzBridge.getAppVersion().then((i) => { const e = $('abVer'); if (e) e.textContent = 'v' + ((i && i.version) || '?'); }).catch(() => {});
-    }
+    // 版本号三来源兜底：桌面 IPC → 安卓原生 App.getInfo → 云端常量（移动端此前一直显示"-"）
+    (() => {
+      const e = $('abVer'); if (!e) return;
+      const paint = (v) => { if (v) e.textContent = 'v' + v; };
+      if (window.uzzBridge?.getAppVersion) {
+        window.uzzBridge.getAppVersion().then((i) => paint(i && i.version)).catch(() => {});
+      } else if (window.XYNative?.isAndroid && window.XYNative.App?.getInfo) {
+        window.XYNative.App.getInfo().then((i) => paint(i && i.version)).catch(() => {});
+      }
+      if (!e.textContent || e.textContent === '-') paint(window.XYCloud?.appVersion);
+    })();
     // 检查更新：两个入口都接上（关于页顶部的「检查更新」+ 状态区按钮）
     $('abCheck') && $('abCheck').addEventListener('click', () => doUpdateCheck(false));
     if ($('updCheck')) $('updCheck').addEventListener('click', () => doUpdateCheck(false));
