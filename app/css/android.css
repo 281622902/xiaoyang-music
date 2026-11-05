@@ -17,3 +17,11 @@
 /* App 内更新进度条（2026-11-05） */
 .apk-progress{width:100%;height:10px;border-radius:6px;background:rgba(127,127,127,.25);overflow:hidden;margin-top:10px;}
 .apk-progress>div{width:0%;height:100%;border-radius:6px;background:var(--accent,#1ecd8a);transition:width .3s ease;}
+
+/* 设置中心（v3.2.0） */
+#page-settings .settings-card{display:flex;flex-direction:column;gap:2px;}
+#page-settings .st-group-title{font-size:12px;opacity:.55;letter-spacing:.08em;margin:8px 2px 2px;}
+#page-settings .st-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 2px;border-bottom:1px solid rgba(127,127,127,.12);}
+#page-settings .st-row:last-child{border-bottom:none;}
+#page-settings .st-row>span{font-size:15px;}
+#page-settings .segmented{max-width:100%;flex-wrap:wrap;}

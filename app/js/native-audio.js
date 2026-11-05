@@ -18,6 +18,9 @@
   syncQueue(){const s=global.Player?.getState();if(!s?.current||!s.queue.length)return;this.command('setQueue',{tracks:s.queue.map(t=>({...t})),index:s.index,base:UzzApi.getApiBase(),url:this._src,position:this._time,play:!this.paused,preserve:true,mode:s.mode,quality:localStorage.getItem('uzz.quality')||'standard',epoch:this.epoch}).catch(e=>this.fail(e));}
   get currentTime(){return this._time;}set currentTime(value){this._time=Math.max(0,Number(value)||0);this.command('seek',{position:this._time}).catch(e=>this.fail(e));}
   get volume(){return this._volume;}set volume(value){this._volume=Math.max(0,Math.min(1,Number(value)||0));this.command('setVolume',{volume:this._volume}).catch(e=>this.fail(e));}
+  // 倍速（v3.2.0）：转发到原生 Media3 setPlaybackSpeed（变速不变调）；还原用 1.0
+  get playbackRate(){return this._rate||1;}set playbackRate(value){this._rate=Math.max(0.25,Math.min(4,Number(value)||1));if(this._rate!==1)this.command('setSpeed',{speed:this._rate}).catch(()=>{});else this.command('setSpeed',{speed:1}).catch(()=>{});}
+  get defaultPlaybackRate(){return this._defRate||1;}set defaultPlaybackRate(value){this._defRate=Math.max(0.25,Math.min(4,Number(value)||1));if(this._rate===undefined){this._rate=this._defRate;this.command('setSpeed',{speed:this._defRate}).catch(()=>{});}}
   async play(){this.error=null;const generation=this.generation;await this.command('play');if(generation!==this.generation)return;this.paused=false;this.dispatchEvent(new Event('play'));}
   async retry(){const generation=this.generation;this.error=null;this.readyState=1;await this.command('retry',{base:UzzApi.getApiBase(),quality:localStorage.getItem('uzz.quality')||'standard'});if(generation!==this.generation)return;this.paused=false;this.dispatchEvent(new Event('play'));}
   replayState(){if(this.lastState?.queue?.length){const event=new Event('nativeTrack');event.state=this.lastState;this.dispatchEvent(event);}}

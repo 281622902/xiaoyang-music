@@ -86,6 +86,14 @@ public class NativeMusicPlugin extends Plugin {
         controller.setPlayWhenReady(call.getBoolean("play",false));emit();
     });}
     @PluginMethod public void play(PluginCall call){ready(call,()->{if(controller.getPlaybackState()==Player.STATE_IDLE)controller.prepare();MusicService.restored=false;controller.play();});}
+    // 倍速（v3.2.0）：Media3 原生变速不变调，1.0 恢复正常
+    @PluginMethod public void setSpeed(PluginCall call){
+        Double d = call.getDouble("speed", 1.0);
+        float speed = d == null ? 1.0f : d.floatValue();
+        if(speed<0.25f||speed>4f){call.reject("倍速范围 0.25x - 4x");return;}
+        main.post(()->{if(controller!=null)controller.setPlaybackSpeed(speed);});
+        call.resolve();
+    }
     @PluginMethod public void retry(PluginCall call){ready(call,()->{
         int index=controller.getCurrentMediaItemIndex();if(index<0||controller.getMediaItemCount()==0)throw new IllegalArgumentException("请先选择歌曲");
         String base=call.getString("base","");

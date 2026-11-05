@@ -68,7 +68,7 @@
   function showPlayer() { if (!Player.getState().current) return toast('先选择一首喜欢的歌曲'); $('mobilePlayer').hidden=false; $('mobileSongName').tabIndex=-1; $('mobileSongName').focus({preventScroll:true}); }
   function closePlayer() { $('mobilePlayer').hidden=true; }
   function showRoute(value) {
-    value=['discover','search','library','me','detail'].includes(value)?value:'discover';
+    value=['discover','search','library','me','settings','detail'].includes(value)?value:'discover';
     if (value==='detail' && !detail) value='library';
     route=value;
     document.querySelectorAll('.m-page').forEach(e=>{e.hidden=e.id!=='page-'+route;});
@@ -183,7 +183,24 @@
   let lyricIndex=-1;
   function progress() {const d=Number.isFinite(audio.duration)?audio.duration:0,c=audio.currentTime||0;$('mobileTime').textContent=fmt(c);$('mobileDuration').textContent=fmt(d);if(document.activeElement!==$('mobileSeek'))$('mobileSeek').value=d?Math.round(c/d*1000):0;$('miniProgress').value=d?c/d*1000:0;const lyrics=Player.getState().lyrics;let index=-1;for(let i=0;i<lyrics.length;i++){if(lyrics[i].t<=c+.15)index=i;else break;}if(index!==lyricIndex){lyricIndex=index;$('mobileLyrics').querySelectorAll('[data-lyric-index]').forEach(e=>{e.classList.toggle('active',Number(e.dataset.lyricIndex)===index);});if(!$('mobileLyrics').hidden)$('mobileLyrics').querySelector('.active')?.scrollIntoView({block:'center',behavior:'smooth'});}}
   function syncHeart() {const t=Player.getState().current;XYCloud.currentSong=t?{name:t.name,url:/^https?:\/\//i.test(t.url||'')?t.url:'',unavailableMessage:t.vendor==='device'?'本地音乐不上传，可在更多菜单保存至本机喜欢':'正在解析播放地址'}:null;heart?.refresh();playerChanged('track');}
-  function applyTheme() {const dark=localStorage.getItem('xy.android.theme')==='dark';document.documentElement.dataset.theme=dark?'dark':'light';$('themeLabel').textContent=dark?'开启':'关闭';document.querySelector('meta[name=theme-color]').content=dark?'#101c1a':'#f7faf8';if(XYNative.isAndroid){XYNative.StatusBar.setStyle({style:dark?'LIGHT':'DARK'}).catch(()=>{});XYNative.StatusBar.setBackgroundColor({color:dark?'#101c1a':'#f7faf8'}).catch(()=>{});}}
+  // ── 主题三态（v3.2.0）：浅色 / 深色 / 跟随系统 ──
+  const systemDark = matchMedia('(prefers-color-scheme: dark)');
+  function themePref() {
+    const v = localStorage.getItem('xy.android.theme') || 'auto';
+    return ['light', 'dark', 'auto'].includes(v) ? v : 'auto';
+  }
+  function applyTheme() {
+    const pref = themePref();
+    const dark = pref === 'dark' || (pref === 'auto' && systemDark.matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    const label = $('themeLabel');
+    if (label) label.textContent = pref === 'dark' ? '开启' : pref === 'auto' ? (systemDark.matches ? '深色' : '浅色') : '关闭';
+    document.querySelector('meta[name=theme-color]').content=dark?'#101c1a':'#f7faf8';
+    if(XYNative.isAndroid){XYNative.StatusBar.setStyle({style:dark?'LIGHT':'DARK'}).catch(()=>{});XYNative.StatusBar.setBackgroundColor({color:dark?'#101c1a':'#f7faf8'}).catch(()=>{});}
+    document.querySelectorAll('#themeSeg [data-theme]').forEach(b=>b.classList.toggle('active',b.dataset.theme===pref));
+  }
+  // 「我的」页快捷开关：浅色↔深色循环（完整三态在设置中心）
+  function cycleTheme() { localStorage.setItem('xy.android.theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); }
   function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;$('mobileMemberName').textContent=user?XYCloud.displayUser(user):'';$('mobileAccountName').textContent=user?XYCloud.displayUser(user):'登录，让喜欢随行';$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;}
   async function checkUpdate() {
     toast('正在检查更新…');
@@ -232,13 +249,78 @@
   }
   function settings(){const candidates=XYNetwork.config.lan||[];sheet('播放与连接设置','<form id="mobileSettingsForm"><label>音乐来源<select id="mobileVendor">'+Object.entries({auto:'自动选择',netease:'网易云音乐',tencent:'QQ 音乐',kugou:'酷狗音乐',kuwo:'酷我音乐'}).map(([v,n])=>'<option value="'+v+'" '+(UzzApi.getVendor()===v?'selected':'')+'>'+n+'</option>').join('')+'</select></label><label>音乐后端地址<input id="mobileBackend" type="url" placeholder="https://你的音乐服务 或下方电脑地址" value="'+escape(UzzApi.getApiBase())+'" required></label><p class="muted">真机的 localhost 指向手机自身。连接电脑同一 Wi-Fi 后，可选择下面的电脑地址；电脑后端须保持运行。离开该局域网后需要公网 HTTPS 音乐服务。登录与收藏直接连接 Supabase，不依赖电脑音乐后端。</p>'+candidates.map(c=>'<button type="button" class="wide-button" data-backend-suggestion="'+escape(c.url)+'">使用电脑地址 '+escape(c.url)+' · '+escape(c.label)+'</button>').join('')+'<button class="primary wide-button">保存设置</button></form><button class="wide-button" data-action="networkDiagnostics">诊断音乐与登录网络</button>');}
   async function networkDiagnostics(){if(!$('accountBackdrop').hidden)closeAccount();sheet('网络诊断','<p class="muted">正在分别检查音乐服务和 Supabase… 不发送手机号或密码。</p>');try{const r=await XYNetwork.diagnose();if($('sheetTitle').textContent!=='网络诊断')return;const text='音乐服务：'+(r.backend||'尚未设置')+'\n'+(r.music.ok?'✓ ':'× ')+r.music.message+'\n\n云端账户：\n'+(r.cloud.ok?'✓ ':'× ')+r.cloud.message;$('sheetContent').replaceChildren();const p=document.createElement('p');p.className='form-status';p.style.whiteSpace='pre-wrap';p.textContent=text;$('sheetContent').appendChild(p);const b=document.createElement('button');b.className='wide-button';b.dataset.action='settings';b.textContent='修改音乐服务地址';$('sheetContent').appendChild(b);}catch(e){toast(e.message);}}
+  // ── 设置中心（v3.2.0 轻量五件套）─────────────────────────────
+  let sleepTimer = null, sleepDeadline = 0;
+  function applyQuality(q) {
+    localStorage.setItem('uzz.quality', q);
+    document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.classList.toggle('active', b.dataset.quality === q));
+    toast(q === 'lossless' ? '无损音质已选择，从下一首歌生效（部分歌曲可能回退高品/标准）' : q === 'ex' ? '高品 320k 已选择，从下一首歌生效' : '标准音质已选择，从下一首歌生效');
+  }
+  function applySpeed(rate) {
+    const r = Number(rate) || 1;
+    try { audio.playbackRate = r; audio.defaultPlaybackRate = r; } catch (e) { /* 原生桥失败不阻塞 */ }
+    document.querySelectorAll('#speedSeg [data-speed]').forEach(b => b.classList.toggle('active', Number(b.dataset.speed) === r));
+    toast(r === 1 ? '恢复正常速度' : '已切换 ' + r + 'x 倍速' + (r > 1 ? ' 🚀' : ''));
+  }
+  function applySleep(minutes) {
+    clearTimeout(sleepTimer); sleepTimer = null;
+    const status = $('sleepStatus');
+    if (!minutes) {
+      sleepDeadline = 0;
+      if (status) { status.hidden = true; status.textContent = ''; }
+      document.querySelectorAll('#sleepSeg [data-sleep]').forEach(b => b.classList.toggle('active', b.dataset.sleep === '0'));
+      toast('已取消定时关闭');
+      return;
+    }
+    sleepDeadline = Date.now() + minutes * 60000;
+    document.querySelectorAll('#sleepSeg [data-sleep]').forEach(b => b.classList.toggle('active', Number(b.dataset.sleep) === minutes));
+    const tick = () => {
+      const left = sleepDeadline - Date.now();
+      if (left <= 0) {
+        sleepTimer = null; sleepDeadline = 0;
+        if (status) { status.hidden = true; status.textContent = ''; }
+        try { audio.pause(); } catch (e) {}
+        toast('定时时间到，播放已停止 🌙');
+        document.querySelectorAll('#sleepSeg [data-sleep]').forEach(b => b.classList.toggle('active', b.dataset.sleep === '0'));
+        return;
+      }
+      const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+      if (status) { status.hidden = false; status.textContent = '将在 ' + m + ' 分 ' + String(s).padStart(2, '0') + ' 秒后停止播放'; }
+      sleepTimer = setTimeout(tick, 1000);
+    };
+    tick();
+    toast('将在 ' + minutes + ' 分钟后停止播放');
+  }
+  function initSettings() {
+    // 音质
+    document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.addEventListener('click', () => applyQuality(b.dataset.quality)));
+    const q = localStorage.getItem('uzz.quality') || 'standard';
+    document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.classList.toggle('active', b.dataset.quality === q));
+    // 倍速（恢复上次选择）
+    const savedRate = Number(localStorage.getItem('uzz.rate') || 1) || 1;
+    document.querySelectorAll('#speedSeg [data-speed]').forEach(b => {
+      b.addEventListener('click', () => { localStorage.setItem('uzz.rate', b.dataset.speed); applySpeed(b.dataset.speed); });
+      b.classList.toggle('active', Number(b.dataset.speed) === savedRate);
+    });
+    try { audio.defaultPlaybackRate = savedRate; audio.playbackRate = savedRate; } catch (e) {}
+    // 定时关闭
+    document.querySelectorAll('#sleepSeg [data-sleep]').forEach(b => b.addEventListener('click', () => applySleep(Number(b.dataset.sleep) || 0)));
+    // 主题三态
+    document.querySelectorAll('#themeSeg [data-theme]').forEach(b => b.addEventListener('click', () => { localStorage.setItem('xy.android.theme', b.dataset.theme); applyTheme(); }));
+    // 跟随系统实时切换
+    systemDark.addEventListener('change', () => { if (themePref() === 'auto') applyTheme(); });
+    applyTheme();
+    const ver = $('settingsVer');
+    if (ver) ver.textContent = 'v' + (window.XYCloud?.appVersion || '');
+  }
+
   const actions={
     account:openAccount,closeAccount,closeSheet,player:showPlayer,closePlayer,toggle:()=>audio.error&&audio.retry?audio.retry():Player.toggle(),next:()=>Player.next(),prev:()=>Player.prev(),mode:()=>Player.cycleMode(),queue:showQueue,
     retryPlayback:async()=>{if(!Player.getState().current)return;if(audio.retry)await audio.retry();else{audio.load();await audio.play();}toast('正在重新连接音源…');},
     trackMenu:()=>trackMenu(Player.getState().current),createPlaylist,addToPlaylist,settings,networkDiagnostics,update:checkUpdate,
     back:()=>navigate(previousRoute==='detail'?'library':previousRoute),refreshDiscover:loadDiscover,retrySearch:()=>search(),refreshCloud,
     history:()=>chooseLibrary('history'),favorites:()=>chooseLibrary('favorites'),openCloud:()=>{closeAccount();chooseLibrary('cloud');},
-    clearSearch:()=>{searchHistory=[];save('uzz.searchHistory',[]);renderSearchWelcome();},theme:()=>{localStorage.setItem('xy.android.theme',localStorage.getItem('xy.android.theme')==='dark'?'light':'dark');applyTheme();},
+    clearSearch:()=>{searchHistory=[];save('uzz.searchHistory',[]);renderSearchWelcome();},theme:cycleTheme,
     charts:()=>{navigate('discover');$('chartCards').scrollIntoView({behavior:'smooth',block:'center'});},
     enqueue:()=>{Player.enqueueTrack(selectedTrack);closeSheet();toast('已加入播放队列');},
     // 本机收藏（双写）：本机列表确定性增删 + 登录态下同步云端（失败不回滚本机）
@@ -350,6 +432,6 @@
     if(XYNative.isAndroid){XYNative.App.addListener('backButton',back).catch(()=>{});XYNative.NativeMusic.addListener('localFiles',r=>{const first=addLocalTracks(r.tracks);if(first)play(first);}).catch(()=>{});XYNative.App.getInfo().then(info=>$('mobileVersion').textContent=info.version).catch(()=>{});for(const name of ['keyboardDidShow','keyboardDidHide'])XYNative.Keyboard.addListener(name,()=>{keyboardOpen=name==='keyboardDidShow';viewport();}).catch(()=>{});}
     global.XYMobileApp={navigate,openOnline,openLocal,renderLibrary,refreshCloud,getDetail:()=>detail};
     audio.connection?.then(()=>{if(audio.lastState?.restored&&Player.getState().current){playerChanged('track');progress();toast('已恢复上次队列与进度，点击播放继续');}}).catch(()=>{});
-    loadDiscover();loadHot();renderCounts();syncHeart();
+    initSettings();loadDiscover();loadHot();renderCounts();syncHeart();
   });
 })(window);

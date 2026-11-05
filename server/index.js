@@ -146,9 +146,32 @@ async function gdsNeteaseUrl(name, artist, quality) {
   return metingSearchUrl(nm, an);
 }
 
+// 按歌手名返回其歌曲列表（海外聚合分类专用：name:/artistlist: 前缀共用），
+// 走国内 meting 搜索。注意：qmeting 对「歌手名」的搜索结果是翻唱曲居多
+//（artist=翻唱者），严格过滤常清零——优先 artist 匹配，不足 5 条放宽为全量，
+// 保证界面始终有内容（聊胜于无原则）。结果自带实时直链（可播）。
+async function artistTracksByName(name, limit) {
+  const nm = String(name || '').trim();
+  if (!nm) return [];
+  let all = [];
+  try {
+    const r = await withTimeout(qmeting.search('netease', nm, 1, 100), SEARCH_TIMEOUT * 2);
+    all = r.list || [];
+  } catch (e) { /* 走 GDStudio */ }
+  // qmeting 对个别热词偶发空结果（上游波动实测）：GDStudio 网易搜索兜底
+  if (!all.length) {
+    try {
+      const r2 = await withTimeout(gds.search('netease', nm, 1, 100), SEARCH_TIMEOUT * 2);
+      all = r2.list || [];
+    } catch (e) { /* 空 */ }
+  }
+  const lk = nm.toLowerCase();
+  const strict = all.filter((t) => (t.artist || '').toLowerCase().includes(lk));
+  return (strict.length >= 5 ? strict : all).slice(0, Math.max(1, limit || 50));
+}
+
 // meting 搜索同曲并直接返回其携带的 mp3 直链（不落库、不解析，拿来即用）
-async function metingSearchUrl(name, artist) {
-  const nm = (name || '').trim();
+async function metingSearchUrl(name, artist) {  const nm = (name || '').trim();
   if (!nm) return '';
   try {
     const u = 'https://api.injahow.cn/meting/?format=json&server=netease&type=search&id=' + encodeURIComponent(nm);
@@ -332,24 +355,57 @@ async function searchMulti(vendor, kw, type, page, limit) {
       } catch (e) { /* 重试 */ }
       if (attempt === 0) await new Promise((r2) => setTimeout(r2, 1000));
     }
-    // 海外兜底（仅歌手分类）：网易被风控时用国内 meting 歌曲数据聚合出歌手分类——
-    // 每个去重歌手带「name:」前缀 ID，/api/artist 识别后按名字搜索其歌曲（直链可播）。
-    // 专辑/歌单 meting 无对应数据，海外时段仍依赖网易直连。
-    if (type === 'artist') {
+    // 海外兜底（歌手/专辑/歌单分类）：网易被风控时用国内 meting 歌曲数据聚合。
+    // 歌手：按歌手去重（name: 前缀）；专辑/歌单：meting 无这两种类型（完整协议仅
+    // search/url/lrc/pic），降级为按歌手聚合的「相关歌曲集」（artistlist: 前缀）——
+    // 数据不如网易原生全，但界面有内容、点击有歌可播。
+    if (type === 'artist' || type === 'album' || type === 'playlist') {
+      let rows = [];
       try {
         const r = await withTimeout(qmeting.search('netease', kw, 1, 50), SEARCH_TIMEOUT * 2);
-        const seen = new Map();
+        rows = r.list || [];
+      } catch (e) { /* 走 GDStudio */ }
+      // qmeting 对个别热词偶发空结果（上游波动实测）：GDStudio 网易搜索兜底
+      if (!rows.length) {
+        try {
+          const r2 = await withTimeout(gds.search('netease', kw, 1, 50), SEARCH_TIMEOUT * 2);
+          rows = r2.list || [];
+        } catch (e) { /* 忽略 */ }
+      }
+      try {
         const lkw = kw.trim().toLowerCase();
-        for (const t of r.list || []) {
+        const seen = new Map(); // 歌手 -> 首图
+        for (const t of rows) {
           const an = (t.artist || '').trim();
           if (!an || seen.has(an)) continue;
           const lk = an.toLowerCase();
           if (!lk.includes(lkw) && !lkw.includes(lk)) continue;
-          seen.set(an, { id: 'name:' + an, name: an, artist: an, album: '', pic: t.pic || '', vendor: 'netease', duration: 0 });
-          if (seen.size >= limit) break;
+          seen.set(an, t.pic || '');
+          if (type === 'artist' && seen.size >= limit) break;
         }
-        if (seen.size) {
-          const r2 = { list: [...seen.values()], total: seen.size };
+        let list;
+        if (type === 'artist') {
+          list = [...seen.entries()].map(([an, pic]) => ({ id: 'name:' + an, name: an, artist: an, album: '', pic, vendor: 'netease', duration: 0 }));
+        } else {
+          // 专辑/歌单：严格匹配的歌手不足 3 个时，放宽为全部结果按歌手分组
+          //（qmeting 对热门词的搜索结果常是翻唱曲，artist=翻唱者，严格过滤会清零）
+          const groups = seen.size >= 3 ? seen : (() => {
+            const g = new Map();
+            for (const t of rows) { const an = (t.artist || '').trim() || '相关歌曲'; if (!g.has(an)) g.set(an, t.pic || ''); }
+            return g;
+          })();
+          list = [...groups.entries()].slice(0, limit).map(([an, pic]) => ({
+            id: 'artistlist:' + an,
+            name: an + ' · 相关歌曲集',
+            artist: an,
+            album: '',
+            pic,
+            vendor: 'netease',
+            duration: 0,
+          }));
+        }
+        if (list.length) {
+          const r2 = { list, total: list.length };
           cacheSet(key, r2, SEARCH_CACHE_MS);
           return r2;
         }
@@ -453,13 +509,8 @@ async function handleApi(req, res, reqUrl) {
       if (String(id).startsWith('name:')) {
         const name = String(id).slice(5).trim();
         if (!name) return sendJson(res, 400, { code: 400, msg: '歌手名无效' });
-        try {
-          const r = await withTimeout(qmeting.search('netease', name, 1, 100), SEARCH_TIMEOUT * 2);
-          const tracks = (r.list || []).filter((t) => (t.artist || '').toLowerCase().includes(name.toLowerCase())).slice(0, limit);
-          return sendJson(res, 200, { code: 200, tracks });
-        } catch (e) {
-          return sendJson(res, 200, { code: 200, tracks: [] });
-        }
+        const tracks = await artistTracksByName(name, limit);
+        return sendJson(res, 200, { code: 200, tracks });
       }
       const tracks = await netease.artistTop(id, limit);
       return sendJson(res, 200, { code: 200, tracks });
@@ -469,6 +520,12 @@ async function handleApi(req, res, reqUrl) {
       // 专辑详情 + 曲目（搜索「专辑」标签点击后用）
       const id = q(reqUrl, 'id');
       if (!id) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
+      // 海外兜底：「artistlist:歌手名」ID 来自 meting 聚合的相关歌曲集——按歌手名搜索其歌曲
+      if (String(id).startsWith('artistlist:')) {
+        const name = String(id).slice('artistlist:'.length).trim();
+        const tracks = await artistTracksByName(name, 100);
+        return sendJson(res, 200, { code: 200, info: { name: name + ' · 相关歌曲集', cover: tracks[0]?.pic || '' }, tracks });
+      }
       const info = await netease.albumDetail(id);
       return sendJson(res, 200, { code: 200, info, tracks: info.tracks });
     }
@@ -680,6 +737,12 @@ async function handleApi(req, res, reqUrl) {
       if (!pid) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
       const platform = q(reqUrl, 'platform') || 'netease';
       const limit = Math.min(200, Math.max(1, parseInt(q(reqUrl, 'limit') || '50', 10)));
+      // 海外兜底：「artistlist:歌手名」ID 来自 meting 聚合的相关歌曲集（与专辑分类共用）
+      if (String(pid).startsWith('artistlist:')) {
+        const name = String(pid).slice('artistlist:'.length).trim();
+        const tracks = await artistTracksByName(name, limit);
+        return sendJson(res, 200, { code: 200, info: { name: name + ' · 相关歌曲集', cover: tracks[0]?.pic || '' }, tracks });
+      }
       if (platform === 'qq' || platform === 'kugou') {
         const prov = platform === 'qq' ? tencent : kugou;
         const info = await prov.playlistDetail(pid);
