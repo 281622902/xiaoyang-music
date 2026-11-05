@@ -36,8 +36,11 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
     version: window.XYCloud?.appVersion,
     hasOverlay: !!(window.XYNative?.NativeMusic?.lyricOverlay)
   })`);
+  // 版本从 App 自身读取，避免每次发版都要手改回归脚本
+  const APP_VER = String(env.version || '3.6.0');
+  const APP_CODE = 3000000 + Number(APP_VER.split('.')[1] || 0) * 1000 + Number(APP_VER.split('.')[2] || 0);
   check('运行在安卓原生壳里', env.isAndroid === true, JSON.stringify(env));
-  check('版本号为 3.5.0', env.version === '3.5.0', String(env.version));
+  check('版本号与根目录一致', APP_VER === require('../package.json').version, APP_VER);
   check('桌面歌词原生能力已注册', env.hasOverlay === true, JSON.stringify(env));
 
   // ── 1. 设备指纹（原生） ──
@@ -49,7 +52,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
   }catch(e){return JSON.stringify({err:String(e)})}})()`);
   check('原生设备指纹可取到', /^[0-9a-f]{16}$/.test(dev.id || ''), JSON.stringify(dev));
   check('设备指纹含 ANDROID_ID / 包名 / 签名', !!dev.androidId && dev.pkg === 'com.xiaoyang.musicplayer' && !!dev.signer, JSON.stringify(dev));
-  check('原生版本号与构建一致', dev.ver === '3.5.0' && Number(dev.code) === 3005000, JSON.stringify(dev));
+  check('原生版本号与构建一致', dev.ver === APP_VER && Number(dev.code) === APP_CODE, JSON.stringify(dev));
 
   // ── 2. 授权门禁：状态查询 ──
   const auth = await json(`(async()=>{try{
@@ -61,7 +64,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
 
   // ── 3. 授权码校验：错误码必须被拒 ──
   const bad = await json(`(async()=>{try{
-    const r=await window.XYDeviceAuth.verify('XY3.5.0-XXXX-XXXX-XXXX');
+    const r=await window.XYDeviceAuth.verify('XY${APP_VER}-XXXX-XXXX-XXXX');
     return JSON.stringify({ok:r.ok, msg:r.msg});
   }catch(e){return JSON.stringify({err:String(e)})}})()`);
   check('错误授权码被服务端拒绝', bad.ok === false && !!bad.msg, JSON.stringify(bad));
@@ -70,7 +73,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
   {
     const issued = await (async () => {
       const http = require('http');
-      const body = JSON.stringify({ deviceId: dev.id, version: '3.5.0', platform: 'android', note: 'mumu-device-test' });
+      const body = JSON.stringify({ deviceId: dev.id, version: APP_VER, platform: 'android', note: 'mumu-device-test' });
       return new Promise(res => {
         const req = http.request({ host: '127.0.0.1', port: 3112, path: '/api/auth/license/issue', method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Token': process.env.XY_ADMIN_TOKEN || 'test-token', 'Content-Length': Buffer.byteLength(body) } },
@@ -78,7 +81,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
         req.on('error', () => res({})); req.write(body); req.end();
       });
     })();
-    check('服务端可为该设备签发授权码', !!(issued.code && String(issued.code).startsWith('XY3.5.0-')), JSON.stringify(issued).slice(0, 200));
+    check('服务端可为该设备签发授权码', !!(issued.code && String(issued.code).startsWith('XY' + APP_VER + '-')), JSON.stringify(issued).slice(0, 200));
 
     const verified = await json(`(async()=>{try{
       const r=await window.XYDeviceAuth.verify(${JSON.stringify(issued.code || 'X')});
@@ -92,7 +95,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
     // 别的设备拿同一个码 → 必须失败（码与设备绑定）
     const stolen = await (async () => {
       const http = require('http');
-      const body = JSON.stringify({ code: issued.code, deviceId: 'ffffffffffffffff', version: '3.5.0' });
+      const body = JSON.stringify({ code: issued.code, deviceId: 'ffffffffffffffff', version: APP_VER });
       return new Promise(res => {
         const req = http.request({ host: '127.0.0.1', port: 3112, path: '/api/auth/license/verify', method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
@@ -114,7 +117,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
       });
     })();
     const oldTry = await json(`(async()=>{try{const r=await window.XYDeviceAuth.verify(${JSON.stringify(oldVer.code || 'X')});return JSON.stringify({ok:r.ok,msg:r.msg})}catch(e){return JSON.stringify({err:String(e)})}})()`);
-    check('旧版本授权码在 v3.5.0 上失效', oldTry.ok === false && /版本/.test(oldTry.msg || ''), JSON.stringify(oldTry));
+    check('旧版本授权码在 v' + APP_VER + ' 上失效', oldTry.ok === false && /版本/.test(oldTry.msg || ''), JSON.stringify(oldTry));
   }
 
   // ── 4. 桌面歌词开关（原生路径） ──

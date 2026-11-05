@@ -24,7 +24,9 @@ const mock = require('./providers/mock');
 const aggregate = require('./providers/aggregate');
 const gds = require('./providers/gds');
 const qmeting = require('./providers/qmeting');
-const { mergeResults, splitQuery } = require('./search-merge');
+const { mergeResults, mergeArtists, splitQuery, titleScore, normalizeName } = require('./search-merge');
+const originalGuard = require('./original-guard');
+const aggregator = require('./providers/aggregator');
 const captcha = require('./captcha');
 const license = require('./providers/license');
 const localLib = require('./local-lib');
@@ -119,22 +121,24 @@ function forceHttps(u) {
 // 候选搜索：国内 meting 聚合源（api.qijieya.cn）优先——海外可达且不受 GDStudio 限流影响；
 // 候选解析：meting type=url 实时直链优先（国内基础设施），GDStudio 兜底。
 // 只用歌名搜索（"歌名+歌手"整串搜索分词质量差），按歌手过滤，最多试 3 个候选。
-async function gdsNeteaseUrl(name, artist, quality) {
+async function gdsNeteaseUrl(name, artist, quality, expectArtist) {
   const nm = (name || '').trim();
   if (!nm) return '';
+  // v3.6.0 原唱守卫：期望歌手优先取搜索词里的歌手，其次才是曲目显示歌手。
+  const want = originalGuard.expectedArtist({ explicit: expectArtist || artist });
   let list = [];
   try { list = (await qmeting.search('netease', nm, 1, 10)).list || []; } catch (e) { /* 走 GDStudio */ }
   if (!list.length) {
     try { list = (await gds.search('netease', nm, 1, 10)).list || []; } catch (e) { /* 空 */ }
   }
   if (!list.length) return '';
-  const an = (artist || '').trim().toLowerCase();
-  const pick = list.filter((c) => c.name.includes(nm) || nm.includes(c.name));
-  const strict = an ? pick.filter((c) => {
-    const cn = (c.artist || '').toLowerCase();
-    return cn.split('/').some((part) => part && (an.includes(part) || part.includes(an)));
-  }) : pick;
-  const candidates = [...(strict.length ? strict : pick)].slice(0, 3);
+  // 歌名必须是同一首；再用原唱守卫挡掉翻唱 / 伴奏 / Live / 歌手不符的条目。
+  // 这里是「点进去却是别人唱的」的高发位置：跨源按歌名找同曲时最容易撞翻唱。
+  const pick = list.filter((c) => titleScore(c.name, nm) >= 2);
+  const strict = pick.filter((c) => originalGuard.judge(c, want).ok);
+  // 有歌手约束时绝不降级到宽松候选——宁可没声音也不放翻唱；
+  // 无约束时保留旧行为（普通歌单播放不能因为严格判定而全军覆没）。
+  const candidates = (strict.length ? strict : (want ? [] : pick)).slice(0, 3);
   for (const c of candidates) {
     try {
       const mu = await qmeting.url('netease', c.id);
@@ -146,7 +150,7 @@ async function gdsNeteaseUrl(name, artist, quality) {
     } catch (e) { /* 试下一候选 */ }
   }
   // 双聚合源都不可用时的最后兜底：injahow meting 搜索直链（精简部署，命中率低但无害）
-  return metingSearchUrl(nm, an);
+  return metingSearchUrl(nm, want);
 }
 
 // 按歌手名返回其歌曲列表（海外聚合分类专用：name:/artistlist: 前缀共用），
@@ -182,10 +186,13 @@ async function metingSearchUrl(name, artist) {  const nm = (name || '').trim();
     if (!res.ok) return '';
     const arr = await res.json();
     if (!Array.isArray(arr)) return '';
-    const an = (artist || '').trim().toLowerCase();
+    const want = originalGuard.expectedArtist({ explicit: artist });
     for (const s of arr) {
-      const sa = String(s.author || s.artist || '').toLowerCase();
-      if (an && sa && !sa.includes(an) && !an.includes(sa)) continue; // 歌手不匹配跳过
+      const songName = String(s.name || s.title || nm);
+      const sa = String(s.author || s.artist || '').trim();
+      // 原唱守卫：能判定歌手就必须严格匹配；歌手字段缺失时只挡明显二次创作
+      if (sa && !originalGuard.judge({ name: songName, artist: sa }, want).ok) continue;
+      if (!sa && originalGuard.isDerivative(songName, '')) continue;
       if (s.url && /^https?:\/\//i.test(s.url)) return s.url;
     }
     return '';
@@ -197,6 +204,14 @@ async function metingSearchUrl(name, artist) {  const nm = (name || '').trim();
 async function resolvePlayUrl(track) {
   const primary = getProvider(track.vendor);
   if (USE_MOCK) return { url: await primary.url(track.id), vendor: track.vendor };
+  // v3.6.0 原唱强匹配：期望歌手来自「用户搜索词里的歌手」（前端透传），
+  // 其次才是列表显示的歌手。strictOriginal=1 表示这是从搜索结果点进来的，
+  // 如果所有源都找不到真原唱，上层必须明确回「暂无原唱版权」而不是静默无声。
+  const wantArtist = originalGuard.expectedArtist({
+    explicit: track.expectArtist || track.artist,
+    display: track.artist,
+  });
+  const strictOriginal = !!track.strictOriginal;
   let expect = track.duration || 0;
   // 期望时长（歌曲真实完整时长）缺失时，netease 可用歌曲详情 GET 接口补全
   if (!expect && track.vendor === 'netease') {
@@ -244,7 +259,7 @@ async function resolvePlayUrl(track) {
   // 搜网易同曲，再按网易 ID 解析完整版——保证搜得到就能播。
   if (!u && track.vendor !== 'netease' && (track.name || '').trim()) {
     try {
-      const gu = await withTimeout(gdsNeteaseUrl(track.name, track.artist, track.quality), 15000);
+      const gu = await withTimeout(gdsNeteaseUrl(track.name, track.artist, track.quality, wantArtist), 15000);
       if (gu) {
         const len = await probeAudioLen(gu);
         if (isFullAudio(len, expect)) return { url: gu, vendor: 'netease' };
@@ -261,36 +276,55 @@ async function resolvePlayUrl(track) {
       }
     } catch (e) { /* 忽略 */ }
   }
-  // 4) 跨音源：按歌名+歌手去其他音源找（候选时长须接近完整版）
+  // 4) 全网底层聚合（v3.6.0）：并行打穿多家底层搜索口，只收严格匹配原唱的候选。
+  //    替换原先「逐音源顺序 search + includes() 松散判歌手」的做法——那正是
+  //    「列表显示周杰伦，点进去却是别人唱的」的源头。
   const name = (track.name || '').trim();
-  const artist = (track.artist || '').trim();
-  for (const v of VENDOR_ORDER) {
-    if (v === track.vendor) continue;
+  let candidates = [];
+  if (name) {
     try {
-      const pv = getProvider(v);
-      const { list } = await pv.search(name, 'song', 1, 10);
-      for (const cand of list) {
-        const ca = (cand.artist || '').trim();
-        if (artist && ca && !ca.includes(artist) && !artist.includes(ca)) continue; // 歌手不匹配跳过
-        // 候选时长明显偏短（剪辑版/BGM）→ 跳过
-        if (expect && cand.duration && cand.duration < expect * 0.85) continue;
-        try {
-          const cu = await pv.url(cand.id);
-          if (cu) {
-            const len = await probeAudioLen(cu);
-            if (isFullAudio(len, cand.duration || expect)) return { url: cu, vendor: v };
-          }
-        } catch (e) { /* 该候选失败，试聚合源 */ }
-        try {
-          const au = await aggregate.url(v, cand.id);
-          if (au) {
-            const len = await probeAudioLen(au);
-            if (isFullAudio(len, cand.duration || expect)) return { url: au, vendor: v };
-          }
-        } catch (e) { /* 忽略 */ }
-      }
-    } catch (e) { /* 忽略该音源 */ }
+      candidates = await withTimeout(aggregator.searchOriginal(name, wantArtist, { timeout: 4500, limit: 12 }), 5200);
+    } catch (e) { candidates = []; }
   }
+  const deadline = Date.now() + 6000;
+  // 聚合口全空时的精简兜底：顺序问三家，但每条候选仍必须过原唱守卫
+  if (!candidates.length && name) {
+    const fallback = [];
+    for (const v of ['netease', 'tencent', 'kugou']) {
+      if (Date.now() > deadline) break;
+      if (v === track.vendor) continue;
+      try {
+        const { list } = await withTimeout(getProvider(v).search(name, 'song', 1, 10), 2200);
+        for (const cand of (list || []).slice(0, 6)) {
+          if (!originalGuard.judge(cand, wantArtist).ok) continue;
+          fallback.push({ ...cand, vendor: v });
+        }
+      } catch (e) { /* 该源不可用，试下一家 */ }
+    }
+    candidates = fallback;
+  }
+  for (const cand of candidates) {
+    if (!cand || !cand.id || Date.now() > deadline) break;
+    const v = /^(netease|tencent|kugou|kuwo)$/.test(String(cand.vendor || '')) ? cand.vendor : 'netease';
+    if (v === track.vendor && String(cand.id) === String(track.id)) continue;
+    if (expect && cand.duration && cand.duration < expect * 0.85) continue;
+    const urls = [];
+    // meting 搜索结果常自带实时直链，优先直接用，省一次解析往返
+    if (cand.url && /^https?:\/\//i.test(cand.url) && !/localhost/i.test(cand.url)) urls.push(cand.url);
+    try { const u = await getProvider(v).url(cand.id); if (u) urls.push(u); } catch (e) { /* 该源签名失效 */ }
+    try { const u = await aggregate.url(v, cand.id); if (u) urls.push(u); } catch (e) { /* 忽略 */ }
+    if (v === 'netease') {
+      try { const u = await qmeting.url('netease', cand.id); if (u) urls.push(u); } catch (e) { /* 忽略 */ }
+    }
+    for (const u of urls) {
+      try {
+        const len = await probeAudioLen(u);
+        if (isFullAudio(len, cand.duration || expect)) return { url: u, vendor: v };
+      } catch (e) { /* 试下一个地址 */ }
+    }
+  }
+  // 严格模式（从搜索结果点播）下全链路都没有真原唱 → 明确拒绝，绝不退而求其次放翻唱
+  if (strictOriginal && wantArtist) return { url: '', vendor: '', blocked: true };
   return { url: '', vendor: '' };
 }
 
@@ -298,7 +332,9 @@ async function resolvePlayUrl(track) {
 // 不再打上游。地址 10 分钟过期，避免拿到已失效的 CDN token。
 // fresh=1 时跳过缓存读（流加载 403 后前端强制换源重解析用），结果仍回写缓存。
 async function resolvePlayUrlCached(track, opts) {
-  const key = 'r:' + (track.vendor || '') + ':' + track.id + ':' + (track.quality || 'standard');
+  // 期望歌手也进缓存键：同一首歌用不同歌手约束解析时结果可能不同，不能串味
+  const key = 'r:' + (track.vendor || '') + ':' + track.id + ':' + (track.quality || 'standard') +
+    ':' + (track.expectArtist ? originalGuard.norm(track.expectArtist) : '') + (track.strictOriginal ? ':s' : '');
   if (!(opts && opts.fresh)) {
     const cached = cacheGet(key);
     if (cached) return cached;
@@ -514,6 +550,96 @@ async function searchMerged(kw, type, page, limit, opts = {}) {
   return { list: merged, total: merged.length };
 }
 
+// ── 分类定向加载（v3.6.0 阶段一）────────────────────────────────────
+// 四个 Tab 不许共用同一份「相关歌曲集」：歌手 / 专辑 / 歌单各有自己的
+// 数据源与聚合方式，歌手还必须去重成唯一卡片。
+// 底层复用已有的国内 meting / GDStudio 通道（海外部署可达），不新造爬虫。
+async function typedSongRows(kw, limit) {
+  const jobs = [
+    withTimeout(qmeting.search('tencent', kw, 1, 30), SEARCH_TIMEOUT * 2),
+    withTimeout(gds.search('netease', kw, 1, 30), SEARCH_TIMEOUT * 2),
+    withTimeout(qmeting.search('netease', kw, 1, 30), SEARCH_TIMEOUT * 2),
+  ];
+  const settled = await Promise.allSettled(jobs);
+  const rows = [];
+  for (const r of settled) {
+    if (r.status !== 'fulfilled' || !r.value || !Array.isArray(r.value.list)) continue;
+    rows.push(...r.value.list);
+  }
+  return rows.slice(0, limit * 4);
+}
+
+function uniqueByName(list) {
+  const seen = new Set(); const out = [];
+  for (const x of list || []) {
+    const k = normalizeName(String(x.name || ''));
+    if (!k || seen.has(k)) continue;
+    seen.add(k); out.push(x);
+  }
+  return out;
+}
+
+async function searchTyped(kw, type, page, limit, vendor) {
+  const base = await searchMulti(vendor, kw, type, page, limit);
+  const raw = (base.list || []).slice();
+  if (type === 'artist') {
+    const lk = String(kw).trim().toLowerCase();
+    const extra = [];
+    for (const t of await typedSongRows(kw, 30)) {
+      const an = String(t.artist || '').trim();
+      if (!an || originalGuard.isDerivative(t.name, an)) continue;
+      for (const pnRaw of originalGuard.canonicalParts(an)) {
+        const pn = String(pnRaw).trim();
+        if (!pn) continue;
+        const low = pn.toLowerCase();
+        if (lk && !low.includes(lk) && !lk.includes(low)) continue;
+        extra.push({ id: 'name:' + pn, name: pn, artist: pn, album: '', pic: t.pic || '', vendor: 'tencent', duration: 0 });
+      }
+    }
+    const merged = mergeArtists([...raw, ...extra], { limit });
+    return {
+      list: merged,
+      total: merged.length,
+      deduped: Math.max(0, raw.length + extra.length - merged.length),
+      targeted: extra.length > 0,
+    };
+  }
+  if (type === 'album') {
+    // 过滤掉旧兜底生成的「XXX · 相关歌曲集」伪专辑
+    const real = raw.filter((x) => !/^artistlist\s*:/.test(String(x.id || '')));
+    if (real.length >= 3) { const u = uniqueByName(real).slice(0, limit); return { list: u, total: u.length, deduped: real.length - u.length }; }
+    const seen = new Map();
+    for (const t of await typedSongRows(kw, 40)) {
+      const an = String(t.album || '').trim();
+      if (!an || originalGuard.isDerivative(an, '')) continue;
+      if (!seen.has(an)) {
+        seen.set(an, { id: 'albumname:' + an, name: an, artist: t.artist || '', album: an, pic: t.pic || '', vendor: t.vendor || 'netease', duration: 0 });
+      }
+    }
+    const list = uniqueByName([...real, ...seen.values()]).slice(0, limit);
+    return { list, total: list.length, deduped: 0, targeted: seen.size > 0 };
+  }
+  if (type === 'playlist') {
+    const real = raw.filter((x) => !/^artistlist\s*:/.test(String(x.id || '')));
+    if (real.length >= 3) { const u = uniqueByName(real).slice(0, limit); return { list: u, total: u.length, deduped: real.length - u.length }; }
+    let pool = [];
+    try { pool = await withTimeout(netease.topPlaylists('全部', 50), SEARCH_TIMEOUT * 2); } catch (e) { pool = []; }
+    const lk = String(kw).trim().toLowerCase();
+    const extra = pool.filter((p) =>
+      String(p.name || '').toLowerCase().includes(lk) ||
+      String(p.creator || p.artist || '').toLowerCase().includes(lk)
+    ).slice(0, limit).map((p) => ({
+      id: String(p.id), name: p.name,
+      artist: p.creator || p.artist || '', album: '',
+      pic: p.cover || p.pic || '', vendor: 'netease', duration: 0,
+      trackCount: p.trackCount || 0, playCount: p.playCount || 0,
+    }));
+    const list = uniqueByName([...real, ...extra]).slice(0, limit);
+    return { list, total: list.length, deduped: 0, targeted: extra.length > 0 };
+  }
+  return { list: raw, total: base.total || raw.length, deduped: 0 };
+}
+
 // 热搜词：取热歌榜前 12 首歌名，缓存 1 小时（供搜索框推荐 + 热搜榜）
 const HOT_LIST_ID = '3778678'; // 云音乐热歌榜
 let hotCache = { t: 0, words: [] };
@@ -640,11 +766,20 @@ async function handleApi(req, res, reqUrl) {
         const cached = cacheGet(key);
         if (cached) return sendJson(res, 200, { code: 200, result: cached.list, total: cached.total });
         const merged = await searchMerged(kw, type, page, limit, { artist });
+        // 用户指定了歌手、但严格过滤后连一条真原唱都没有 → 明确告知，不给错歌
+        const noOriginal = !!artist && merged.list.length === 0;
         cacheSet(key, merged, SEARCH_CACHE_MS);
-        return sendJson(res, 200, { code: 200, result: merged.list, total: merged.total });
+        return sendJson(res, 200, {
+          code: 200, result: merged.list, total: merged.total,
+          noOriginal, ...(noOriginal ? { msg: '暂无原唱版权' } : {}),
+        });
       }
-      const { list, total } = await searchMulti(vendor, kw, type, page, limit);
-      return sendJson(res, 200, { code: 200, result: list, total });
+      // 歌手 / 专辑 / 歌单：各自定向加载，歌手还会合并重复项
+      const typed = await searchTyped(kw, type, page, limit, vendor);
+      return sendJson(res, 200, {
+        code: 200, result: typed.list, total: typed.total,
+        deduped: typed.deduped || 0, targeted: !!typed.targeted,
+      });
     }
 
     if (pathname === '/api/artist') {
@@ -836,11 +971,26 @@ async function handleApi(req, res, reqUrl) {
       const name = q(reqUrl, 'name') || '';
       const artist = q(reqUrl, 'artist') || '';
       const quality = q(reqUrl, 'quality') || 'standard';
+      // v3.6.0 原唱强匹配（可选参数）：旧端不传时完全沿用旧行为，双端兼容。
+      const strictOriginal = q(reqUrl, 'strict') === '1';
+      const wantArtist = originalGuard.expectedArtist({
+        explicit: q(reqUrl, 'expectArtist') || artist,
+        display: artist,
+      });
       // 主音源元数据查询整体限时：海外 IP 被风控时 weapi 可能长挂，
       // 超时后落成空壳，交给下方完整版兜底链，不再让前端转圈半天。
       let data;
       try { data = await withTimeout(p.song(id, quality), SEARCH_TIMEOUT * 2); }
       catch (e) { data = { id, url: '', name: '', artist: '', duration: 0 }; }
+      // 上游元数据里若明确写着「不是期望歌手」，说明这条 id 本身就是别人唱的
+      //（列表标了周杰伦、实际指向翻唱），严格模式下直接拒绝，不给任何地址。
+      const upstreamArtist = String(data.artist || '').trim();
+      if (strictOriginal && wantArtist && upstreamArtist &&
+          !originalGuard.judge({ name: data.name || name, artist: upstreamArtist }, wantArtist).ok) {
+        data.url = ''; data.trial = false;
+        data.noOriginal = true; data.msg = '暂无原唱版权';
+        return sendJson(res, 200, { code: 200, data });
+      }
       // 元数据回填：上游反爬导致空歌名/歌手时，用前端传来的信息补齐，避免播放条显示「未知」
       if (!data.name && name) data.name = name;
       if (!data.artist && artist) data.artist = artist;
@@ -851,10 +1001,11 @@ async function handleApi(req, res, reqUrl) {
         // fresh=1：流加载 403 后前端强制换源重解析，跳过解析缓存读。
         try {
           const fb = await withTimeout(
-            resolvePlayUrlCached({ vendor, id, name: data.name || name, artist: data.artist || artist, duration: data.duration || 0, quality }, { fresh: q(reqUrl, 'fresh') === '1' }),
+            resolvePlayUrlCached({ vendor, id, name: data.name || name, artist: data.artist || artist, duration: data.duration || 0, quality, expectArtist: wantArtist, strictOriginal }, { fresh: q(reqUrl, 'fresh') === '1' }),
             RESOLVE_TOTAL_TIMEOUT,
           );
           if (fb && fb.url) { data.url = fb.url; data.vendor = fb.vendor; data.trial = false; }
+          if (fb && fb.blocked) data.noOriginal = true;
         } catch (e) {
           data.url = data.url || '';
           data.resolveTimeout = true;
@@ -862,7 +1013,11 @@ async function handleApi(req, res, reqUrl) {
       }
       data.url = forceHttps(data.url);
       // 全部音源都试过仍无地址（非超时）：给前端明确标记 → 提示「受版权保护或暂无音源」
-      if (!data.url && !data.resolveTimeout) data.exhausted = true;
+      if (!data.url && !data.resolveTimeout) {
+        data.exhausted = true;
+        // 严格模式（搜索结果点播）下没有真原唱 → 用用户指定的文案，不要含糊其辞
+        if (strictOriginal && wantArtist) { data.noOriginal = true; data.msg = '暂无原唱版权'; }
+      }
       return sendJson(res, 200, { code: 200, data });
     }
 
@@ -873,11 +1028,21 @@ async function handleApi(req, res, reqUrl) {
       const artist = q(reqUrl, 'artist') || '';
       const duration = parseInt(q(reqUrl, 'duration') || '0', 10) || 0;
       const quality = q(reqUrl, 'quality') || 'standard';
+      const strictOriginal = q(reqUrl, 'strict') === '1';
+      const wantArtist = originalGuard.expectedArtist({
+        explicit: q(reqUrl, 'expectArtist') || artist,
+        display: artist,
+      });
       const fb = await withTimeout(
-        resolvePlayUrlCached({ vendor, id, name, artist, duration, quality }, { fresh: q(reqUrl, 'fresh') === '1' }),
+        resolvePlayUrlCached({ vendor, id, name, artist, duration, quality, expectArtist: wantArtist, strictOriginal }, { fresh: q(reqUrl, 'fresh') === '1' }),
         RESOLVE_TOTAL_TIMEOUT,
       );
-      return sendJson(res, 200, { code: 200, url: forceHttps(fb.url), vendor: fb.vendor });
+      return sendJson(res, 200, {
+        code: 200,
+        url: forceHttps(fb.url),
+        vendor: fb.vendor,
+        ...((!fb.url && (fb.blocked || strictOriginal)) ? { noOriginal: true, msg: '暂无原唱版权' } : {}),
+      });
     }
 
     if (pathname === '/api/lyric') {

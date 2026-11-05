@@ -76,13 +76,25 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
     const s = await json(`JSON.stringify({sum:document.getElementById('searchSummary')?.textContent,rows:document.querySelectorAll('#mobileResults .track-row').length,first:[...document.querySelectorAll('#mobileResults .track-row')].slice(0,3).map(r=>r.querySelector('strong').textContent+'|'+r.querySelector('small').textContent.split('·')[0].trim())})`);
     check('搜索单曲有结果', s.rows > 0, JSON.stringify(s));
     check('歌手匹配置顶周杰伦', (s.first || []).some(x => x.includes('周杰伦')), JSON.stringify(s.first));
-    check('搜索摘要提示歌手优先', /优先展示/.test(s.sum || ''), s.sum);
+    check('搜索摘要提示歌手优先', /(已锁定.*原唱|优先展示)/.test(s.sum || ''), s.sum);
   }
+  // v3.6.0：四个 Tab 各有专属容器与专属类名，不再统一走 #searchGrid 网格
+  const TAB_BOX = {
+    artist: ['#searchArtists', '.artist-circle-item'],
+    album: ['#searchAlbums', '.album-square'],
+    playlist: ['#searchPlaylists', '.playlist-strip'],
+  };
   for (const [type, label] of [['artist', '歌手'], ['album', '专辑'], ['playlist', '歌单']]) {
     await val(`document.querySelector('#searchTypes [data-type=${type}]').click();1`);
     await sleep(6000);
-    const s = await json(`JSON.stringify({listHidden:document.getElementById('mobileResults')?.hidden,grid:document.querySelectorAll('#searchGrid>button').length,gridHidden:document.getElementById('searchGrid')?.hidden})`);
-    check(`搜索「${label}」走网格分流`, s.listHidden === true && s.gridHidden === false && s.grid > 0, JSON.stringify(s));
+    const [boxSel, itemSel] = TAB_BOX[type];
+    const s = await json(`JSON.stringify({
+      listHidden:document.getElementById('mobileResults')?.hidden,
+      boxHidden:document.querySelector('${boxSel}')?.hidden,
+      items:document.querySelectorAll('${boxSel} ${itemSel}').length,
+      others:['mobileResults','searchArtists','searchAlbums','searchPlaylists'].filter(id=>id!=='${boxSel.slice(1)}').every(id=>document.getElementById(id).hidden)
+    })`);
+    check(`搜索「${label}」走专属 UI`, s.listHidden === true && s.boxHidden === false && s.items > 0 && s.others === true, JSON.stringify(s));
   }
   await val(`document.querySelector('#searchTypes [data-type=song]').click();1`); await sleep(6000);
 

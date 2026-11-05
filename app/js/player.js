@@ -593,6 +593,20 @@
   async function loadAndPlay(track, opts) {
     opts = opts || {};
     if (!track || !track.id) return;
+    // v3.6.0 原唱守卫 · 前端第一道闸：搜索结果可能自带实时直链（不走后端解析），
+    // 所以必须在播放前自己校验一次「显示歌手 == 搜索词里的歌手」。
+    // 合唱（周杰伦/费玉清）用包含判断放行；翻唱条目歌手不同则直接拦下。
+    if (track.strictOriginal && track.expectArtist) {
+      const normArtist = (s) => String(s || '').toLowerCase()
+        .replace(/[（(][^）)]*[）)]/g, '')
+        .replace(/[\s·・\-—_,，。.、!！?？/&＋+|]/g, '');
+      const shown = normArtist(track.artist);
+      const want = normArtist(track.expectArtist);
+      if (shown && want && !shown.includes(want) && !want.includes(shown)) {
+        toast('暂无原唱版权：这条不是 ' + track.expectArtist + ' 演唱的版本');
+        return;
+      }
+    }
     if (opts.quiet) {
       enqueueTrack(track);
       return;
@@ -681,6 +695,16 @@
         setPlayIcon(false);
         return;
       }
+    }
+
+    // v3.6.0 原唱守卫 · 后端回执：所有音源都没有真原唱 → 明确提示，
+    // 不再把翻唱 / 伴奏 / 空地址当成「播放失败」含糊带过。
+    if (STATE.current.noOriginal || (!STATE.current.url && STATE.current.msg === '暂无原唱版权')) {
+      STATE.loading = false;
+      STATE.failSeq = seq;
+      toast('暂无原唱版权：未找到该歌手的正版音源');
+      setPlayIcon(false);
+      return;
     }
 
     // 歌词（含翻译，供「翻译歌词」开关使用）

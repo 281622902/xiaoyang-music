@@ -191,7 +191,7 @@
       '<p class="muted" id="authGateDesc">正在读取设备信息…</p>' +
       '<div class="auth-gate-meta"><span>设备码</span><strong id="authGateDevice">读取中…</strong></div>' +
       '<div class="auth-gate-meta"><span>当前版本</span><strong id="authGateVersion">—</strong></div>' +
-      '<label class="auth-gate-label">授权码<input id="authGateInput" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="XY3.5.0-XXXX-XXXX-XXXX"></label>' +
+      '<label class="auth-gate-label">授权码<input id="authGateInput" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="XY' + currentVersion() + '-XXXX-XXXX-XXXX"></label>' +
       '<p class="auth-gate-status" id="authGateStatus" role="status" aria-live="polite"></p>' +
       '<button class="primary wide-button" id="authGateSubmit">验证并进入</button>' +
       '<button class="auth-gate-retry" id="authGateRetry" type="button">重新读取设备信息</button>' +

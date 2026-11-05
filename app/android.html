@@ -48,7 +48,14 @@
           <div class="section-heading"><h2>最近搜索</h2><button class="text-button" data-action="clearSearch">清空</button></div><div id="searchHistory" class="chips"></div>
           <div class="section-heading"><h2>大家都在搜</h2><button class="text-button" data-action="showAllHot">浏览全部 ›</button></div><div id="hotSearches" class="hot-cloud"></div>
         </div>
-        <div id="searchResults" hidden><div id="searchTypes" class="segmented sticky-types" role="group" aria-label="搜索分类"><button data-type="song" class="active">单曲</button><button data-type="artist">歌手</button><button data-type="album">专辑</button><button data-type="playlist">歌单</button></div><p id="searchSummary" class="muted" role="status"></p><ul id="mobileResults" class="track-list"></ul><div id="searchGrid" class="cover-grid" hidden></div><button id="searchMore" class="wide-button" hidden>加载更多</button></div>
+        <div id="searchResults" hidden><div id="searchTypes" class="segmented sticky-types" role="group" aria-label="搜索分类"><button data-type="song" class="active">单曲</button><button data-type="artist">歌手</button><button data-type="album">专辑</button><button data-type="playlist">歌单</button></div><p id="searchSummary" class="muted" role="status"></p><p id="searchKindHint" class="kind-hint" hidden></p>
+          <!-- v3.6.0：四个 Tab 各自独立容器 + 各自独立渲染，绝不复用同一套网格 -->
+          <ul id="mobileResults" class="track-list song-rank-list"></ul>
+          <div id="searchArtists" class="artist-circle-list" hidden></div>
+          <div id="searchAlbums" class="album-square-grid" hidden></div>
+          <div id="searchPlaylists" class="playlist-strip-list" hidden></div>
+          <div id="searchGrid" class="cover-grid" hidden></div>
+          <button id="searchMore" class="wide-button" hidden>加载更多</button></div>
       </section>
       <!-- ══════════ 笔记（v3.3.0 新页面，瀑布流）══════════ -->
       <section id="page-notes" class="m-page" hidden aria-labelledby="notesTitle">
@@ -75,12 +82,12 @@
         <div id="meRecent" class="recent-grid"></div>
         <div class="section-heading"><h2>创建的歌单</h2><button class="text-button" data-nav="library">全部 ›</button></div>
         <div id="mePlaylists" class="me-list"></div>
-        <div class="settings-card me-extra"><button data-action="update"><span data-icon="download"></span><span>检查版本更新</span><span id="mobileVersion">3.5.0</span></button><button data-action="networkDiagnostics"><span data-icon="search"></span><span>网络诊断</span><span>&gt;</span></button><button data-action="settings"><span data-icon="settings"></span><span>播放与连接设置</span><span>&gt;</span></button></div>
+        <div class="settings-card me-extra"><button data-action="update"><span data-icon="download"></span><span>检查版本更新</span><span id="mobileVersion">3.6.0</span></button><button data-action="networkDiagnostics"><span data-icon="search"></span><span>网络诊断</span><span>&gt;</span></button><button data-action="settings"><span data-icon="settings"></span><span>播放与连接设置</span><span>&gt;</span></button></div>
         <div class="quiet-note"><img src="icon.svg" alt=""><p>属于你的音乐空间</p><small>本地歌单保存在当前设备，云端收藏随账号保存。</small></div>
       </section>
       <!-- ══════════ 设置中心（v3.2.0 轻量五件套）══════════ -->
       <section id="page-settings" class="m-page" hidden aria-labelledby="settingsTitle">
-        <div class="section-heading"><h1 id="settingsTitle">设置中心</h1><span class="muted" id="settingsVer">v3.5.0</span></div>
+        <div class="section-heading"><h1 id="settingsTitle">设置中心</h1><span class="muted" id="settingsVer">v3.6.0</span></div>
         <p class="st-group-title">播放</p>
         <div class="settings-card">
           <button id="rowQuality"><span data-icon="library"></span><span class="st-label">音质<small>调整下一首播放的码率</small></span><span id="valQuality">标准</span></button>
@@ -107,7 +114,7 @@
         <div class="settings-card">
           <button data-action="about"><span data-icon="spark"></span><span class="st-label">关于小杨音乐<small>版本、鸣谢与许可</small></span><span>&gt;</span></button>
         </div>
-        <div class="quiet-note"><img src="icon.svg" alt=""><p>小杨音乐 · v3.5.0</p><small>音质从下一首歌生效 · 桌面歌词可拖动、长按关闭</small></div>
+        <div class="quiet-note"><img src="icon.svg" alt=""><p>小杨音乐 · v3.6.0</p><small>音质从下一首歌生效 · 桌面歌词可拖动、长按关闭</small></div>
       </section>
 
       <section id="page-detail" class="m-page" hidden><button class="back-button" data-action="back"><span data-icon="back"></span>返回</button><div class="detail-head"><img id="detailCover" src="icon.svg" alt="歌单封面"><div><span class="eyebrow" id="detailKind">精选歌单</span><h1 id="detailTitle">歌单</h1><p id="detailSummary" class="muted"></p></div></div><div class="detail-actions"><button id="detailPlayAll" class="primary"><span data-icon="play"></span>播放全部</button><button id="detailSave" class="outline" hidden>保存歌单</button><button id="detailRename" class="outline" hidden>编辑</button></div><p id="detailStatus" role="status" class="muted"></p><ul id="detailTracks" class="track-list"></ul></section>
@@ -141,7 +148,7 @@
       <p class="muted" id="authGateDesc">正在读取设备信息…</p>
       <div class="auth-gate-meta"><span>设备码</span><strong id="authGateDevice">读取中…</strong></div>
       <div class="auth-gate-meta"><span>当前版本</span><strong id="authGateVersion">—</strong></div>
-      <label class="auth-gate-label">授权码<input id="authGateInput" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="XY3.5.0-XXXX-XXXX-XXXX"></label>
+      <label class="auth-gate-label">授权码<input id="authGateInput" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="XY3.6.0-XXXX-XXXX-XXXX"></label>
       <p class="auth-gate-status" id="authGateStatus" role="status" aria-live="polite"></p>
       <button class="primary wide-button" id="authGateSubmit">验证并进入</button>
       <button class="auth-gate-retry" id="authGateRetry" type="button">重新读取设备信息</button>

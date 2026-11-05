@@ -143,6 +143,10 @@
     return {
       list: (r.result || []).map(normalizeTrack),
       total: r.total || (r.result ? r.result.length : 0),
+      // v3.6.0：原唱守卫 / 歌手去重 / 定向加载的回执，交给搜索页做摘要提示
+      noOriginal: !!r.noOriginal,
+      deduped: Number(r.deduped || 0),
+      targeted: !!r.targeted,
     };
   }
 
@@ -152,6 +156,11 @@
     const id = typeof track === 'string' ? track : track.id;
     const name = typeof track === 'string' ? '' : (track.name || '');
     const artist = typeof track === 'string' ? '' : (track.artist || '');
+    // v3.6.0 原唱强匹配：搜索结果点播时把「期望歌手」透传给后端，
+    // 后端解析链只采信该歌手的原唱候选；旧调用不传 → 行为完全不变。
+    const meta = typeof track === 'string' ? {} : (track || {});
+    const expectArtist = (opts && opts.expectArtist) || meta.expectArtist || '';
+    const strict = ((opts && opts.strict) || meta.strictOriginal) ? 1 : undefined;
     // 超时 22s：后端兜底链整体限时 18s，留出余量让后端的
     // "解析超时"标记能正常回传，避免前端先 abort 把原因掩盖成"网络慢"。
     let r;
@@ -161,6 +170,8 @@
         vendor: vendor || (typeof track === 'string' ? getVendor() : (track.vendor || getVendor())),
         name,
         artist,
+        expectArtist: expectArtist || undefined,
+        strict,
         quality: localStorage.getItem('uzz.quality') || 'standard',
         fresh: opts && opts.fresh ? 1 : undefined,
       }, 26000, signal);
@@ -180,12 +191,17 @@
     const id = typeof track === 'string' ? track : track.id;
     const name = typeof track === 'string' ? '' : (track.name || '');
     const artist = typeof track === 'string' ? '' : (track.artist || '');
+    const meta = typeof track === 'string' ? {} : (track || {});
+    const expectArtist = (opts && opts.expectArtist) || meta.expectArtist || '';
+    const strict = ((opts && opts.strict) || meta.strictOriginal) ? 1 : undefined;
     try {
       const r = await request('/api/url', {
         id,
         vendor: vendor || (typeof track === 'string' ? getVendor() : (track.vendor || getVendor())),
         name,
         artist,
+        expectArtist: expectArtist || undefined,
+        strict,
         quality: localStorage.getItem('uzz.quality') || 'standard',
         fresh: opts && opts.fresh ? 1 : undefined,
       }, 20000, signal);

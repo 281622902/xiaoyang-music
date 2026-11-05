@@ -39,14 +39,25 @@
   const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
   const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
   const keyOf = track => track.vendor + '|' + track.id;
-  const cover = value => { if (!value || value==='icon.svg') return 'icon.svg'; try { const u = new URL(value, location.href); if (!/^https?:$/.test(u.protocol)) return 'icon.svg'; /* 安卓直连图床（国内 4G 直连快），不经海外后端 /api/pic 转图 */ return XYNative.isAndroid ? u.href : UzzApi.picProxy(u.href); } catch { return 'icon.svg'; } };
+  const cover = value => {
+    if (!value || value==='icon.svg') return 'icon.svg';
+    try {
+      const u = new URL(value, location.href);
+      if (!/^https?:$/.test(u.protocol)) return 'icon.svg';
+      // 安卓 WebView 的安全上下文是 https://localhost，http:// 明文图片会被
+      // 系统拦截（ERR_CLEARTEXT_NOT_PERMITTED）→ 卡片出现白块。国内图床均
+      // 支持 https，这里统一升级，保证搜索四 Tab 的封面真实可见。
+      if (u.protocol === 'http:') u.protocol = 'https:';
+      return XYNative.isAndroid ? u.href : UzzApi.picProxy(u.href);
+    } catch { return 'icon.svg'; }
+  };
   const fmt = n => { n = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0; return Math.floor(n / 60) + ':' + String(n % 60).padStart(2,'0'); };
   const modes = {list:'列表循环',single:'单曲循环',random:'随机播放',sequential:'顺序播放'};
   const trackSets = new Map();
   let route = 'discover', previousRoute = 'discover', libraryTab = 'playlists', detail = null;
   let playlists = read('uzz.playlists', []), searchHistory = read('uzz.searchHistory', []);
   let localTracks = read('xy.android.localTracks', []);
-  let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort, searchArtistHint = '';
+  let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort, searchArtistHint = '', searchDeduped = 0, searchTargeted = false;
   let channel = 'recommend';
   let detailGeneration = 0, discoveryGeneration = 0, cloudGeneration = 0, authGeneration = 0, heart;
   let cloudRows = [], authMode = 'login', selectedTrack = null, lastFocus = null, sheetFocus = null, lastBack = 0;
@@ -222,47 +233,87 @@
     }
     return { title: kw, artist: '' };
   }
+  // v3.6.0：四个 Tab 各自的数据加载与提示文案，绝不共用一套渲染
+  const SEARCH_KIND_HINT = {
+    song: '单曲 · 原唱强匹配，翻唱 / 伴奏版本已剔除',
+    artist: '歌手 · 多源去重，合并为唯一歌手卡片',
+    album: '专辑 · 定向加载专辑封面与歌手信息',
+    playlist: '歌单 · 定向加载歌单封面与曲目数',
+  };
+  const SEARCH_KIND_UNIT = { song: '首歌曲', artist: '位歌手', album: '张专辑', playlist: '个歌单' };
+  const SEARCH_BOX_IDS = ['mobileResults', 'searchArtists', 'searchAlbums', 'searchPlaylists', 'searchGrid'];
   async function search(more=false) {
     const keyword=$('mobileSearchInput').value.trim(); if(!keyword)return;
     searchAbort?.abort(); searchAbort=new AbortController(); const ticket=++searchGeneration;
     if(!more || keyword!==searchKeyword){searchPage=1;searchRows=[];}else searchPage++;
     searchKeyword=keyword; searchHistory=[keyword,...searchHistory.filter(s=>s!==keyword)].slice(0,20); save('uzz.searchHistory',searchHistory);
     $('searchWelcome').hidden=true; $('searchResults').hidden=false; $('searchSummary').textContent='正在寻找好声音…'; $('searchMore').hidden=true;
-    if(!more){ $('mobileResults').innerHTML=''; const gb=$('searchGrid'); if(gb)gb.innerHTML=''; }
-    // 歌手识别：命中时后端会把该歌手的版本置顶（解决「搜周杰伦的歌搜到别人唱的」）
-    const hint = more ? (searchArtistHint || parseArtistHint(keyword)) : parseArtistHint(keyword);
+    // 切换 Tab / 新搜索时把四个容器全清掉，避免上一类结果残留
+    if(!more){ SEARCH_BOX_IDS.forEach(id=>{const b=$(id);if(b){b.innerHTML='';b.hidden=true;}}); }
+    // 歌手识别：命中时后端会把该歌手的版本置顶并硬剔除翻唱
+    const hint = more ? (searchArtistHint ? {title:keyword,artist:searchArtistHint} : parseArtistHint(keyword)) : parseArtistHint(keyword);
     searchArtistHint = hint.artist || '';
+    // 定向加载：歌手多取一些（去重后会少），其余按 20 条分页
+    const kindLimit = searchType==='artist' ? 24 : 20;
     try {
-      const r=await UzzApi.search(keyword,searchType,searchPage,20,searchAbort.signal,hint.artist); if(ticket!==searchGeneration)return;
+      const r=await UzzApi.search(keyword,searchType,searchPage,kindLimit,searchAbort.signal,hint.artist); if(ticket!==searchGeneration)return;
       searchRows=more?[...searchRows,...r.list]:r.list;
-      const artistNote=(searchType==='song'&&hint.artist)?'（已优先展示 '+hint.artist+' 的版本）':'';
-      $('searchSummary').textContent=r.total?('找到 '+r.total+' 个结果'+artistNote):'暂未找到结果，试试其他关键词或音源';
+      searchDeduped=r.deduped||0; searchTargeted=!!r.targeted;
+      const artistNote=(searchType==='song'&&hint.artist)?' · 已锁定 '+hint.artist+' 原唱':'';
+      $('searchSummary').textContent=r.noOriginal
+        ? '暂无原唱版权：没有找到 '+(hint.artist||'该歌手')+' 的正版音源'
+        : r.total?('找到 '+r.total+' '+(SEARCH_KIND_UNIT[searchType]||'个结果')+artistNote):'暂未找到结果，试试其他关键词或音源';
       paintSearchResults();
-      $('searchMore').hidden=r.list.length<20||searchRows.length>=r.total;
-    } catch(e) {if(ticket!==searchGeneration)return; if(more)searchPage--; $('searchSummary').textContent='搜索失败：'+e.message; if(!more)$('mobileResults').innerHTML='<li>'+failure('检查网络后重试。','retrySearch')+'</li>';else $('searchMore').hidden=false;}
+      $('searchMore').hidden=r.list.length<kindLimit||searchRows.length>=r.total;
+    } catch(e) {if(ticket!==searchGeneration)return; if(more)searchPage--; $('searchSummary').textContent='搜索失败：'+e.message; if(!more){$('mobileResults').hidden=false;$('mobileResults').innerHTML='<li>'+failure('检查网络后重试。','retrySearch')+'</li>';}else $('searchMore').hidden=false;}
   }
-  // 搜索结果按分类分流：单曲 → 列表（带序号）；歌手/专辑/歌单 → 大图网格
-  const SEARCH_KIND_LABEL = { artist:'歌手', album:'专辑', playlist:'歌单' };
+  // 搜索结果四套完全不同的 UI（v3.6.0 阶段一）：
+  //   单曲=带序号列表 / 歌手=圆形头像列表 / 专辑=方形图片网格 / 歌单=长条卡片
   function paintSearchResults() {
-    const isSong = searchType === 'song';
-    const listBox = $('mobileResults'), gridBox = $('searchGrid');
-    if (listBox) listBox.hidden = !isSong;
-    if (gridBox) {
-      gridBox.hidden = isSong;
-      if (!isSong) {
-        const kind = SEARCH_KIND_LABEL[searchType] || '结果';
-        gridBox.innerHTML = searchRows.length ? searchRows.map((t,i)=>
-          '<button data-search-index="'+i+'"><img loading="lazy" src="'+escape(cover(t.pic))+'"><strong>'+escape(t.name||'未知')+'</strong><small>'+escape(kind+' · '+(t.artist||t.album||'—'))+'</small></button>'
-        ).join('') : empty('没有找到相关'+kind);
-      }
+    SEARCH_BOX_IDS.forEach(id=>{const b=$(id);if(b){b.hidden=true;b.innerHTML='';}});
+    const hintBox=$('searchKindHint');
+    if(hintBox){
+      let text=SEARCH_KIND_HINT[searchType]||'搜索结果';
+      if(searchType==='artist'&&searchDeduped>0)text+=' · 已合并 '+searchDeduped+' 个重复项';
+      else if(searchTargeted)text+=' · 已补充定向数据';
+      hintBox.textContent=text; hintBox.hidden=false;
     }
-    if (isSong && listBox) {
-      listBox.innerHTML = searchRows.length ? searchRows.map((t,i)=>
+    const rows=searchRows;
+    if(searchType==='song'){
+      const box=$('mobileResults'); box.hidden=false;
+      box.innerHTML = rows.length ? rows.map((t,i)=>
         '<li class="track-row"><span class="track-index">'+(i+1)+'</span>'+
         '<button class="track-main" data-track-list="search" data-track-index="'+i+'"><img loading="lazy" src="'+escape(cover(t.pic))+'"><span><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape([t.artist,t.album].filter(Boolean).join(' · '))+'</small></span></button></li>'
-      ).join('') : empty('没有找到相关歌曲');
-      trackSets.set('search', searchRows);
+      ).join('') : empty(searchArtistHint?'暂无原唱版权，试试其它关键词或音源':'没有找到相关歌曲');
+      trackSets.set('search', rows);
+      return;
     }
+    if(searchType==='artist'){
+      const box=$('searchArtists'); box.hidden=false;
+      box.innerHTML = rows.length ? rows.map((t,i)=>
+        '<button class="artist-circle-item" data-search-index="'+i+'">'+
+        '<span class="artist-circle-art">'+(t.pic?'<img loading="lazy" src="'+escape(cover(t.pic))+'">':'<span>'+escape((t.name||'歌').slice(0,1))+'</span>')+'</span>'+
+        '<span class="artist-circle-meta"><strong>'+escape(t.name||'未知歌手')+'</strong><small>歌手 · 点击查看热门歌曲'+(t._mergedCount>1?' · 合并 '+t._mergedCount+' 个来源':'')+'</small></span>'+
+        '<span class="artist-circle-arrow">›</span></button>'
+      ).join('') : empty('没有找到相关歌手');
+      return;
+    }
+    if(searchType==='album'){
+      const box=$('searchAlbums'); box.hidden=false;
+      box.innerHTML = rows.length ? rows.map((t,i)=>
+        '<button class="album-square" data-search-index="'+i+'">'+
+        '<span class="album-square-art"><img loading="lazy" src="'+escape(cover(t.pic))+'"></span>'+
+        '<strong>'+escape(t.name||'未知专辑')+'</strong><small>'+escape(t.artist||'专辑')+'</small></button>'
+      ).join('') : empty('没有找到相关专辑');
+      return;
+    }
+    const box=$('searchPlaylists'); box.hidden=false;
+    box.innerHTML = rows.length ? rows.map((t,i)=>
+      '<button class="playlist-strip" data-search-index="'+i+'">'+
+      '<img loading="lazy" src="'+escape(cover(t.pic))+'">'+
+      '<span class="strip-meta"><strong>'+escape(t.name||'未知歌单')+'</strong><small>'+escape('歌单 · '+(t.artist||'网易云')+(t.trackCount?(' · '+t.trackCount+' 首'):''))+'</small></span>'+
+      '<span class="strip-count">'+(t.playCount?('▶ '+Math.round(t.playCount/10000)+'万'):'›')+'</span></button>'
+    ).join('') : empty('没有找到相关歌单');
   }
   async function loadDiscover() {
     const ticket=++discoveryGeneration; $('refreshDiscover').disabled=true;
@@ -389,12 +440,28 @@
   function openLocal(id) {const p=playlists.find(p=>p.id===id);if(!p)return;detailGeneration++;detail={localId:id,name:p.name,cover:p.cover,tracks:p.tracks||[]};navigate('detail');paintDetail();}
   async function openSearchResult(index) {
     const t=searchRows[index];if(!t)return;
-    if(searchType==='song')return play(t);
+    // v3.6.0：从搜索结果点播时把「搜索词歌手 / 显示歌手」作为强约束传给播放链，
+    // 解析出的音频歌手对不上，后端直接回「暂无原唱版权」，绝不放翻唱。
+    if(searchType==='song')return play(t, true);
     if(searchType==='artist')return openOnline('artist:'+t.id,t.name,async()=>({info:{name:t.name,cover:t.pic},tracks:await UzzApi.getArtistTop(t.id,100)}));
-    if(searchType==='album')return openOnline('album:'+t.id,t.name,()=>UzzApi.getAlbum(t.id));
+    if(searchType==='album'){
+      // 定向兜底生成的专辑卡没有平台数字 id，按专辑名拉同专辑歌曲
+      if(String(t.id||'').startsWith('albumname:'))return openOnline('albumname:'+t.name,t.name,async()=>{
+        const r=await UzzApi.search(t.name,'song',1,40);
+        return {info:{name:t.name,cover:t.pic},tracks:r.list};
+      });
+      return openOnline('album:'+t.id,t.name,()=>UzzApi.getAlbum(t.id));
+    }
     return openOnline(t.id,t.name);
   }
-  function play(track) { if(!track)return; Player.loadAndPlay(track).catch(e=>toast(e.message)); }
+  function play(track, fromSearch) {
+    if(!track)return;
+    if(fromSearch){
+      const want=searchArtistHint||track.artist||'';
+      track={...track, expectArtist:want, strictOriginal:1};
+    }
+    Player.loadAndPlay(track).catch(e=>toast(e.message));
+  }
   function renderLibrary() {
     document.querySelectorAll('[data-library]').forEach(e=>e.classList.toggle('active',e.dataset.library===libraryTab));
     renderLibraryStats();
@@ -540,7 +607,7 @@
         '</div>'+
         (st.authorized
           ? '<button class="wide-button" id="deviceAuthReset">解除本机授权</button>'
-          : '<label>授权码<input id="deviceAuthCode" placeholder="XY3.5.0-XXXX-XXXX-XXXX" autocomplete="off"></label><button class="primary wide-button" id="deviceAuthSubmit">验证并激活</button><p class="muted" style="margin-top:10px;">首次在新设备安装时需要向作者索取本版本的授权码；同一台设备升级版本会自动续期，无需再次输入。</p>');
+          : '<label>授权码<input id="deviceAuthCode" placeholder="XY' + (window.XYDeviceAuth?.currentVersion?.()||'3.6.0') + '-XXXX-XXXX-XXXX" autocomplete="off"></label><button class="primary wide-button" id="deviceAuthSubmit">验证并激活</button><p class="muted" style="margin-top:10px;">首次在新设备安装时需要向作者索取本版本的授权码；同一台设备升级版本会自动续期，无需再次输入。</p>');
       const submit=$('deviceAuthSubmit');
       if(submit)submit.onclick=async()=>{
         submit.disabled=true;

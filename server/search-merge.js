@@ -12,7 +12,14 @@
  *   3) 支持显式 artist 目标（前端识别「歌名 - 歌手」或独立参数），
  *      歌手命中者置顶；不命中者降权但不完全剔除（避免 0 结果）；
  *   4) 输出 matched 标记，前端可提示「已按歌手筛选」。
+ *
+ * v3.6.0 阶段一：接入 original-guard 做「原唱强匹配」。
+ *   用户指定歌手（搜「周杰伦」/「晴天 周杰伦」）时，翻唱/伴奏/Live/
+ *   歌手对不上的条目**直接剔除**，不再只是降权；宁可列表短，也不给错歌。
+ *   同时新增 mergeArtists() 把多源重复歌手合并成唯一卡片。
  * ============================================================ */
+
+const guard = require('./original-guard');
 
 // 归一化：去大小写、空白、标点、括号补充说明（如「晴天 (Live)」→「晴天」）
 function normalizeName(value) {
@@ -176,8 +183,14 @@ function mergeResults(groups, opts = {}, limit = 20) {
   }
 
   const scored = [];
+  // 用户明确给了歌手目标时启用「原唱强匹配」：翻唱 / 伴奏 / Live / 歌手不符
+  // 的条目直接不进结果集，而不是降权后排在后面被误点。
+  // 没有歌手目标时保持原有打分（泛搜索仍要尽量召回），只用 _original 标记。
+  const strictOriginal = !!wantArtist && opts.strict !== false;
   for (const bucket of buckets.values()) {
     const t = bucket.best;
+    const verdict = guard.judge(t, wantArtist);
+    if (strictOriginal && !verdict.ok) continue;
     const ts = titleScore(t.name, wantTitle);
     const as = wantArtist ? artistScore(aliasArtist(t.artist), aliasArtist(wantArtist)) : 0;
     let score = ts * 40;
@@ -200,6 +213,8 @@ function mergeResults(groups, opts = {}, limit = 20) {
       _titleScore: ts,
       _artistScore: as,
       _version: versionPenalty(t.name) > 0,
+      _original: verdict.ok,
+      _matchReason: verdict.reason || '',
       _sources: [...bucket.sources],
       _platforms: [...bucket.platforms],
       _matched: wantArtist ? as >= 2 : ts >= 3,
@@ -222,4 +237,84 @@ function mergeResults(groups, opts = {}, limit = 20) {
   return out;
 }
 
-module.exports = { mergeResults, splitQuery, titleScore, artistScore, artistParts, normalizeName, stripVersion, isKnownArtist };
+/**
+ * 歌手去重合并（v3.6.0 阶段一）。
+ * 多源搜索歌手时会出现：「周杰伦」「周杰倫」「Jay Chou」「周杰伦 · 相关歌曲集」
+ * 以及同一歌手在不同平台的多张卡片。这里按「归一化 + 别名映射」合并成唯一
+ * 歌手卡片，并保留最有用的 id 与封面：
+ *   - 真实平台 id 优先于 name:/artistlist: 这类聚合伪 id（点进去才能拿到真热门歌曲）
+ *   - 有封面的覆盖没封面的（列表不能出现白块）
+ * 返回项带 _aliases / _sources / _mergedCount，前端可展示「合并了 N 个重复项」。
+ */
+function mergeArtists(list, opts = {}) {
+  const limit = Math.max(1, Math.min(50, Number(opts.limit || 20)));
+  const buckets = new Map();
+  for (const item of list || []) {
+    if (!item || !item.name) continue;
+    const raw = String(item.name).trim();
+    // 聚合兜底生成的「XXX · 相关歌曲集」不是歌手卡片，先剥掉后缀
+    const clean = raw.replace(/\s*[·・\-—]\s*相关歌曲集\s*$/, '').trim();
+    if (!clean) continue;
+    const key = normalizeName(guard.canonical(clean));
+    if (!key) continue;
+    let b = buckets.get(key);
+    if (!b) {
+      b = {
+        ...item,
+        id: String(item.id || ''),
+        name: guard.canonical(clean),
+        artist: guard.canonical(clean),
+        _aliases: new Set(),
+        _sources: new Set(),
+        _mergedCount: 0,
+      };
+      buckets.set(key, b);
+    }
+    b._aliases.add(raw);
+    if (item.vendor) b._sources.add(item.vendor);
+    b._mergedCount += 1;
+    const bFake = /^(name|artistlist)\s*:/.test(String(b.id || ''));
+    const iFake = /^(name|artistlist)\s*:/.test(String(item.id || ''));
+    if (bFake && !iFake) { b.id = String(item.id); b.vendor = item.vendor || b.vendor; }
+    if (!b.pic && item.pic) b.pic = item.pic;
+    if (!b.artistId && item.artistId) b.artistId = item.artistId;
+  }
+  // 二次合并：装饰性变体（「周杰伦♚」「周杰伦jay」「周杰伦(官方)」）
+  // 各家平台很常见，按前缀/包含关系归到最短的主名，避免同一歌手出多张卡。
+  const keys = [...buckets.keys()].sort((a, b) => a.length - b.length);
+  const aliasOf = new Map();
+  for (const short of keys) {
+    if (short.length < 2) continue;
+    for (const long of keys) {
+      if (long === short || aliasOf.has(long)) continue;
+      if (long.length <= short.length || long.length - short.length > 4) continue;
+      if (long.startsWith(short) || long.includes(short)) aliasOf.set(long, short);
+    }
+  }
+  for (const [from, to] of aliasOf) {
+    const src = buckets.get(from), dst = buckets.get(to);
+    if (!src || !dst) continue;
+    dst._aliases = new Set([...dst._aliases, ...src._aliases]);
+    dst._sources = new Set([...dst._sources, ...src._sources]);
+    dst._mergedCount += src._mergedCount;
+    const dFake = /^(name|artistlist)\s*:/.test(String(dst.id || ''));
+    const sFake = /^(name|artistlist)\s*:/.test(String(src.id || ''));
+    if (dFake && !sFake) { dst.id = src.id; dst.vendor = src.vendor || dst.vendor; }
+    if (!dst.pic && src.pic) dst.pic = src.pic;
+    buckets.delete(from);
+  }
+
+  const out = [...buckets.values()].map((b) => ({
+    ...b,
+    _aliases: [...b._aliases],
+    _sources: [...b._sources],
+  }));
+  // 有封面的排前面（视觉优先），其次按合并数量（热门歌手在多源出现更多）
+  out.sort((a, b) => (!!b.pic - !!a.pic) || (b._mergedCount - a._mergedCount));
+  return out.slice(0, limit);
+}
+
+module.exports = {
+  mergeResults, mergeArtists, splitQuery, titleScore, artistScore,
+  artistParts, normalizeName, stripVersion, isKnownArtist,
+};
