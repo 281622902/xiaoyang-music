@@ -43,6 +43,23 @@
   const allowed=u.origin===cloudOrigin||(proxyOrigin&&u.origin===new URL(proxyOrigin).origin&&u.pathname.startsWith('/api/supabase/'));
   if(!allowed||u.username||u.password)throw Error('云端请求目标不匹配，已停止发送账户凭据');
   if(!native()||!global.XYNative.CapacitorHttp)return global.fetch(input,init);
+  // 多栈重试（v3.3.0）：国内 4G 到 onrender.com 间歇性被运营商阻断（真机 Connection
+  // reset；同分钟模拟器通/本机 curl 死——分时段分网络波动）。单栈重试撞墙还是死，
+  // 改用「原生 CapacitorHttp → WebView fetch → CapacitorHttp」双栈交替共 3 次，
+  // 每次间隔 700ms 退避。AbortError（调用方主动取消）直接透传不重试。
+  let lastErr=null;
+  for(let i=0;i<3;i++){
+    if(i===1){try{return await global.fetch(input,init);}catch(e){if(e.name==='AbortError')throw e;lastErr=e;}}
+    else{
+      try{return await nativeHttpFetch(input,init);}catch(e){if(e.name==='AbortError')throw e;lastErr=e;}
+    }
+    if(i<2)await new Promise(r=>setTimeout(r,700*(i+1)));
+  }
+  throw new TypeError(describe(lastErr));
+ }
+ async function nativeHttpFetch(input,init={}){
+  const value=typeof input==='string'||input instanceof URL?String(input):input.url;
+  const u=new URL(value);
   const signal=init.signal||input?.signal;if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const headers=Object.fromEntries(new Headers(init.headers||input?.headers||{}).entries());
   let data=init.body;if(data!=null&&typeof data!=='string')throw Error('云端原生请求只支持 JSON 数据');
@@ -50,7 +67,7 @@
   let timer,onAbort;
   const canceled=new Promise((_,reject)=>{onAbort=()=>reject(new DOMException('Aborted','AbortError'));signal?.addEventListener('abort',onAbort,{once:true});timer=setTimeout(()=>reject(new Error('云端网络连接超时')),20000);});
   try{
-   const r=await Promise.race([global.XYNative.CapacitorHttp.request({url:u.href,method:init.method||input?.method||'GET',headers,data,connectTimeout:10000,readTimeout:12000,disableRedirects:true,responseType:'text'}),canceled]);
+   const r=await Promise.race([global.XYNative.CapacitorHttp.request({url:u.href,method:init.method||input?.method||'GET',headers,data,connectTimeout:8000,readTimeout:12000,disableRedirects:true,responseType:'text'}),canceled]);
    const responseHeaders=new Headers(r.headers||{});responseHeaders.delete('content-length');responseHeaders.delete('content-encoding');
    return new Response([204,205,304].includes(r.status)?null:typeof r.data==='string'?r.data:JSON.stringify(r.data),{status:r.status,headers:responseHeaders});
   }catch(error){if(error.name==='AbortError')throw error;throw new TypeError(describe(error));}

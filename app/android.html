@@ -14,27 +14,63 @@
   <div class="phone-shell">
     <header class="m-header"><a href="#discover" class="m-brand" aria-label="小杨音乐首页"><img src="icon.svg" alt=""><span>小杨音乐<small>让喜欢，随身听。</small></span></a><button class="avatar" data-action="account" aria-label="账户">杨</button></header>
     <main id="mobileMain" tabindex="-1">
+      <!-- ══════════ 首页（v3.3.0 网易云风格）══════════ -->
       <section id="page-discover" class="m-page" aria-labelledby="discoverTitle">
-        <div class="section-title"><div><p class="eyebrow">MADE FOR YOUR DAY</p><h1 id="discoverTitle">今天，听点喜欢的</h1></div><span id="todayDate" class="date-badge"></span></div>
-        <button class="search-prompt" data-nav="search"><span data-icon="search"></span><span>搜索歌曲、歌手、专辑</span><kbd>发现好声音</kbd></button>
-        <section class="daily-card"><div><span class="pill">每日听单</span><h2>把日常调成<br>你喜欢的频率</h2><p>从今日热歌中，找一首心动。</p><button class="primary" data-online="3778678" data-title="今日热歌">即刻开听 <span data-icon="arrow"></span></button></div><div class="record-art" aria-hidden="true"><div><img src="icon.svg" alt=""></div></div></section>
-        <div class="quick-links"><button data-online="3779629" data-title="新歌速递"><span class="quick-symbol" data-icon="spark"></span>新歌速递</button><button data-action="charts"><span class="quick-symbol" data-icon="chart"></span>排行榜</button><button data-action="history"><span class="quick-symbol" data-icon="clock"></span>最近播放</button><button data-nav="library"><span class="quick-symbol" data-icon="heart"></span>我的歌单</button></div>
-        <div class="section-heading"><h2>为你发现</h2><button id="refreshDiscover" class="text-button">换一批 ↻</button></div>
+        <div class="home-topbar"><div class="home-tabs" role="tablist" aria-label="首页频道"><button class="active" aria-current="page">推荐</button><button>音乐</button><button>播客</button><button>听书</button><button>电台</button><button>私人FM</button></div><button class="round-button compact" data-nav="search" aria-label="搜索" data-icon="search"></button></div>
+        <div class="banner-scroll" aria-label="推荐横幅">
+          <button class="banner-card b-green" data-online="3778678" data-title="今日热歌"><span class="banner-tag">每日推荐</span><strong>今日限定好歌</strong><small>根据你的口味 · 每日更新</small><span class="banner-play" data-icon="play"></span></button>
+          <button class="banner-card b-dark" data-action="favorites"><span class="banner-tag">心动模式</span><strong>红心歌曲与相似推荐</strong><small>戴上耳机，进入心动频道</small><span class="banner-play" data-icon="heart"></span></button>
+        </div>
+        <div class="quick-grid" aria-label="快捷入口">
+          <button data-action="charts"><span class="qg-icon qg-blue" data-icon="chart"></span>排行榜</button>
+          <button data-nav="library"><span class="qg-icon qg-brown" data-icon="library"></span>歌单</button>
+          <button data-action="history"><span class="qg-icon qg-gray" data-icon="clock"></span>最近播放</button>
+          <button data-nav="notes"><span class="qg-icon qg-purple" data-icon="spark"></span>音乐笔记</button>
+        </div>
+        <div class="section-heading"><h2>为你推荐</h2><button id="refreshDiscover" class="text-button">换一批 ↻</button></div>
         <div id="recommendations" class="cover-grid" aria-live="polite"></div>
-        <div class="section-heading"><h2>此刻流行</h2><span class="muted">好音乐，不止一种</span></div><div id="chartCards" class="chart-grid"></div>
+        <div class="section-heading"><h2>此刻流行</h2><span class="muted">大家都在听</span></div><div id="chartCards" class="chart-grid"></div>
       </section>
+      <!-- ══════════ 搜索（v3.3.0 网易云风格）══════════ -->
       <section id="page-search" class="m-page" hidden aria-labelledby="searchTitle">
-        <h1 id="searchTitle">搜索</h1><form id="mobileSearchForm" class="search-form"><span data-icon="search"></span><input id="mobileSearchInput" type="search" placeholder="歌曲、歌手、专辑、歌单" autocomplete="off" aria-label="搜索音乐"><button type="submit">搜索</button></form>
-        <div id="searchWelcome"><div class="section-heading"><h2>最近搜索</h2><button class="text-button" data-action="clearSearch">清空</button></div><div id="searchHistory" class="chips"></div><div class="section-heading"><h2>大家都在搜</h2></div><div id="hotSearches" class="hot-grid"></div></div>
+        <div class="search-hero"><form id="mobileSearchForm" class="search-pill"><span data-icon="search"></span><input id="mobileSearchInput" type="search" placeholder="热门儿歌大全" autocomplete="off" aria-label="搜索音乐"><button class="mic-button" type="button" aria-label="语音搜索" data-icon="more"></button><button type="submit" hidden>搜索</button></form></div>
+        <div id="searchWelcome">
+          <div id="hotBanner" class="hot-banner" data-action="charts"><span class="hb-tag">热歌推荐</span><strong>飙升榜 · 实时更新</strong><small>看看此刻大家都在听什么</small></div>
+          <div class="quick-grid search-cats">
+            <button data-action="charts"><span class="qg-icon qg-blue" data-icon="chart"></span>排行榜</button>
+            <button data-nav="library"><span class="qg-icon qg-brown" data-icon="library"></span>歌单</button>
+            <button data-online="3779629" data-title="新歌速递"><span class="qg-icon qg-gray" data-icon="spark"></span>新歌速递</button>
+            <button data-action="history"><span class="qg-icon qg-purple" data-icon="clock"></span>最近播放</button>
+          </div>
+          <div class="section-heading"><h2>最近搜索</h2><button class="text-button" data-action="clearSearch">清空</button></div><div id="searchHistory" class="chips"></div>
+          <div class="section-heading"><h2>大家都在搜</h2><span class="muted">浏览全部</span></div><div id="hotSearches" class="hot-grid"></div>
+        </div>
         <div id="searchResults" hidden><div id="searchTypes" class="segmented" role="group" aria-label="搜索分类"><button data-type="song" class="active">单曲</button><button data-type="artist">歌手</button><button data-type="album">专辑</button><button data-type="playlist">歌单</button></div><p id="searchSummary" class="muted" role="status"></p><ul id="mobileResults" class="track-list"></ul><button id="searchMore" class="wide-button" hidden>加载更多</button></div>
       </section>
+      <!-- ══════════ 笔记（v3.3.0 新页面，瀑布流）══════════ -->
+      <section id="page-notes" class="m-page" hidden aria-labelledby="notesTitle">
+        <div class="notes-top"><h1 id="notesTitle">笔记</h1><div id="notesTabs" class="segmented slim"><button data-notes="feed" class="active">推荐</button><button data-notes="follow">关注</button></div></div>
+        <p class="muted notes-tip">来自热歌与歌单的音乐卡片 · 点击卡片直接播放</p>
+        <div id="notesGrid" class="notes-grid" aria-live="polite"></div>
+      </section>
       <section id="page-library" class="m-page" hidden aria-labelledby="libraryTitle"><div class="section-heading"><h1 id="libraryTitle">音乐库</h1><button class="round-button" data-action="createPlaylist" aria-label="创建歌单" data-icon="plus"></button></div><div id="libraryTabs" class="segmented"><button data-library="playlists" class="active">歌单</button><button data-library="favorites">喜欢</button><button data-library="local">本地</button><button data-library="history">最近</button><button data-library="cloud">云端</button></div><div id="libraryContent"></div></section>
-      <section id="page-me" class="m-page" hidden aria-labelledby="meTitle"><h1 id="meTitle">我的</h1><button class="profile-card" data-action="account"><span class="avatar large">杨</span><span><strong id="mobileAccountName">登录，让喜欢随行</strong><small id="mobileAccountHint">云端收藏 · 多端共用同一个账号</small></span><span data-icon="chevron"></span></button><div class="stats-card"><button data-action="favorites"><strong id="favCount">0</strong><span>本机喜欢</span></button><button data-action="history"><strong id="historyCount">0</strong><span>最近播放</span></button><button data-nav="library"><strong id="playlistCount">0</strong><span>我的歌单</span></button></div>
-        <div class="settings-card"><button data-action="theme"><span data-icon="moon"></span><span>深色外观</span><span id="themeLabel">关闭</span></button><button data-action="settings"><span data-icon="settings"></span><span>播放与连接设置</span><span data-icon="chevron"></span></button><button data-action="update"><span data-icon="download"></span><span>检查版本更新</span><span id="mobileVersion">3.2.3</span></button></div><div class="quiet-note"><img src="icon.svg" alt=""><p>属于你的音乐空间</p><small>本地歌单保存在当前设备，云端收藏随账号保存。</small></div>
+      <!-- ══════════ 我的（v3.3.0 网易云风格）══════════ -->
+      <section id="page-me" class="m-page" hidden aria-labelledby="meTitle">
+        <div class="me-topbar"><h1 id="meTitle" class="sr-only">我的</h1><button class="round-button compact" data-action="drawer" aria-label="侧边菜单" data-icon="more"></button></div>
+        <div class="profile-hero">
+          <button class="ph-user" data-action="account"><span class="avatar xlarge" id="meAvatar">杨</span><span class="ph-names"><strong id="mobileAccountName">登录，让喜欢随行</strong><small id="mobileAccountHint">云端收藏 · 多端共用同一个账号</small></span><span data-icon="chevron"></span></button>
+          <div class="ph-stats"><button><strong id="meFollow">12</strong><span>关注</span></button><button><strong id="meFans">3</strong><span>粉丝</span></button><button><strong>Lv.<em id="meLevel">9</em></strong><span>等级</span></button><button data-action="history"><strong id="historyCount">0</strong><span>最近</span></button></div>
+          <div class="ph-quick"><button data-action="history"><span data-icon="clock"></span>最近</button><button data-nav="library"><span data-icon="library"></span>本地</button><button data-action="theme"><span data-icon="moon"></span><span id="themeLabel">装扮</span></button><button data-nav="settings"><span data-icon="settings"></span>设置</button></div>
+        </div>
+        <button class="me-love-card" data-action="favorites"><span class="love-icon" data-icon="heart"></span><span class="love-info"><strong>我喜欢的音乐</strong><small><em id="favCount">0</em> 首 · 点开随机播红心歌</small></span><span class="love-go" data-icon="arrow"></span></button>
+        <div class="section-heading"><h2>创建的歌单</h2><button class="text-button" data-nav="library">全部 ›</button></div>
+        <div id="mePlaylists" class="me-list"></div>
+        <div class="settings-card me-extra"><button data-action="update"><span data-icon="download"></span><span>检查版本更新</span><span id="mobileVersion">3.3.0</span></button><button data-action="networkDiagnostics"><span data-icon="search"></span><span>网络诊断</span><span>&gt;</span></button><button data-action="settings"><span data-icon="settings"></span><span>播放与连接设置</span><span>&gt;</span></button></div>
+        <div class="quiet-note"><img src="icon.svg" alt=""><p>属于你的音乐空间</p><small>本地歌单保存在当前设备，云端收藏随账号保存。</small></div>
       </section>
       <!-- ══════════ 设置中心（v3.2.0 轻量五件套）══════════ -->
       <section id="page-settings" class="m-page" hidden aria-labelledby="settingsTitle">
-        <div class="section-heading"><h1 id="settingsTitle">设置中心</h1><span class="muted" id="settingsVer">v3.2.3</span></div>
+        <div class="section-heading"><h1 id="settingsTitle">设置中心</h1><span class="muted" id="settingsVer">v3.3.0</span></div>
         <p class="muted" style="margin:18px 4px 7px;font-size:11px;letter-spacing:.06em;">播放</p>
         <div class="settings-card">
           <button id="rowQuality"><span data-icon="library"></span><span>音质</span><span id="valQuality">标准</span></button>
@@ -58,8 +94,22 @@
       <section id="page-detail" class="m-page" hidden><button class="back-button" data-action="back"><span data-icon="back"></span>返回</button><div class="detail-head"><img id="detailCover" src="icon.svg" alt="歌单封面"><div><span class="eyebrow" id="detailKind">精选歌单</span><h1 id="detailTitle">歌单</h1><p id="detailSummary" class="muted"></p></div></div><div class="detail-actions"><button id="detailPlayAll" class="primary"><span data-icon="play"></span>播放全部</button><button id="detailSave" class="outline" hidden>保存歌单</button><button id="detailRename" class="outline" hidden>编辑</button></div><p id="detailStatus" role="status" class="muted"></p><ul id="detailTracks" class="track-list"></ul></section>
     </main>
     <div id="mobileMini" class="m-mini" hidden><button class="mini-song" data-action="player"><img id="mobileMiniCover" src="icon.svg" alt=""><span><strong id="mobileMiniName">未在播放</strong><small id="mobileMiniArtist"></small></span></button><button id="mobileMiniPlay" class="round-button" data-action="toggle" aria-label="播放" data-icon="play"></button><button class="round-button" data-action="queue" aria-label="播放队列" data-icon="queue"></button><progress id="miniProgress" value="0" max="1000"></progress></div>
-    <nav class="bottom-nav" aria-label="主导航"><button data-nav="discover" class="active" aria-current="page"><span data-icon="discover"></span>发现</button><button data-nav="search"><span data-icon="search"></span>搜索</button><button data-nav="library"><span data-icon="library"></span>音乐库</button><button data-nav="me"><span data-icon="user"></span>我的</button><button data-nav="settings"><span data-icon="settings"></span>设置</button></nav>
+    <nav class="bottom-nav" aria-label="主导航"><button data-nav="discover" class="active" aria-current="page"><span data-icon="discover"></span>首页</button><button data-nav="search"><span data-icon="search"></span>搜索</button><button data-nav="notes"><span data-icon="spark"></span>笔记</button><button data-nav="me"><span data-icon="user"></span>我的</button></nav>
   </div>
+  <!-- ══════════ 侧边抽屉（v3.3.0 网易云风格）══════════ -->
+  <div id="drawerBackdrop" class="drawer-backdrop" hidden><nav class="drawer" role="dialog" aria-modal="true" aria-label="侧边菜单">
+    <div class="drawer-head"><button class="ph-user mini" data-action="account"><span class="avatar" id="drawerAvatar">杨</span><span class="ph-names"><strong id="drawerName">小杨音乐</strong><small>点击登录</small></span><span data-icon="chevron"></span></button></div>
+    <div class="drawer-banner">听歌攒云贝 · 免费换 VIP</div>
+    <div class="drawer-list">
+      <button data-action="history"><span data-icon="clock"></span>最近播放</button>
+      <button data-action="favorites"><span data-icon="heart"></span>我喜欢的音乐</button>
+      <button data-nav="library"><span data-icon="library"></span>我的音乐库</button>
+      <button data-action="mlyric"><span data-icon="queue"></span>桌面歌词</button>
+      <button data-action="networkDiagnostics"><span data-icon="search"></span>网络诊断</button>
+      <button data-action="settings"><span data-icon="settings"></span>播放与连接设置</button>
+    </div>
+    <div class="drawer-foot"><button data-nav="settings"><span data-icon="settings"></span>设置</button><button data-action="closeDrawer"><span data-icon="close"></span>关闭</button></div>
+  </nav></div>
   <section id="mobilePlayer" class="player-screen" hidden aria-label="正在播放"><div class="player-top"><button class="round-button" data-action="closePlayer" aria-label="收起播放器" data-icon="down"></button><span>正在播放<small id="mobileSource"></small></span><button class="round-button" data-action="trackMenu" aria-label="歌曲操作" data-icon="more"></button></div><div class="player-stage"><div class="player-info"><h1 id="mobileSongName"></h1><p id="mobileSongArtist"></p></div><button id="mobileArtwork" class="artwork" aria-label="切换到歌词"><img id="mobileCover" src="icon.svg" alt="专辑封面"></button><div id="mobileLyrics" class="lyric-panel" hidden></div><button id="lyricToggle" class="lyric-toggle">歌词 ↗</button></div><div class="player-bottom"><div class="player-tools"><button id="favoriteBtn" class="round-button heart-button" aria-label="收藏到云端" aria-pressed="false" data-icon="heart"></button><span id="favoriteStatus" class="muted" role="status"></span><button class="round-button" data-action="trackMenu" aria-label="更多操作" data-icon="more"></button></div><input id="mobileSeek" type="range" min="0" max="1000" value="0" aria-label="播放进度"><div class="time-labels"><span id="mobileTime">0:00</span><span id="mobileDuration">0:00</span></div><div class="player-controls"><button id="mobileMode" class="round-button" data-action="mode" aria-label="列表循环" data-icon="repeat"></button><button class="round-button skip" data-action="prev" aria-label="上一首" data-icon="prev"></button><button id="mobilePlay" class="big-play" data-action="toggle" aria-label="播放" data-icon="play"></button><button class="round-button skip" data-action="next" aria-label="下一首" data-icon="next"></button><button class="round-button" data-action="queue" aria-label="播放队列" data-icon="queue"></button></div></div></section>
   <div id="sheetBackdrop" class="sheet-backdrop" hidden><section id="mobileSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1"><div class="sheet-handle"></div><div class="section-heading"><h2 id="sheetTitle"></h2><button class="round-button" data-action="closeSheet" aria-label="关闭" data-icon="close"></button></div><div id="sheetContent"></div></section></div>
   <div id="accountBackdrop" class="sheet-backdrop account-backdrop" hidden><section class="account-dialog" role="dialog" aria-modal="true" aria-labelledby="mobileLoginTitle"><button class="round-button dialog-close" data-action="closeAccount" aria-label="关闭登录" data-icon="close"></button><img class="login-logo" src="icon.svg" alt=""><h2 id="mobileLoginTitle">让喜欢，随你而行</h2><p class="muted">使用手机号，登录你的音乐空间</p><div id="mobileGuest"><div class="segmented" id="mobileAuthTabs"><button data-auth="login" class="active">登录</button><button data-auth="register">注册</button></div><form id="mobileLoginForm"><label>手机号<input id="mobilePhone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="请输入手机号" required></label><label>密码<input id="mobilePassword" type="password" autocomplete="current-password" placeholder="请输入密码" required></label><button id="mobileLoginSubmit" class="primary wide-button">登录</button></form></div><div id="mobileMember" hidden><p id="mobileMemberName"></p><button class="wide-button" data-action="openCloud">查看云端收藏</button><button id="mobileLogout" class="wide-button">退出登录</button></div><p id="mobileAuthStatus" role="status" aria-live="polite" class="form-status"></p></section></div>

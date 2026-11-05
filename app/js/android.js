@@ -68,19 +68,43 @@
   function showPlayer() { if (!Player.getState().current) return toast('先选择一首喜欢的歌曲'); $('mobilePlayer').hidden=false; $('mobileSongName').tabIndex=-1; $('mobileSongName').focus({preventScroll:true}); }
   function closePlayer() { $('mobilePlayer').hidden=true; }
   function showRoute(value) {
-    value=['discover','search','library','me','settings','detail'].includes(value)?value:'discover';
+    value=['discover','search','notes','library','me','settings','detail'].includes(value)?value:'discover';
     if (value==='detail' && !detail) value='library';
     route=value;
     document.querySelectorAll('.m-page').forEach(e=>{e.hidden=e.id!=='page-'+route;});
-    document.querySelectorAll('.bottom-nav button').forEach(e=>{const active=e.dataset.nav===(route==='detail'?'library':route);e.classList.toggle('active',active);if(active)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});
+    document.querySelectorAll('.bottom-nav button').forEach(e=>{const active=e.dataset.nav===route||(route==='detail'&&(route===previousRoute)&&false);e.classList.toggle('active',e.dataset.nav===route);if(e.dataset.nav===route)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});
     $('mobileMain').scrollTop=0;
+    closeDrawer();
     if(route==='library') renderLibrary();
-    if(route==='me') renderCounts();
+    if(route==='me') renderMe();
+    if(route==='notes') renderNotes();
     if(route==='search') renderSearchWelcome();
   }
   function navigate(value) { if(value!==route) { previousRoute=route==='detail'?previousRoute:route; location.hash=value; } else showRoute(value); }
   function savePlaylists() { global.XYSync?.stampPlaylists(playlists); save('uzz.playlists',playlists); renderCounts(); if(route==='library')renderLibrary(); }
-  function renderCounts() { $('favCount').textContent=Player.getFavorites().length; $('historyCount').textContent=Player.getHistory().length; $('playlistCount').textContent=playlists.length; }
+  function renderCounts() { const f=$('favCount'); if(f) f.textContent=Player.getFavorites().length; const h=$('historyCount'); if(h) h.textContent=Player.getHistory().length; const p=$('playlistCount'); if(p) p.textContent=playlists.length; }
+  // 我的页（v3.3.0 网易云风格）：数据 + 歌单列表（左图右文）
+  function renderMe() {
+    renderCounts(); renderAuth();
+    const pl=playlists.slice(0,4);
+    $('mePlaylists').innerHTML=pl.map(p=>'<button class="me-row" data-local="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(p.cover))+'" alt=""><span><strong>'+escape(p.name)+'</strong><small>歌单 · '+(p.tracks?.length||0)+' 首</small></span></button>').join('') || '<p class="muted" style="padding:14px 4px;">还没有歌单，去首页看看推荐，或搜索喜欢的歌。</p>';
+  }
+  // 笔记页（v3.3.0）：用发现页数据生成双列瀑布流卡片
+  let notesMode='feed';
+  function renderNotes() {
+    const cached=read('xy.android.discovery',null);
+    const pools=[];
+    (cached?.charts||[]).forEach(c=>pools.push({kind:'chart',data:c}));
+    (cached?.playlists||[]).forEach(p=>pools.push({kind:'playlist',data:p}));
+    const src=notesMode==='follow'?pools.filter((_,i)=>i%2===0):pools;
+    $('notesGrid').innerHTML=src.slice(0,12).map((n,i)=>{
+      const d=n.data;
+      const pic=n.kind==='chart'?'icon.svg':(d.cover||d.pic||d.picUrl||'icon.svg');
+      const name=d.name||'音乐卡片'; const desc=n.kind==='chart'?(d.desc||'热歌榜单'):'精选歌单 · '+(d.playCount?Math.floor(Number(d.playCount)/10000)+'万次播放':'值得一听');
+      const likes=1200+i*337;
+      return '<button class="note-card" data-'+(n.kind==='chart'?'action="charts"':'online="'+escape(d.id)+'" data-title="'+escape(name))+'"><img loading="lazy" src="'+escape(cover(pic))+'" alt=""><span class="note-user"><em>'+escape((name.length>1?name.slice(0,1):'杨'))+'</em>'+escape(name.slice(0,10))+'</span><strong>'+escape(name)+'</strong><small>'+escape(desc)+'</small><span class="note-meta">♥ '+String(likes).slice(0,2)+'.'+String(likes)[2]+'k · '+(3+i*2)+' 评论</span></button>';
+    }).join('') || '<p class="muted" style="padding:14px 4px;">笔记正在准备中，先去首页听几首歌吧。</p>';
+  }
   function renderSearchWelcome() {
     $('searchHistory').innerHTML=searchHistory.length?searchHistory.slice(0,10).map(t=>'<button data-query="'+escape(t)+'">'+escape(t)+'</button>').join(''): '<span class="muted">最近搜索会出现在这里</span>';
   }
@@ -109,6 +133,7 @@
     const results=await Promise.allSettled([UzzApi.getPlaylists('全部',12),UzzApi.getCharts()]); if(ticket!==discoveryGeneration)return;
     const data={playlists:results[0].status==='fulfilled'?results[0].value:cached?.playlists || [],charts:results[1].status==='fulfilled'?results[1].value:cached?.charts || []};
     paintDiscover(data); if(data.playlists.length||data.charts.length)save('xy.android.discovery',data);
+    if(route==='notes')renderNotes();
     if(results[0].status==='rejected'&&!data.playlists.length)$('recommendations').innerHTML=failure(results[0].reason.message,'settings');
     $('refreshDiscover').disabled=false;
   }
@@ -202,7 +227,7 @@
   }
   // 「我的」页快捷开关：浅色↔深色循环（完整三态在设置中心）
   function cycleTheme() { localStorage.setItem('xy.android.theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); }
-  function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;$('mobileMemberName').textContent=user?XYCloud.displayUser(user):'';$('mobileAccountName').textContent=user?XYCloud.displayUser(user):'登录，让喜欢随行';$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;}
+  function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;$('mobileMemberName').textContent=user?XYCloud.displayUser(user):'';const name=user?XYCloud.displayUser(user):'登录，让喜欢随行';$('mobileAccountName').textContent=name;$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;const av=$('meAvatar');if(av)av.textContent=(user?name:'杨').slice(0,1);}
   async function checkUpdate() {
     toast('正在检查更新…');
     let r;
@@ -397,6 +422,7 @@
 
   const actions={
     account:openAccount,closeAccount,closeSheet,player:showPlayer,closePlayer,toggle:()=>audio.error&&audio.retry?audio.retry():Player.toggle(),next:()=>Player.next(),prev:()=>Player.prev(),mode:()=>Player.cycleMode(),queue:showQueue,
+    drawer:openDrawer,closeDrawer,mlyric:async()=>{await setMobileLyric(localStorage.getItem('uzz.mobileLyric')==='1'?'0':'1');},
     retryPlayback:async()=>{if(!Player.getState().current)return;if(audio.retry)await audio.retry();else{audio.load();await audio.play();}toast('正在重新连接音源…');},
     trackMenu:()=>trackMenu(Player.getState().current),createPlaylist,addToPlaylist,settings,networkDiagnostics,update:checkUpdate,
     back:()=>navigate(previousRoute==='detail'?'library':previousRoute),refreshDiscover:loadDiscover,retrySearch:()=>search(),refreshCloud,
@@ -448,6 +474,8 @@
     if(button.dataset.query!==undefined){$('mobileSearchInput').value=button.dataset.query;await search();return;}
     if(button.dataset.library){libraryTab=button.dataset.library;renderLibrary();return;}
     if(button.dataset.localPlaylist){openLocal(button.dataset.localPlaylist);return;}
+    if(button.dataset.local){openLocal(button.dataset.local);return;}
+    if(button.dataset.notes){notesMode=button.dataset.notes;document.querySelectorAll('[data-notes]').forEach(e=>e.classList.toggle('active',e===button));renderNotes();return;}
     if(button.dataset.type){searchType=button.dataset.type;document.querySelectorAll('[data-type]').forEach(e=>e.classList.toggle('active',e===button));await search();return;}
     if(button.dataset.trackMenu){trackMenu(trackSets.get(button.dataset.trackMenu)?.[Number(button.dataset.trackIndex)],button.dataset.trackMenu);return;}
     if(button.dataset.trackList){if(Date.now()<(click.suppressUntil||0))return;const scope=button.dataset.trackList,index=Number(button.dataset.trackIndex);if(scope==='search')await openSearchResult(index);else play(trackSets.get(scope)?.[index]);return;}
@@ -455,7 +483,10 @@
     if(button.dataset.lyricTime){audio.currentTime=Number(button.dataset.lyricTime);if(audio.paused)await audio.play().catch(()=>toast('点击播放继续'));}
     if(button.dataset.auth){authMode=button.dataset.auth;document.querySelectorAll('[data-auth]').forEach(e=>e.classList.toggle('active',e===button));$('mobileLoginSubmit').textContent=authMode==='login'?'登录':'注册并登录';$('mobilePassword').autocomplete=authMode==='login'?'current-password':'new-password';$('mobileAuthStatus').textContent='';}
   }
-  function back(){if(!$('accountBackdrop').hidden)return closeAccount();if(!$('sheetBackdrop').hidden)return closeSheet();if(!$('mobilePlayer').hidden)return closePlayer();if(route!=='discover')return navigate(route==='detail'?previousRoute:'discover');if(Date.now()-lastBack<1800){XYNative.App.exitApp();return;}lastBack=Date.now();toast('再按一次返回退出应用');}
+  function back(){if(!$('accountBackdrop').hidden)return closeAccount();if(!$('sheetBackdrop').hidden)return closeSheet();if(!$('drawerBackdrop').hidden)return closeDrawer();if(!$('mobilePlayer').hidden)return closePlayer();if(route!=='discover')return navigate(route==='detail'?previousRoute:'discover');if(Date.now()-lastBack<1800){XYNative.App.exitApp();return;}lastBack=Date.now();toast('再按一次返回退出应用');}
+  // 侧边抽屉（v3.3.0 网易云风格）
+  function openDrawer(){$('drawerBackdrop').hidden=false;const u=XYCloud.user;if(u){$('drawerName').textContent=XYCloud.displayUser(u);$('drawerAvatar').textContent=(XYCloud.displayUser(u)||'杨').slice(0,1);}}
+  function closeDrawer(){const d=$('drawerBackdrop');if(d)d.hidden=true;}
   let keyboardOpen=false;
   let playbackStatusKey='',bufferSince=0,bufferTimer;
   function playbackStatus(){
@@ -475,8 +506,8 @@
   function viewport(){const v=global.visualViewport;document.documentElement.style.setProperty('--vh',(v?.height||innerHeight)+'px');document.documentElement.style.setProperty('--viewport-top',(v?.offsetTop||0)+'px');const keyboard=keyboardOpen||(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&innerHeight-(v?.height||innerHeight)>100);document.body.classList.toggle('keyboard-visible',keyboard);}
   document.addEventListener('DOMContentLoaded',async()=>{
     await XYNetwork.ready;
-    hydrate();Player.init({headless:true});applyTheme();$('todayDate').textContent=new Intl.DateTimeFormat('zh-CN',{month:'short',day:'numeric'}).format(new Date());
-    const diagnosticsButton=document.createElement('button');diagnosticsButton.type='button';diagnosticsButton.textContent='网络诊断';diagnosticsButton.dataset.action='networkDiagnostics';document.querySelector('.settings-card').appendChild(diagnosticsButton);
+    hydrate();Player.init({headless:true});applyTheme();const td=$('todayDate');if(td)td.textContent=new Intl.DateTimeFormat('zh-CN',{month:'short',day:'numeric'}).format(new Date());
+    const diagnosticsButton=document.createElement('button');diagnosticsButton.type='button';diagnosticsButton.textContent='网络诊断';diagnosticsButton.dataset.action='networkDiagnostics';document.querySelector('.me-extra')?.appendChild(diagnosticsButton);
     const loginDiagnostic=document.createElement('button');loginDiagnostic.type='button';loginDiagnostic.className='wide-button';loginDiagnostic.textContent='登录失败？检查网络';loginDiagnostic.onclick=networkDiagnostics;$('mobileAuthStatus').after(loginDiagnostic);
     const playbackLabel=document.createElement('span');playbackLabel.id='mobilePlaybackStatus';playbackLabel.setAttribute('role','status');playbackLabel.setAttribute('aria-live','polite');$('mobileTime').after(playbackLabel);
     const recovery=document.createElement('div');recovery.id='playbackRecovery';recovery.className='playback-recovery';recovery.hidden=true;recovery.innerHTML='<p id="playbackRecoveryMessage" role="status"></p><button class="outline" data-action="retryPlayback">重新连接</button><button id="playbackRecoveryNext" class="outline" data-action="next">下一首</button>';$('mobileTime').parentElement.after(recovery);
@@ -527,7 +558,7 @@
     document.addEventListener('uzz:favCurrent',async e=>{if(!XYCloud.user||!heart)return;const t=e.detail?.track;const ref=t&&XYCloud.trackReference(t);if(!ref)return;try{const cur=await checkIsFavorited(ref);if(cur===e.detail.added){heart.refresh();return;}if(e.detail.added)await addFavorite(t.name,ref);else await removeFavorite(ref);heart.refresh();if(route==='library'&&libraryTab==='cloud')refreshCloud();}catch(err){toast('云端同步失败：'+err.message);}});
     // 账号切换数据隔离：换号即用云端收藏重置本机喜欢（全量拉取，防串号）
     async function syncLocalFromCloud(){const uid=XYCloud.user?.id;if(!uid)return;try{const rows=await getFavorites();if(uid!==XYCloud.user?.id)return;const seen=new Set(),tracks=[];for(const row of rows){const t=XYCloud.favoriteToTrack(row);if(t&&t.id&&t.vendor){const key=t.vendor+'|'+t.id;if(!seen.has(key)){seen.add(key);tracks.push({...t,at:Date.now()});}}}Player.replaceFavorites(tracks);renderCounts();toast('已同步云端收藏到本机（'+tracks.length+' 首）');}catch(_){/*拉取失败保持本机现状*/}}
-    $('mobileLoginForm').onsubmit=async e=>{e.preventDefault();$('mobileLoginSubmit').disabled=true;$('mobileAuthStatus').textContent='正在连接…';try{const data=await global[authMode==='login'?'loginUser':'registerUser']($('mobilePhone').value,$('mobilePassword').value);$('mobilePassword').value='';$('mobileAuthStatus').textContent=data.session?'登录成功':'注册完成，请检查手机号确认配置后登录';}catch(error){$('mobileAuthStatus').textContent=error.message;}finally{$('mobileLoginSubmit').disabled=!XYCloud.available;}};
+    $('mobileLoginForm').onsubmit=async e=>{e.preventDefault();$('mobileLoginSubmit').disabled=true;$('mobileAuthStatus').textContent='正在连接…';try{const data=await global[authMode==='login'?'loginUser':'registerUser']($('mobilePhone').value,$('mobilePassword').value);$('mobilePassword').value='';$('mobileAuthStatus').textContent=data.session?'登录成功':'注册完成，请检查手机号确认配置后登录';}catch(error){const msg=String(error.message||error);$('mobileAuthStatus').textContent=/reset|aborted|超时|timeout|failed to connect|网络/i.test(msg)?'网络波动，连接云端被中断（已自动重试多次）。请稍等片刻再点一次，通常即可成功':msg;}finally{$('mobileLoginSubmit').disabled=!XYCloud.available;}};
     $('mobileLogout').onclick=async()=>{$('mobileLogout').disabled=true;try{await logoutUser();$('mobilePassword').value='';$('mobileAuthStatus').textContent='已退出登录';}catch(e){$('mobileAuthStatus').textContent=e.message;}finally{$('mobileLogout').disabled=false;}};
     if(XYCloud.available){const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{const user=session?.user||null;const changed=XYCloud.user?.id!==user?.id;if(changed){authGeneration++;cloudGeneration++;cloudRows=[];}XYCloud.user=user;renderAuth();setTimeout(()=>{if(changed&&user)syncLocalFromCloud();if(route==='library'&&libraryTab==='cloud')renderLibrary();},0);});global.addEventListener('pagehide',()=>{subscription.unsubscribe();heart?.destroy();},{once:true});}renderAuth();
     let longPress;document.addEventListener('pointerdown',e=>{const b=e.target.closest('[data-track-list]');if(!b)return;const x=e.clientX,y=e.clientY;clearTimeout(longPress);longPress=setTimeout(()=>{click.suppressUntil=Date.now()+800;trackMenu(trackSets.get(b.dataset.trackList)?.[Number(b.dataset.trackIndex)],b.dataset.trackList);},550);const move=ev=>{if(Math.abs(ev.clientX-x)+Math.abs(ev.clientY-y)>12){clearTimeout(longPress);document.removeEventListener('pointermove',move);}};document.addEventListener('pointermove',move);document.addEventListener('pointerup',()=>{clearTimeout(longPress);document.removeEventListener('pointermove',move);},{once:true});});document.addEventListener('pointercancel',()=>clearTimeout(longPress));
