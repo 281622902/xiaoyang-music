@@ -167,13 +167,13 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
     await val(`document.getElementById('mobileSearchInput').value='晴天 周杰伦';document.getElementById('mobileSearchForm').dispatchEvent(new Event('submit',{cancelable:true}));1`);
     await sleep(7000);
     await val(`document.querySelector('#mobileResults .track-main')?.click();1`);
-    await sleep(5000);
+    await sleep(8000);
     const playing = await json(`JSON.stringify({cur:(window.Player&&window.Player.getState&&window.Player.getState().current||{}).name||'',mini:!document.getElementById('mobileMini').hidden})`);
     check('可播放并进入播放状态', !!playing.cur && playing.mini === true, JSON.stringify(playing));
-    await val(`document.querySelector('#mobileMini [data-action=player]')?.click();1`); await sleep(1500);
+    await val(`document.querySelector('#mobileMini [data-action=player]')?.click();1`); await sleep(1800);
     const pl = await json(`JSON.stringify({open:!document.getElementById('mobilePlayer').hidden,chips:[...document.querySelectorAll('.player-chip')].map(c=>c.id+':'+c.textContent.trim())})`);
     check('播放器可打开', pl.open === true, JSON.stringify(pl));
-    check('播放器 3 个 chip 存在', pl.chips.length === 3, JSON.stringify(pl.chips));
+    check('播放器 3 个 chip 存在', (pl.chips || []).length === 3, JSON.stringify(pl.chips));
     check('播放器显示歌名', !!(await val(`(document.getElementById('mobileSongName')?.textContent||'').trim()`)), '');
     for (const id of ['mobileRate', 'mobileSleep', 'mobileQuality']) {
       await val(`document.getElementById('${id}').click();1`); await sleep(800);
