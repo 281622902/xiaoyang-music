@@ -425,6 +425,24 @@ async function searchMulti(vendor, kw, type, page, limit) {
     if (ne) { cacheSet(key, ne, SEARCH_CACHE_MS); return ne; }
     const qm = await qmP;
     if (qm) { cacheSet(key, qm, SEARCH_CACHE_MS); return qm; }
+    // 两路皆空（网易被风控 + meting 主站此刻拒连）→ 不在此返回空，
+    // 继续走下面的兜底链（GDStudio 等），否则用户直接看到「搜不到歌」。
+    // ⚠️ 2026-11-05 实测：线上 DEFAULT_VENDOR=netease 时本分支曾直接返回
+    //    空列表，只有 vendor=auto 才有兜底 → 默认参数下搜索间歇性 0 条。
+    if (vendor === 'netease') {
+      const ORDER = ['__gds__', 'tencent', 'kugou', 'kuwo'];
+      for (const v of ORDER) {
+        try {
+          const r = v === '__gds__'
+            ? await withTimeout(gds.search('netease', kw, page, limit), SEARCH_TIMEOUT * 2)
+            : (PROVIDERS[v] ? await withTimeout(PROVIDERS[v].search(kw, type, page, limit), SEARCH_TIMEOUT) : null);
+          if (r && r.list && r.list.length) { cacheSet(key, r, SEARCH_CACHE_MS); return r; }
+        } catch (e) {
+          console.warn('[search fail]', v, e && e.message);
+        }
+      }
+      return { list: [], total: 0 };
+    }
   }
   if (vendor === 'auto' || !PROVIDERS[vendor]) {
     // 顺序：网易 → GDStudio网易（海外可达，结果=可播的网易曲目）→ 其他直连源。

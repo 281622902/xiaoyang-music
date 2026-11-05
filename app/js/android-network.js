@@ -12,10 +12,12 @@
   return cloudOrigin;
  }
  function backendURL(value){
-  let u;try{u=new URL(String(value||'').trim());}catch{throw Error('请填写音乐服务地址，或选择下方的电脑地址');}
-  if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.search||u.hash)throw Error('服务地址必须是无账号、参数和片段的 HTTP / HTTPS 地址');
-  if(u.protocol==='http:'&&!(config.cleartextHosts||[]).includes(u.hostname))throw Error('此 HTTP 地址不在安装包的局域网许可中。请使用 HTTPS，或在电脑上重新打包当前局域网地址');
-  return u.href.replace(/\/+$/,'');
+   let u;try{u=new URL(String(value||'').trim());}catch{throw Error('请填写音乐服务地址，或选择下方的电脑地址');}
+   if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.search||u.hash)throw Error('服务地址必须是无账号、参数和片段的 HTTP / HTTPS 地址');
+   // 运行时读取配置快照：模块加载瞬间 android-config.js 可能尚未执行（见 ready 注释）
+   const live=global.XYAndroidConfig||config;
+   if(u.protocol==='http:'&&!(live.cleartextHosts||[]).includes(u.hostname))throw Error('此 HTTP 地址不在安装包的局域网许可中。请使用 HTTPS，或在电脑上重新打包当前局域网地址');
+   return u.href.replace(/\/+$/,'');
  }
  function requireBackend(){const base=localStorage.getItem('uzz.apiBase')||'';if(native()&&!base)throw Error('尚未连接音乐服务：请到“我的 → 播放与连接设置”选择同一 Wi-Fi 的电脑地址，或填写 HTTPS 服务器');return base;}
  function describe(error,kind='cloud'){
@@ -81,8 +83,32 @@
   ]);
   return{backend:base,music:{ok:results[0].status==='fulfilled',message:results[0].status==='fulfilled'?results[0].value:describe(results[0].reason,'music')},cloud:{ok:results[1].status==='fulfilled',message:results[1].status==='fulfilled'?results[1].value:describe(results[1].reason)}};
  }
- const ready=(async()=>{if(!native())return;let launch={};try{launch=await global.XYNative.NativeMusic.getLaunchConfig();}catch{}
-  if(!localStorage.getItem('uzz.apiBase')){const value=config.defaultBackend||launch.developmentBackend;if(value)localStorage.setItem('uzz.apiBase',backendURL(value));}
+ const ready=(async()=>{
+   if(!native())return;
+   // ⚠️ 配置必须在「DOM 就绪后」再取一次：android-config.js 与本文件都是 defer，
+   // 正常顺序执行时 config 已就绪；但若本文件先于配置脚本完成执行（例如从缓存
+   // 恢复、加载时序抖动），模块顶层的 config 快照会是空 defaultBackend，
+   // 导致 App 永远连不上后端（表现：所有在线接口返回自身 HTML）。
+   // 这里统一等 DOMContentLoaded 后重新读取运行时配置，并保留启动参数兜底。
+   // 注意：无 DOM 环境（如 node:test 的 vm 沙箱）没有 document，需直接跳过等待。
+   const doc=global.document;
+   if(doc&&doc.readyState!=='complete'){
+     await new Promise(res=>{
+       if(doc.readyState==='interactive'||doc.readyState==='complete')res();
+       else doc.addEventListener('DOMContentLoaded',res,{once:true});
+       setTimeout(res,1500); // 兜底：DOMContentLoaded 永远不来也要继续
+     });
+   }
+   const liveConfig=global.XYAndroidConfig||config;
+   let launch={};try{launch=await global.XYNative.NativeMusic.getLaunchConfig();}catch{}
+   if(!localStorage.getItem('uzz.apiBase')){
+     const value=liveConfig.defaultBackend||launch.developmentBackend;
+     if(value)localStorage.setItem('uzz.apiBase',backendURL(value));
+   }
  })();
- global.XYNetwork={config,ready,backendURL,requireBackend,describe,cloudFetch,diagnose,supabaseOrigin};
+ global.XYNetwork={
+   // config 用 getter 暴露运行时配置：android-config.js 可能在本模块之后才执行，
+   // 静态快照会导致 defaultBackend / lan / cleartextHosts 全为空（连不上后端）。
+   get config(){return global.XYAndroidConfig||config;},
+   ready,backendURL,requireBackend,describe,cloudFetch,diagnose,supabaseOrigin};
 })(window);

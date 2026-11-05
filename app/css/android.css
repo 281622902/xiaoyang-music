@@ -113,10 +113,53 @@
 .drawer{width:min(66%,300px);height:100%;background:var(--surface);box-shadow:8px 0 30px #0003;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 14px) 0 0;animation:drawer-in .22s ease}
 @keyframes drawer-in{from{transform:translateX(-14px);opacity:.4}to{transform:none;opacity:1}}
 .drawer-head{padding:8px 16px 14px}
-.drawer-banner{margin:0 14px 10px;border-radius:11px;padding:12px 14px;font-size:12px;color:#fff;background:linear-gradient(120deg,#4a3f8a,#6d5fae)}
+.drawer-banner{margin:0 14px 10px;border-radius:11px;padding:12px 14px;font-size:12px;color:#fff;background:linear-gradient(120deg,#4a3f8a,#6d5fae);display:block;width:calc(100% - 28px);text-align:left}
+.drawer-banner span{display:block;font-weight:600}
+.drawer-banner small{display:block;font-size:10px;opacity:.8;margin-top:3px;color:#fff}
 .drawer-list{flex:1;overflow:auto;padding:2px 14px}
 .drawer-list button{display:flex;align-items:center;gap:12px;width:100%;min-height:50px;font-size:14px;text-align:left;border-bottom:1px solid var(--line)}
 .drawer-list svg{color:var(--accent)}
 .drawer-foot{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px))}
 .drawer-foot button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;border-radius:12px;background:var(--bg);font-size:13px}
 @media(min-width:620px){.banner-card{flex-basis:62%}.notes-grid{grid-template-columns:repeat(3,1fr)}.quick-grid{max-width:620px}}
+
+/* ═══════════ v3.4.0 菜单功能补全 ═══════════ */
+/* 私人FM 列表 */
+.fm-list{display:flex;flex-direction:column;gap:2px}
+.fm-row{display:flex;align-items:center;gap:11px;min-height:58px;padding:7px 4px;border-radius:10px;text-align:left;width:100%}
+.fm-row:hover{background:var(--soft)}
+.fm-idx{font-size:11px;color:var(--sub);width:20px;text-align:center;flex-shrink:0;font-variant-numeric:tabular-nums}
+.fm-row img{width:42px;height:42px;border-radius:9px;flex-shrink:0;background:var(--soft)}
+.fm-meta{min-width:0;flex:1}
+.fm-meta strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fm-meta small{display:block;font-size:10px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fm-play{width:30px;height:30px;border-radius:50%;background:var(--soft);color:var(--accent);display:grid;place-items:center;flex-shrink:0}
+.fm-play svg{width:15px;height:15px}
+/* 全部热搜列表 */
+.hot-list{display:flex;flex-direction:column}
+.hot-row{display:flex;align-items:center;gap:13px;min-height:46px;font-size:13px;text-align:left;width:100%;border-bottom:1px solid var(--line)}
+.hot-row b{font-size:13px;color:var(--sub);width:22px;font-variant-numeric:tabular-nums}
+.hot-row:nth-child(-n+3) b{color:var(--accent);font-weight:700}
+/* 云贝与权益 */
+.reward-hero{display:flex;flex-direction:column;align-items:center;gap:2px;padding:16px 0 10px}
+.reward-hero strong{font-size:38px;font-weight:800;color:var(--accent);line-height:1.1}
+.reward-hero span{font-size:12px;color:var(--sub)}
+.reward-list{margin:8px 0 12px}
+.reward-list .sheet-action{justify-content:flex-start}
+.reward-list .sheet-action .muted{margin-left:auto;font-size:11px}
+/* 百科信息 */
+.wiki-list{display:flex;flex-direction:column;margin-top:6px}
+.wiki-row{display:flex;justify-content:space-between;gap:14px;padding:11px 2px;border-bottom:1px solid var(--line);font-size:12px}
+.wiki-row:last-child{border-bottom:none}
+.wiki-row span{color:var(--sub);flex-shrink:0}
+.wiki-row strong{text-align:right;font-weight:600;overflow-wrap:anywhere}
+/* 歌词翻译 */
+.lyric-tools{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.lyric-tools .lyric-toggle{padding:6px 13px;min-height:32px;border-radius:16px;background:var(--soft);color:var(--sub);font-size:11px}
+.lyric-tools .lyric-toggle[aria-pressed=true]{color:var(--accent);font-weight:650}
+.lyric-tools .lyric-toggle:disabled{opacity:.45}
+.lyric-panel em.lyric-trans{display:block;font-style:normal;font-size:12px;color:var(--sub);margin-top:2px;opacity:.85}
+/* 音乐库头部双按钮 */
+.lib-head-actions{display:flex;gap:8px}
+/* 关注歌手行 */
+.sheet-action img{width:32px;height:32px;border-radius:8px;background:var(--soft);flex-shrink:0}

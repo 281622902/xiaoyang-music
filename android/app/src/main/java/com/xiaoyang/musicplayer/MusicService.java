@@ -53,7 +53,10 @@ public class MusicService extends MediaSessionService {
     @Override public void onCreate() {
         super.onCreate();
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
-            .setUserAgent("XiaoyangMusic/Android").setConnectTimeoutMs(12000).setReadTimeoutMs(22000);
+            .setUserAgent("XiaoyangMusic/Android").setConnectTimeoutMs(12000).setReadTimeoutMs(22000)
+            // meting 实时解析接口会 302 跳到网易 CDN（可能跨子域），必须允许跨协议重定向，
+            // 否则播放器拿到 3xx 响应体 → ERROR_CODE_IO_BAD_HTTP_STATUS（真机实测根因之一）。
+            .setAllowCrossProtocolRedirects(true);
         DefaultDataSource.Factory upstream = new DefaultDataSource.Factory(this, http);
         ResolvingDataSource.Factory resolving = new ResolvingDataSource.Factory(upstream, dataSpec -> {
             Uri uri = dataSpec.uri;
@@ -76,7 +79,15 @@ public class MusicService extends MediaSessionService {
             String url = song.optString("url");
             if (!(url.startsWith("https://") || url.startsWith("http://"))) throw new IOException("No playable song URL");
             resolved.put(key,song);
-            Uri stream = Uri.parse(base + "/api/stream").buildUpon().appendQueryParameter("url",url).build();
+            // 直连优先：解析结果本身已是可播放的 http(s) 地址（网易云走国内 meting 实时解析接口，
+            // 每次请求都 302 到当下新鲜的 CDN 直链，永不过期）。原生 Media3 无 CORS 限制，
+            // 直连国内 CDN 最快最稳；再套一层海外 /api/stream 反而是 IO 错误的根源。
+            Uri stream;
+            if (url.startsWith("https://") || url.startsWith("http://")) {
+                stream = Uri.parse(url);
+            } else {
+                stream = Uri.parse(base + "/api/stream").buildUpon().appendQueryParameter("url", url).build();
+            }
             playableUrls.put(uri.toString(),stream);
             return dataSpec.withUri(stream);
         });

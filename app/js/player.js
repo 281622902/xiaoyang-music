@@ -687,7 +687,13 @@
         // 令牌校验：防止旧歌的翻译歌词串到新歌上
         if (seqAlive(seq) && STATE.current && STATE.current.id === track.id) {
           STATE.tlyrics = parseLrc(f.tlyric || '');
+          // 译文是异步补拉的：必须无条件派发刷新事件，否则「翻译」开关
+          // 拿不到 tlyrics 就一直停在「无译文」且禁用（v3.4.0 真机实测）。
+          // 桌面版靠 uzz:lyricRefresh 刷新，移动版靠 xy:player(lyrics) 刷新，
+          // 两个事件都发，两端都能正确更新按钮可用态。
           if (transOn()) renderLyric();
+          document.dispatchEvent(new CustomEvent('uzz:lyricRefresh'));
+          emit('lyrics');
         }
       }).catch(() => {});
     }

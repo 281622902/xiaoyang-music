@@ -17,6 +17,13 @@
   function getApiBase() {
     // 优先用设置里的值；否则同源（桌面版 Electron 内置后端即同源）
     let base = (localStorage.getItem('uzz.apiBase') || '').trim();
+    // 安卓端兜底：地址被清空（误操作 / 存储被清）时回落到安装包内置的默认后端，
+    // 否则所有在线请求会落到同源 https://localhost（返回 App 自身 HTML），
+    // 表现为「搜索无结果 / 播放无地址」等全线失联。
+    if (!base && global.XYNative?.isAndroid) {
+      const fallback = (global.XYAndroidConfig && global.XYAndroidConfig.defaultBackend) || '';
+      if (fallback) base = fallback.trim();
+    }
     if (!base) base = '';
     return base.replace(/\/+$/, '');
   }
