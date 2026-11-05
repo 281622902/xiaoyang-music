@@ -36,6 +36,7 @@
 
         </activity>
 
+        <service android:name=".LyricOverlayService" android:exported="false" />
         <service android:name=".MusicService" android:foregroundServiceType="mediaPlayback" android:exported="true">
             <intent-filter><action android:name="androidx.media3.session.MediaSessionService" /></intent-filter>
         </service>
@@ -56,6 +57,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 桌面歌词悬浮窗（v3.2.2） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- App 内下载 APK 并调起系统安装器（2026-11-05 更新闭环） -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

@@ -228,9 +228,30 @@
         if (fill) fill.style.width = pct + '%';
         if (label) label.textContent = pct + '%（' + Math.round((Number(p.received) || 0) / 1048576) + ' / ' + Math.round((Number(p.total) || 0) / 1048576) + ' MB）';
       });
-      const res = await XYNative.NativeMusic.downloadApk({ url: r.url, version: r.latest });
+      // 原生下载最多试 2 次（Render 免费实例偶发连接重置）：失败重试一次
+      let res = null, lastErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await XYNative.NativeMusic.downloadApk({ url: r.url, version: r.latest });
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (attempt === 0) {
+            const st = document.getElementById('apkStatus');
+            if (st) st.textContent = '下载中断，正在自动重试…';
+            const fill = document.getElementById('apkBarFill');
+            if (fill) fill.style.width = '0%';
+          }
+        }
+      }
       if (prog && prog.remove) prog.remove();
-      if (!res || !res.path) throw new Error('下载未完成');
+      if (!res || !res.path) {
+        // 双次失败 → 终极兜底：系统浏览器打开下载链接（浏览器下载可断点续传）
+        closeSheet();
+        toast('App 内下载失败（' + ((lastErr && lastErr.message) || '连接被重置') + '），已转系统浏览器下载，下载完成后请点击安装', 7000);
+        try { await XYNative.openUpdate(r.url); } catch (e2) { toast('浏览器打开失败，请手动访问下载链接', 5000); }
+        return;
+      }
       apkPath = res.path;
       const st = document.getElementById('apkStatus');
       if (st) st.textContent = '下载完成，正在启动安装…';
@@ -250,8 +271,8 @@
   }
   function settings(){const candidates=XYNetwork.config.lan||[];sheet('播放与连接设置','<form id="mobileSettingsForm"><label>音乐来源<select id="mobileVendor">'+Object.entries({auto:'自动选择',netease:'网易云音乐',tencent:'QQ 音乐',kugou:'酷狗音乐',kuwo:'酷我音乐'}).map(([v,n])=>'<option value="'+v+'" '+(UzzApi.getVendor()===v?'selected':'')+'>'+n+'</option>').join('')+'</select></label><label>音乐后端地址<input id="mobileBackend" type="url" placeholder="https://你的音乐服务 或下方电脑地址" value="'+escape(UzzApi.getApiBase())+'" required></label><p class="muted">真机的 localhost 指向手机自身。连接电脑同一 Wi-Fi 后，可选择下面的电脑地址；电脑后端须保持运行。离开该局域网后需要公网 HTTPS 音乐服务。登录与收藏直接连接 Supabase，不依赖电脑音乐后端。</p>'+candidates.map(c=>'<button type="button" class="wide-button" data-backend-suggestion="'+escape(c.url)+'">使用电脑地址 '+escape(c.url)+' · '+escape(c.label)+'</button>').join('')+'<button class="primary wide-button">保存设置</button></form><button class="wide-button" data-action="networkDiagnostics">诊断音乐与登录网络</button>');}
   async function networkDiagnostics(){if(!$('accountBackdrop').hidden)closeAccount();sheet('网络诊断','<p class="muted">正在分别检查音乐服务和 Supabase… 不发送手机号或密码。</p>');try{const r=await XYNetwork.diagnose();if($('sheetTitle').textContent!=='网络诊断')return;const text='音乐服务：'+(r.backend||'尚未设置')+'\n'+(r.music.ok?'✓ ':'× ')+r.music.message+'\n\n云端账户：\n'+(r.cloud.ok?'✓ ':'× ')+r.cloud.message;$('sheetContent').replaceChildren();const p=document.createElement('p');p.className='form-status';p.style.whiteSpace='pre-wrap';p.textContent=text;$('sheetContent').appendChild(p);const b=document.createElement('button');b.className='wide-button';b.dataset.action='settings';b.textContent='修改音乐服务地址';$('sheetContent').appendChild(b);}catch(e){toast(e.message);}}
-  // ── 设置中心（v3.2.0 轻量五件套）─────────────────────────────
-  let sleepTimer = null, sleepDeadline = 0;
+  // ── 设置中心（v3.2.2 网易云风格列表）────────────────────────
+  let sleepTimer = null, sleepDeadline = 0, lastSleepPick = 0;
   function applyQuality(q) {
     localStorage.setItem('uzz.quality', q);
     document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.classList.toggle('active', b.dataset.quality === q));
@@ -293,26 +314,77 @@
     toast('将在 ' + minutes + ' 分钟后停止播放');
   }
   function initSettings() {
-    // 音质
-    document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.addEventListener('click', () => applyQuality(b.dataset.quality)));
-    const q = localStorage.getItem('uzz.quality') || 'standard';
-    document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.classList.toggle('active', b.dataset.quality === q));
-    // 倍速（恢复上次选择）
+    const QUALITY_LABELS = { standard: '标准', ex: '高品', lossless: '无损' };
+    const SPEED_LABELS = { 0.5: '0.5x', 1: '1.0x', 1.5: '1.5x', 2: '2.0x' };
+    const SLEEP_LABELS = { 0: '关闭', 15: '15分钟', 30: '30分钟', 60: '60分钟' };
+    const THEME_LABELS = { light: '浅色', dark: '深色', auto: '跟随系统' };
+    // 通用：底部弹层单选（网易云风格：列表行 → sheet 选值）
+    function pickSheet(title, options, current, onPick) {
+      sheet(title, options.map((o) => '<button class="sheet-action" data-pick="' + o.value + '">' + (String(o.value) === String(current) ? '✓ ' : '') + escape(o.label) + '</button>').join(''));
+      document.querySelectorAll('#sheetContent [data-pick]').forEach(b => { b.onclick = () => { closeSheet(); onPick(b.dataset.pick); }; });
+    }
+    const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    function refreshSettingsValues() {
+      const q = localStorage.getItem('uzz.quality') || 'standard';
+      const r = Number(localStorage.getItem('uzz.rate') || 1) || 1;
+      const sl = sleepDeadline > Date.now() ? Math.ceil((sleepDeadline - Date.now()) / 60000) + ' 分钟后停' : (SLEEP_LABELS[lastSleepPick] || '关闭');
+      const th = themePref();
+      const ml = localStorage.getItem('uzz.mobileLyric') === '1' ? '已开启' : '关闭';
+      setText('valQuality', QUALITY_LABELS[q] || q);
+      setText('valSpeed', SPEED_LABELS[String(r)] || r + 'x');
+      setText('valSleep', sl);
+      setText('valTheme', THEME_LABELS[th] || th);
+      setText('valMobileLyric', ml);
+    }
+    // 恢复上次选择
     const savedRate = Number(localStorage.getItem('uzz.rate') || 1) || 1;
-    document.querySelectorAll('#speedSeg [data-speed]').forEach(b => {
-      b.addEventListener('click', () => { localStorage.setItem('uzz.rate', b.dataset.speed); applySpeed(b.dataset.speed); });
-      b.classList.toggle('active', Number(b.dataset.speed) === savedRate);
-    });
     try { audio.defaultPlaybackRate = savedRate; audio.playbackRate = savedRate; } catch (e) {}
-    // 定时关闭
-    document.querySelectorAll('#sleepSeg [data-sleep]').forEach(b => b.addEventListener('click', () => applySleep(Number(b.dataset.sleep) || 0)));
-    // 主题三态
-    document.querySelectorAll('#themeSeg [data-theme]').forEach(b => b.addEventListener('click', () => { localStorage.setItem('xy.android.theme', b.dataset.theme); applyTheme(); }));
-    // 跟随系统实时切换
+    const rowQuality = $('rowQuality');
+    if (rowQuality) rowQuality.onclick = () => pickSheet('音质', [
+      { value: 'standard', label: '标准 128k' }, { value: 'ex', label: '高品 320k' }, { value: 'lossless', label: '无损' },
+    ], localStorage.getItem('uzz.quality') || 'standard', (v) => { applyQuality(v); refreshSettingsValues(); });
+    const rowSpeed = $('rowSpeed');
+    if (rowSpeed) rowSpeed.onclick = () => pickSheet('播放倍速', [
+      { value: '0.5', label: '0.5x 慢速' }, { value: '1', label: '1.0x 正常' }, { value: '1.5', label: '1.5x' }, { value: '2', label: '2.0x 🚀' },
+    ], String(savedRate), (v) => { localStorage.setItem('uzz.rate', v); applySpeed(v); refreshSettingsValues(); });
+    const rowSleep = $('rowSleep');
+    if (rowSleep) rowSleep.onclick = () => pickSheet('定时关闭', [
+      { value: '0', label: '关闭' }, { value: '15', label: '15 分钟' }, { value: '30', label: '30 分钟' }, { value: '60', label: '60 分钟' },
+    ], String(lastSleepPick || 0), (v) => { lastSleepPick = Number(v) || 0; applySleep(lastSleepPick); refreshSettingsValues(); });
+    const rowTheme = $('rowTheme');
+    if (rowTheme) rowTheme.onclick = () => pickSheet('主题', [
+      { value: 'light', label: '浅色' }, { value: 'dark', label: '深色' }, { value: 'auto', label: '跟随系统' },
+    ], themePref(), (v) => { localStorage.setItem('xy.android.theme', v); applyTheme(); refreshSettingsValues(); });
+    const rowMobileLyric = $('rowMobileLyric');
+    if (rowMobileLyric) rowMobileLyric.onclick = async () => { await setMobileLyric(localStorage.getItem('uzz.mobileLyric') === '1' ? '0' : '1'); refreshSettingsValues(); };
+    // 主题跟随系统实时切换
     systemDark.addEventListener('change', () => { if (themePref() === 'auto') applyTheme(); });
     applyTheme();
+    refreshSettingsValues();
     const ver = $('settingsVer');
     if (ver) ver.textContent = 'v' + (window.XYCloud?.appVersion || '');
+  }
+  // 桌面歌词开关（v3.2.2）：开启需悬浮窗权限，未授权引导系统设置后重开
+  async function setMobileLyric(v) {
+    const on = v === '1';
+    if (!on) {
+      localStorage.removeItem('uzz.mobileLyric');
+      try { await XYNative.NativeMusic.lyricOverlay({ show: false }); } catch (e) {}
+      return toast('桌面歌词已关闭');
+    }
+    try {
+      const r = await XYNative.NativeMusic.lyricOverlay({ show: true, cur: '小杨音乐 · 桌面歌词已开启', next: '播放歌曲后逐句显示（可拖动，长按关闭）', playing: true });
+      if (r && r.needsPermission) {
+        sheet('需要悬浮窗权限', '<p class="muted">请在接下来的页面允许「显示在其他应用上层」，返回后再打开桌面歌词。</p><button id="overlayGrant" class="primary wide-button">去授权</button>');
+        const g = document.getElementById('overlayGrant');
+        if (g) g.onclick = async () => { await XYNative.NativeMusic.overlayPermission(); };
+        return;
+      }
+      localStorage.setItem('uzz.mobileLyric', '1');
+      toast('桌面歌词已开启 🎵');
+    } catch (e) {
+      toast('无法开启桌面歌词：' + (e.message || '系统拒绝'), 5000);
+    }
   }
 
   const actions={

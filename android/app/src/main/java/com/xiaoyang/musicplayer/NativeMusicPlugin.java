@@ -6,6 +6,7 @@ import android.app.Activity;
 import android.database.Cursor;
 import android.media.MediaMetadataRetriever;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import androidx.activity.result.ActivityResult;
 import android.net.Uri;
 import android.os.Bundle;
@@ -87,6 +88,42 @@ public class NativeMusicPlugin extends Plugin {
     });}
     @PluginMethod public void play(PluginCall call){ready(call,()->{if(controller.getPlaybackState()==Player.STATE_IDLE)controller.prepare();MusicService.restored=false;controller.play();});}
     // 倍速（v3.2.0）：Media3 原生变速不变调，1.0 恢复正常
+    // ── 桌面歌词悬浮窗（v3.2.2）──────────────────────────────────
+    // 前端播放器每句歌词调用：{show, cur, next, playing}。
+    // show=true 且无悬浮窗权限 → resolve({needsPermission:true})，前端引导授权后重试。
+    @PluginMethod public void lyricOverlay(PluginCall call) {
+        boolean show = Boolean.TRUE.equals(call.getBoolean("show", false));
+        if (!show) {
+            getContext().stopService(new Intent(getContext(), LyricOverlayService.class));
+            call.resolve();
+            return;
+        }
+        if (!LyricOverlayService.canDraw(getContext())) {
+            JSObject result = new JSObject(); result.put("needsPermission", true);
+            call.resolve(result);
+            return;
+        }
+        try {
+            if (LyricOverlayService.getInstance() == null) {
+                getContext().startService(new Intent(getContext(), LyricOverlayService.class));
+            }
+        } catch (Exception e) { call.reject("无法启动悬浮窗：" + (e.getMessage() == null ? "系统拒绝" : e.getMessage()), e); return; }
+        String cur = call.getString("cur", "");
+        String next = call.getString("next", "");
+        boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", true));
+        main.post(() -> { LyricOverlayService svc = LyricOverlayService.getInstance(); if (svc != null) svc.updateLyric(cur, next, playing); });
+        call.resolve();
+    }
+    // 跳系统「显示在其他应用上层」授权页
+    @PluginMethod public void overlayPermission(PluginCall call) {
+        try {
+            Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getContext().getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) { call.reject("无法跳转授权页：" + (e.getMessage() == null ? "系统拒绝" : e.getMessage()), e); }
+    }
+
     @PluginMethod public void setSpeed(PluginCall call){
         Double d = call.getDouble("speed", 1.0);
         float speed = d == null ? 1.0f : d.floatValue();

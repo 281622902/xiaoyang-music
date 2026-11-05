@@ -12,7 +12,10 @@ export async function openUpdate(value) {
   const url = new URL(String(value));
   if (url.protocol !== 'https:') throw new Error('更新下载地址必须使用 HTTPS');
   if (isAndroid) {
-    if (!url.pathname.toLowerCase().endsWith('.apk')) throw new Error('安卓更新需要 .apk 安装包下载链接');
+    // 后端 /api/release-file 代理地址不带 .apk 后缀（流式转发），放行自家音乐服务的下载代理
+    const apiBase = (localStorage.getItem('uzz.apiBase') || '').replace(/\/+$/, '');
+    const viaProxy = !!apiBase && url.href.startsWith(apiBase + '/api/release-file');
+    if (!viaProxy && !url.pathname.toLowerCase().endsWith('.apk')) throw new Error('安卓更新需要 .apk 安装包下载链接');
     // Android 使用系统浏览器的 Custom Tab，下载交由浏览器完成。
     await Browser.open({ url: url.href, toolbarColor: '#0c151c' });
   } else window.open(url.href, '_blank', 'noopener,noreferrer');

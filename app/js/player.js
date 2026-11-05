@@ -287,10 +287,24 @@
   function dlEnabled() {
     return localStorage.getItem('uzz.dl.enabled') === '1' && window.uzzBridge;
   }
+  // 安卓桌面歌词悬浮窗（v3.2.2）：设置开启时逐句推给原生悬浮窗
+  function pushMobileLyric(cur, next, playing) {
+    if (!global.XYNative?.isAndroid) return;
+    if (!global.XYNative.NativeMusic?.lyricOverlay) return;
+    if (localStorage.getItem('uzz.mobileLyric') !== '1') return;
+    global.XYNative.NativeMusic.lyricOverlay({ show: true, cur: cur || '', next: next || '', playing: !!playing }).then((r) => {
+      if (r && r.needsPermission) {
+        localStorage.setItem('uzz.mobileLyric', ''); // 未授权：关开关，等设置里重新引导
+        global.XYNative.NativeMusic.lyricOverlay({ show: false }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
   function pushLyric(idx) {
-    if (!window.uzzBridge) return;
     const cur = STATE.lyrics[idx] ? STATE.lyrics[idx].text : '';
     const next = STATE.lyrics[idx + 1] ? STATE.lyrics[idx + 1].text : '';
+    const audioEl = document.getElementById('audio');
+    pushMobileLyric(cur, next, !!(audioEl && !audioEl.paused && audioEl.src));
+    if (!window.uzzBridge) return;
     // 翻译行（桌面歌词双行用）：开翻译且有译文时取当前句译文
     let trans = '';
     if (transOn() && STATE.lyrics[idx] && STATE.tlyrics && STATE.tlyrics.length) {
