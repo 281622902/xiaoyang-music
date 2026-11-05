@@ -82,14 +82,62 @@
     }
   }
 
+  // POST 请求（写操作：验证码校验等）。与 request() 同源的错误处理与超时策略。
+  async function postRequest(path, body, timeout = 10000, externalSignal) {
+    const base = getApiBase();
+    global.XYNetwork?.requireBackend();
+    const url = new URL(base + path, location.origin);
+    const ctrl = new AbortController();
+    const requestId = crypto.randomUUID();
+    ctrl.signal.addEventListener('abort', () => global.uzzBridge?.cancelWebRequest?.(requestId), { once: true });
+    const cancel = () => ctrl.abort();
+    if (externalSignal?.aborted) cancel();
+    else externalSignal?.addEventListener('abort', cancel, { once: true });
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', 'X-XY-Request': requestId },
+        body: JSON.stringify(body || {}),
+      });
+      if (!res.ok) {
+        let msg = '';
+        try { const j = await res.json(); msg = (j && (j.msg || j.message)) || ''; } catch (e) { /* 非 JSON */ }
+        throw new Error(msg || ('HTTP ' + res.status));
+      }
+      return await res.json();
+    } catch (error) {
+      if (externalSignal?.aborted) throw error;
+      throw new Error(global.XYNetwork?.describe(error, 'music') || error.message);
+    } finally {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', cancel);
+    }
+  }
+
+  // 图形验证码（注册用）。后端零依赖 SVG 生成：GET 取题，POST 校验。
+  async function getCaptcha() {
+    const r = await request('/api/captcha', {}, 8000);
+    if (!r || r.code !== 200 || !r.id) throw new Error((r && r.msg) || '验证码获取失败');
+    return { id: r.id, svg: r.svg || '' };
+  }
+  async function verifyCaptcha(id, answer) {
+    const r = await postRequest('/api/captcha/verify', { id, answer }, 8000);
+    if (!r || r.code !== 200 || !r.ok) throw new Error((r && r.msg) || '验证码不正确');
+    return true;
+  }
+
   // 搜索
-  async function search(keyword, type, page, limit, signal) {
+  // artist：可选的歌手目标（前端识别「歌名 - 歌手」或「歌名 歌手」后传入），
+  //   后端据此把该歌手的版本置顶——解决「搜周杰伦的歌搜到的是别人唱的」。
+  async function search(keyword, type, page, limit, signal, artist) {
     const r = await request('/api/search', {
       keyword,
       type: type || 'song',
       page: page || 1,
       limit: limit || DEFAULT_LIMIT,
       vendor: getVendor(),
+      artist: artist || '',
     }, 12000, signal);
     if (!r || r.code !== 200) throw new Error((r && r.msg) || '搜索失败');
     return {
@@ -146,9 +194,11 @@
     return null;
   }
 
-  async function getLyric(id, vendor, signal) {
+  // 歌词。name/artist 可选：传入后后端在主源无歌词时会跨源（QQ/酷狗）按
+  // 「歌名+歌手」找同曲补词——用户反馈「网络歌曲没有歌词」的兜底路径。
+  async function getLyric(id, vendor, signal, name, artist) {
     try {
-      const r = await request('/api/lyric', { id, vendor: vendor || getVendor() }, 8000, signal);
+      const r = await request('/api/lyric', { id, vendor: vendor || getVendor(), name: name || '', artist: artist || '' }, 10000, signal);
       if (r && r.code === 200 && r.lyric) return r.lyric;
     } catch (e) {}
     return '';
@@ -332,12 +382,12 @@
   }
 
   // 歌词 + 翻译（歌词区「翻译」开关用）
-  async function getLyricEx(id, vendor, signal) {
+  async function getLyricEx(id, vendor, signal, name, artist) {
     try {
-      const r = await request('/api/lyric', { id, vendor: vendor || getVendor() }, 8000, signal);
-      if (r && r.code === 200) return { lyric: r.lyric || '', tlyric: r.tlyric || '' };
+      const r = await request('/api/lyric', { id, vendor: vendor || getVendor(), name: name || '', artist: artist || '' }, 10000, signal);
+      if (r && r.code === 200) return { lyric: r.lyric || '', tlyric: r.tlyric || '', source: r.source || '' };
     } catch (e) {}
-    return { lyric: '', tlyric: '' };
+    return { lyric: '', tlyric: '', source: 'none' };
   }
 
   // 歌曲百科（曲风 / 语种 / 发行时间 / 发行版本 / BPM 等）
@@ -357,5 +407,6 @@
   }
 
   global.UzzApi = { search, getSong, getUrl, getLyric, getLyricEx, getWiki, getSimi, getApiBase, getVendor, ping, downloadUrl, normalizeTrack, picProxy, suggest, getPlaylist, getPlaylists, getArtistTop, getAlbum,
-    localScan, localLibrary, localLyric, localAddFile, localSetProgress, localUpdateMeta, localRemove, localDuplicates, localCues, localSmartPlaylists, getCharts, resolveImport };
+    localScan, localLibrary, localLyric, localAddFile, localSetProgress, localUpdateMeta, localRemove, localDuplicates, localCues, localSmartPlaylists, getCharts, resolveImport,
+    getCaptcha, verifyCaptcha };
 })(window);

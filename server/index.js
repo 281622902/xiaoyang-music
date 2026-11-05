@@ -24,6 +24,9 @@ const mock = require('./providers/mock');
 const aggregate = require('./providers/aggregate');
 const gds = require('./providers/gds');
 const qmeting = require('./providers/qmeting');
+const { mergeResults, splitQuery } = require('./search-merge');
+const captcha = require('./captcha');
+const license = require('./providers/license');
 const localLib = require('./local-lib');
 const localAccess = require('./local-access');
 const { audioExtension } = require('./audio-format');
@@ -470,6 +473,47 @@ async function searchMulti(vendor, kw, type, page, limit) {
   }
 }
 
+// ── 多源合并搜索（v3.5.0）─────────────────────────────────────────
+// 用户实测反馈：「搜周杰伦的歌搜到的不是周杰伦唱的」。
+// 根因：单源搜索结果把同名歌的翻唱/其它歌手版本与原唱混排，原唱不一定在前。
+// 本函数并行拉取 网易 / QQ音乐 / meting聚合 三路结果，按「歌名+歌手」归一化
+// 合并后打分排序：歌手命中者置顶，跨平台共现者（= 原唱）加权。
+// 另支持 artist 目标参数与「歌名 - 歌手」自动拆分。
+async function searchMerged(kw, type, page, limit, opts = {}) {
+  const parsed = splitQuery(kw);
+  // 歌手强匹配只认「显式 artist 参数」——自动猜测左右谁是歌手容易反了，
+  // 猜错会误伤正常结果。自动拆分仅用于额外召回（多搜一次纯歌名）。
+  const artist = String(opts.artist || '').trim();
+  const title = String(opts.title || parsed.title || kw).trim();
+  const queries = [];
+  const pushQuery = (s) => { const t = String(s || '').trim(); if (t && !queries.includes(t)) queries.push(t); };
+  pushQuery(kw);
+  for (const part of parsed.parts || []) pushQuery(part);
+
+  const jobs = [];
+  for (const qk of queries) {
+    // 网易：唯一能稳定出播放地址的通道（但未登录搜索是降级结果集）
+    jobs.push({ source: 'netease', p: withTimeout(netease.search(qk, type, page, limit), SEARCH_TIMEOUT) });
+    // QQ 音乐（经 meting）：搜索质量最好——歌手正确、有封面直链；
+    //   免登录 vkey 已失效，故只作「认歌 + 封面 + 歌词」用，播放走跨源兜底。
+    jobs.push({ source: 'tencent', p: withTimeout(qmeting.search('tencent', qk, page, limit), SEARCH_TIMEOUT) });
+    // 酷狗：歌手正确、可提供封面与歌词
+    jobs.push({ source: 'kugou', p: withTimeout(kugou.search(qk, type, page, limit), SEARCH_TIMEOUT) });
+    // meting 网易：与网易直连互补（海外可达性不同）
+    jobs.push({ source: 'qmeting', p: withTimeout(qmeting.search('netease', qk, page, limit), SEARCH_TIMEOUT) });
+  }
+  const settled = await Promise.allSettled(jobs.map((j) => j.p));
+  const groups = [];
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value && r.value.list && r.value.list.length) {
+      groups.push({ source: jobs[i].source, list: r.value.list });
+    }
+  });
+  if (!groups.length) return { list: [], total: 0 };
+  const merged = mergeResults(groups, { title, artist }, limit);
+  return { list: merged, total: merged.length };
+}
+
 // 热搜词：取热歌榜前 12 首歌名，缓存 1 小时（供搜索框推荐 + 热搜榜）
 const HOT_LIST_ID = '3778678'; // 云音乐热歌榜
 let hotCache = { t: 0, words: [] };
@@ -508,12 +552,97 @@ async function handleApi(req, res, reqUrl) {
   try {
     if (pathname === '/api/health') return sendJson(res, 200, { code: 200, msg: 'ok', ...(publicMode?{service:'xiaoyang-music-api',publicMode:true}:{}) });
 
+    // ══════ 图形验证码（注册防机器注册） ══════
+    if (pathname === '/api/captcha') {
+      const c = captcha.issue();
+      return sendJson(res, 200, { code: 200, id: c.id, svg: c.svg });
+    }
+    if (pathname === '/api/captcha/verify') {
+      if (req.method !== 'POST') return sendJson(res, 405, { code: 405, msg: '请使用 POST' });
+      let payload = {};
+      try {
+        const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > 8192) break; chunks.push(chunk); }
+        payload = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+      } catch (e) { return sendJson(res, 400, { code: 400, msg: '请求格式不正确' }); }
+      const r = captcha.verify(payload.id, payload.answer);
+      return sendJson(res, r.ok ? 200 : 400, { code: r.ok ? 200 : 400, ok: r.ok, msg: r.msg });
+    }
+
+    // ── 设备授权（v3.5.0 防泄露机制）────────────────────────────
+    // 陌生设备首次安装需要授权码；同设备升级凭本地记录自动续期。
+    // 授权码绑定「设备指纹 + 版本号」，旧版本码在新版本上自动失效。
+    if (pathname.startsWith('/api/auth/license')) {
+      const adminToken = String(process.env.XY_ADMIN_TOKEN || '').trim();
+      const isAdmin = (req) => {
+        if (!adminToken) return false;
+        const got = String(req.headers['x-admin-token'] || req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+        return got && got === adminToken;
+      };
+      const readBody = async () => {
+        const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > 8192) break; chunks.push(chunk); }
+        const raw = Buffer.concat(chunks).toString();
+        try { return JSON.parse(raw || '{}'); } catch { return {}; }
+      };
+      // 管理端：签发 / 列出 / 吊销
+      if (pathname === '/api/auth/license/issue' || pathname === '/api/auth/license/list' || pathname === '/api/auth/license/revoke') {
+        if (!adminToken) return sendJson(res, 503, { code: 503, msg: '授权管理未启用（服务端未设置 XY_ADMIN_TOKEN）' });
+        if (!isAdmin(req)) return sendJson(res, 401, { code: 401, msg: '管理口令不正确' });
+        try {
+          if (pathname === '/api/auth/license/issue') {
+            if (req.method !== 'POST') return sendJson(res, 405, { code: 405, msg: '请使用 POST' });
+            const p = await readBody();
+            const r = await license.issue(p);
+            return sendJson(res, 200, { code: 200, ...r });
+          }
+          if (pathname === '/api/auth/license/revoke') {
+            if (req.method !== 'POST') return sendJson(res, 405, { code: 405, msg: '请使用 POST' });
+            const p = await readBody();
+            const r = await license.revoke(p.code, p.revoked !== false);
+            return sendJson(res, 200, { code: 200, ...r });
+          }
+          const rows = await license.list({ deviceId: q(reqUrl, 'device') || '', version: q(reqUrl, 'version') || '', limit: Number(q(reqUrl, 'limit') || 100) });
+          return sendJson(res, 200, { code: 200, list: rows });
+        } catch (e) {
+          return sendJson(res, 400, { code: 400, msg: e.message || '授权操作失败' });
+        }
+      }
+      // 客户端：查询本机授权状态
+      if (pathname === '/api/auth/license/status') {
+        const deviceId = q(reqUrl, 'device') || '';
+        const version = q(reqUrl, 'version') || '';
+        const st = await license.deviceStatus({ deviceId, version });
+        return sendJson(res, 200, { code: 200, ...st });
+      }
+      // 客户端：校验并激活授权码
+      if (pathname === '/api/auth/license/verify') {
+        if (req.method !== 'POST') return sendJson(res, 405, { code: 405, msg: '请使用 POST' });
+        const p = await readBody();
+        const r = await license.verify({ code: p.code, deviceId: p.device, version: p.version });
+        return sendJson(res, r.ok ? 200 : 400, { code: r.ok ? 200 : 400, ok: r.ok, msg: r.msg, license: r.license });
+      }
+      return sendJson(res, 404, { code: 404, msg: '授权接口不存在' });
+    }
+
     if (pathname === '/api/search') {
       const kw = q(reqUrl, 'keyword') || '';
       const type = q(reqUrl, 'type') || 'song';
       const page = Math.max(1, parseInt(q(reqUrl, 'page') || '1', 10));
       const limit = Math.min(50, Math.max(1, parseInt(q(reqUrl, 'limit') || '20', 10)));
+      const artist = q(reqUrl, 'artist') || '';
       if (!kw) return sendJson(res, 400, { code: 400, msg: '缺少 keyword' });
+      // 歌曲类走多源合并（网易 + QQ音乐 + meting 聚合），按歌手匹配与跨平台
+      // 共现排序，解决「搜周杰伦的歌搜到别人唱的」；歌手/专辑/歌单等分类
+      // 仍走原有单源逻辑（多源合并仅对歌曲有意义）。
+      if (type === 'song') {
+        const key = 'sm:' + kw + ':' + page + ':' + limit + ':' + artist;
+        const cached = cacheGet(key);
+        if (cached) return sendJson(res, 200, { code: 200, result: cached.list, total: cached.total });
+        const merged = await searchMerged(kw, type, page, limit, { artist });
+        cacheSet(key, merged, SEARCH_CACHE_MS);
+        return sendJson(res, 200, { code: 200, result: merged.list, total: merged.total });
+      }
       const { list, total } = await searchMulti(vendor, kw, type, page, limit);
       return sendJson(res, 200, { code: 200, result: list, total });
     }
@@ -716,10 +845,45 @@ async function handleApi(req, res, reqUrl) {
     if (pathname === '/api/lyric') {
       const id = q(reqUrl, 'id');
       if (!id) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
-      let full;
-      if (p.lyricFull) full = await p.lyricFull(id).catch(() => ({ lyric: '', tlyric: '' }));
-      else full = { lyric: await p.lyric(id), tlyric: '' };
-      return sendJson(res, 200, { code: 200, lyric: full.lyric, tlyric: full.tlyric || '' });
+      const name = q(reqUrl, 'name') || '';
+      const artist = q(reqUrl, 'artist') || '';
+      // v3.5.0：歌词多源自动补全（用户反馈「网络歌曲没有歌词」）
+      // 单源缺失时按顺序兜底：主音源 → meting(同源) → meting(QQ) → QQ直连 → 酷狗
+      //   → 按「歌名+歌手」到 QQ 索引里找同曲再取词（网易未登录搜索降级时，
+      //      网易搜不到周杰伦的《晴天》，但 QQ 能搜到 → 用 QQ 的歌词补上）
+      const steps = [];
+      if (p.lyricFull) steps.push(['main', () => p.lyricFull(id).then((r) => ({ lyric: r && r.lyric, tlyric: (r && r.tlyric) || '' }))]);
+      else steps.push(['main', () => p.lyric(id).then((lyric) => ({ lyric, tlyric: '' }))]);
+      steps.push(['meting:' + vendor, () => qmeting.lyric(vendor, id).then((lyric) => ({ lyric, tlyric: '' }))]);
+      steps.push(['meting:tencent', () => qmeting.lyric('tencent', id).then((lyric) => ({ lyric, tlyric: '' }))]);
+      steps.push(['tencent', () => tencent.lyric(id).then((lyric) => ({ lyric, tlyric: '' }))]);
+      steps.push(['kugou', () => kugou.lyric(id).then((lyric) => ({ lyric, tlyric: '' }))]);
+      if (name) {
+        steps.push(['cross:tencent', async () => {
+          const r = await qmeting.search('tencent', name, 1, 12);
+          const list = r.list || [];
+          const sameArtist = artist
+            ? list.find((t) => t.name.includes(name) && t.artist && (t.artist.includes(artist) || artist.includes(t.artist)))
+            : null;
+          const sameName = list.find((t) => t.name.includes(name));
+          const cand = sameArtist || sameName;
+          if (!cand) return { lyric: '', tlyric: '' };
+          return { lyric: await qmeting.lyric('tencent', cand.id), tlyric: '' };
+        }]);
+      }
+      let out = { lyric: '', tlyric: '' };
+      let source = 'none';
+      for (const [tag, fn] of steps) {
+        try {
+          const r = await withTimeout(fn(), 6000);
+          if (r && r.lyric && String(r.lyric).trim()) {
+            out = { lyric: r.lyric, tlyric: r.tlyric || '' };
+            source = tag;
+            break;
+          }
+        } catch (e) { /* 换下一个源 */ }
+      }
+      return sendJson(res, 200, { code: 200, lyric: out.lyric, tlyric: out.tlyric || '', source });
     }
 
     // ══════ 歌曲百科（曲风/语种/发行时间/发行版本/BPM 等，wiki 失败用专辑信息兜底） ══════
@@ -921,6 +1085,9 @@ const server = http.createServer((req, res) => runRequest(req, res, () => {
   catch { res.writeHead(400); return res.end('Bad request'); }
   if(publicGate&&!publicGate(req,res,reqUrl))return;
   if (req.method === 'OPTIONS') {
+    // 必须放在路由分发之前：浏览器对 POST + JSON 会先发预检，
+    // 若先进入路由分支会返回 405（且没有 CORS 头），前端只能看到
+    // 「服务无响应」这种误导性错误。
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',

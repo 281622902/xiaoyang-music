@@ -33,7 +33,7 @@ const UA =
 let lastGoodBase = null;
 // 记录每个 type 最近一次成功的节点（搜索与解析分开记，避免互相污染）
 const lastGoodByType = new Map();
-async function fetchAny(path, { json = false, type = '', validate = null } = {}) {
+async function fetchAny(path, { json = false, type = '', validate = null, keepBody = false } = {}) {
   let lastErr = null;
   // 只保留支持该 type 的节点；lastGoodBase 优先，但必须同样支持该 type
   const candidates = BASES.filter((x) => !type || x.support.includes(type));
@@ -42,27 +42,35 @@ async function fetchAny(path, { json = false, type = '', validate = null } = {})
   for (const node of order) {
     const base = node.base;
     const u = base + path;
-    try {
-      const res = await fetch(u, { headers: { 'User-Agent': UA }, redirect: 'follow' });
-      if (!res.ok) { lastErr = new Error('meting ' + res.status); continue; }
-      if (!json) {
-        if (validate && !validate(res)) { lastErr = new Error('meting invalid response'); continue; }
-        // 302 目标已是 CDN 音频（实测 12MB），这里只需要 headers 与最终 URL，
-        // 主动丢弃响应体，避免挂着一个大流白占连接（fetch 不会自动释放）。
-        try { if (res.body && typeof res.body.cancel === 'function') await res.body.cancel(); } catch (e) { /* 忽略 */ }
+    // 单节点最多试 2 次：meting 公共实例会间歇性返回空体/限流（实测同一秒两次
+    // 调用一次成功一次空），不重试会让「搜得到却返回 0 条」随机发生。
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(u, { headers: { 'User-Agent': UA }, redirect: 'follow' });
+        if (!res.ok) { lastErr = new Error('meting ' + res.status); continue; }
+        if (!json) {
+          if (validate && !validate(res)) { lastErr = new Error('meting invalid response'); continue; }
+          // 302 目标已是 CDN 音频（实测 12MB），这里只需要 headers 与最终 URL，
+          // 主动丢弃响应体，避免挂着一个大流白占连接（fetch 不会自动释放）。
+          // ⚠️ 但调用方要读 body 时（type=lrc 歌词是纯文本）必须 keepBody，
+          //    否则 body 被 cancel 后 res.text() 永远为空。
+          if (!keepBody) {
+            try { if (res.body && typeof res.body.cancel === 'function') await res.body.cancel(); } catch (e) { /* 忽略 */ }
+          }
+          lastGoodBase = base;
+          if (type) lastGoodByType.set(type, base);
+          return res;
+        }
+        const body = await res.json();
+        // JSON 形状校验：meting 的错误响应是 HTTP 200 + {"error":"..."}，
+        // 不校验就会把「不支持该 type 的站」当成成功（→ 搜索静默 0 条）。
+        if (validate && !validate(body)) { lastErr = new Error('meting invalid json'); continue; }
         lastGoodBase = base;
         if (type) lastGoodByType.set(type, base);
-        return res;
+        return body;
+      } catch (e) {
+        lastErr = e;
       }
-      const body = await res.json();
-      // JSON 形状校验：meting 的错误响应是 HTTP 200 + {"error":"..."}，
-      // 不校验就会把「不支持该 type 的站」当成成功（→ 搜索静默 0 条）。
-      if (validate && !validate(body)) { lastErr = new Error('meting invalid json'); continue; }
-      lastGoodBase = base;
-      if (type) lastGoodByType.set(type, base);
-      return body;
-    } catch (e) {
-      lastErr = e;
     }
   }
   throw lastErr || new Error('meting unavailable');
@@ -71,30 +79,57 @@ async function fetchAny(path, { json = false, type = '', validate = null } = {})
 // 生成「实时解析接口」地址：播放器请求它时由 meting 302 到当下新鲜的 CDN 直链。
 // 该地址永不过期（不像 CDN 直链约 1 小时即 403）。
 // 按 type 选节点：解析必须用支持 type=url 的站。
-function liveUrl(id, type = 'url') {
+function liveUrl(id, type = 'url', server = 'netease') {
   const candidates = BASES.filter((x) => x.support.includes(type));
   const byType = lastGoodByType.get(type);
   const base = (byType && candidates.some((x) => x.base === byType) && byType)
     || (lastGoodBase && candidates.some((x) => x.base === lastGoodBase) && lastGoodBase)
     || (candidates[0] && candidates[0].base)
     || BASE;
-  return base + '?type=url&id=' + encodeURIComponent(id) + '&server=netease';
+  return base + '?type=' + type + '&id=' + encodeURIComponent(id) + '&server=' + server;
 }
 
-// meting 仅支持 netease 源（qijieya 部署）；其他源直接跳过
-function onlyNetease(vendor) {
-  return vendor === 'netease' || vendor === 'auto';
+// 支持的平台（server 参数）：netease=网易云 / tencent=QQ音乐 / kugou=酷狗
+const SERVERS = ['netease', 'tencent', 'kugou'];
+function normalizeServer(vendor) {
+  const v = String(vendor || 'netease').toLowerCase();
+  if (v === 'qq' || v === 'tencent') return 'tencent';
+  if (v === 'kg' || v === 'kugou') return 'kugou';
+  if (v === 'netease' || v === '163' || v === 'auto') return 'netease';
+  return SERVERS.includes(v) ? v : 'netease';
 }
 
 // 从 meting 返回的 url/lrc/pic 接口链接中解析出歌曲 ID
+// ⚠️ ID 不一定是纯数字：网易是数字 id，QQ 音乐是 songmid（含字母），
+//    酷狗是 32 位 hash（含字母）——旧正则 [?&]id=(\d+) 会把 QQ/酷狗全部丢掉。
 function idFromUrl(u) {
-  const m = /[?&]id=(\d+)/.exec(String(u || ''));
+  const m = /[?&]id=([A-Za-z0-9_-]+)/.exec(String(u || ''));
   return m ? m[1] : '';
 }
 
+// 把 meting 的 pic 解析接口地址转成可直接 <img src> 的图片直链。
+// （直接用接口地址也能显示，但带查询串的图片在部分安卓 WebView 上会被风控，
+//   转成 CDN 直链更稳、也能被 <img> 缓存。）
+function directPic(server, rawPic) {
+  const u = String(rawPic || '');
+  if (!u) return '';
+  if (/^https?:\/\/.*\.(jpg|jpeg|png|webp)(\?|$)/i.test(u)) return u.replace(/^http:/, 'https:');
+  const pid = idFromUrl(u);
+  if (!pid) return '';
+  if (server === 'tencent') return 'https://y.gtimg.cn/music/photo_new/T002R500x500M000' + pid + '.jpg';
+  if (server === 'kugou') return '';
+  // 网易：pic id 即图片主键
+  return 'https://p1.music.126.net/' + pid + '/' + pid + '.jpg';
+}
+
 // 搜索：type=search，响应数组 [{name, artist, url, pic, lrc}]
+// v3.5.0：支持多平台（server=netease / tencent / kugou）。
+// 背景（用户实测反馈）：网易云未登录搜索接口会返回「降级结果集」——
+// 搜「晴天」只给 RyaVocal/纪钧瀚 等翻唱版本，周杰伦原唱根本不出现；
+// 而 meting 的 server=tencent 走的是 QQ 音乐的真实索引，搜「晴天 周杰伦」
+// 返回的全是周杰伦本人曲目。两者合并即可同时拿到「正确歌手」与「可播曲目」。
 async function search(vendor, keyword, page = 1, limit = 20) {
-  if (!onlyNetease(vendor)) return { list: [], total: 0 };
+  const server = normalizeServer(vendor);
   const kw = String(keyword || '').trim();
   if (!kw) return { list: [], total: 0 };
   try {
@@ -105,7 +140,7 @@ async function search(vendor, keyword, page = 1, limit = 20) {
     const parts = kw.split(/\s+/).filter(Boolean);
     const songName = parts.length > 1 ? parts[parts.length - 1] : kw;
     const artistHint = parts.length > 1 ? parts.slice(0, -1).join(' ').toLowerCase() : '';
-    const u = `?type=search&id=${encodeURIComponent(songName)}&limit=${fetchLimit}&server=netease`;
+    const u = `?type=search&id=${encodeURIComponent(songName)}&limit=${fetchLimit}&server=${server}`;
     // validate：必须是数组才算成功（meting 的错误响应是 HTTP 200 + {"error":"..."}）
     const arr = await fetchAny(u, {
       json: true,
@@ -122,14 +157,14 @@ async function search(vendor, keyword, page = 1, limit = 20) {
         artistId: '',
         album: '',
         albumId: '',
-        pic: s.pic || '',
+        pic: directPic(server, s.pic),
         // 实时解析接口地址（非 CDN token）：手机播放那一刻再请求，必得新鲜直链。
         // 统一改写到本站可用 meting 节点，避免上游返回的节点已挂导致 404/000。
         // 注意用 liveUrl(id,'url')：搜索节点（qijieya）与解析节点可能不同，
         // 不能把「搜索用的节点」当成「解析用的节点」。
-        url: id ? liveUrl(id, 'url') : (s.url || ''),
+        url: id ? liveUrl(id, 'url', server) : (s.url || ''),
         lyric: '',
-        vendor: 'netease',
+        vendor: server,
         duration: 0,
       };
     }).filter((x) => x.id && x.name);
@@ -145,6 +180,37 @@ async function search(vendor, keyword, page = 1, limit = 20) {
   }
 }
 
+// 歌词：type=lrc。meting 支持 netease / tencent / kugou 三种 server，
+// 这是「网络歌曲没有歌词 → 自动补歌词」的主力通道（QQ 音乐歌词覆盖率很高）。
+async function lyric(vendor, id) {
+  if (!id) return '';
+  const server = normalizeServer(vendor);
+  try {
+    const res = await fetchAny(`?type=lrc&id=${encodeURIComponent(id)}&server=${server}`, {
+      type: 'lyric',
+      keepBody: true,
+      validate: (r) => {
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        return !ct.includes('application/json');
+      },
+    });
+    const text = await res.text();
+    const t = String(text || '').trim();
+    if (!t || /^\{/.test(t)) return '';
+    return t;
+  } catch (e) {
+    return '';
+  }
+}
+
+// 封面：type=pic → 转成 CDN 直链
+async function pic(vendor, id) {
+  if (!id) return '';
+  const server = normalizeServer(vendor);
+  const raw = server + '|' + id;
+  return directPic(server, server + '?type=pic&id=' + encodeURIComponent(id)) || raw;
+}
+
 // 解析：type=url 按网易 ID 实时直出 CDN mp3。
 // ⚠️ 关键（2026-11-05 真机实测修正）：
 //   跟随 302 拿到的网易 CDN 直链带有时间戳签名，实测约 1 小时后即 403
@@ -154,11 +220,12 @@ async function search(vendor, keyword, page = 1, limit = 20) {
 //   再请求一次，拿到当下新鲜的 302 目标 → 永远不会过期。
 //   代价是播放时多一次 302 跳转（国内 CDN，毫秒级），换来 100% 可播。
 async function url(vendor, id) {
-  if (!onlyNetease(vendor) || !id) return '';
+  const server = normalizeServer(vendor);
+  if (!id) return '';
   try {
     // 只取 302 目标做可用性校验（探测当前直链是否真的可播），但返回的仍是实时接口地址。
     // type='url' → 允许降级到备用站（两站都支持 type=url）
-    const res = await fetchAny(`?type=url&id=${encodeURIComponent(id)}&server=netease`, {
+    const res = await fetchAny(`?type=url&id=${encodeURIComponent(id)}&server=${server}`, {
       type: 'url',
       validate: (r) => {
         const ct = (r.headers.get('content-type') || '').toLowerCase();
@@ -167,7 +234,7 @@ async function url(vendor, id) {
         return ct.includes('audio') || ct.includes('octet-stream') || /\.mp3(\?|$)/i.test(target);
       },
     });
-    return liveUrl(id, 'url');
+    return liveUrl(id, 'url', server);
   } catch (e) {
     return '';
   }
@@ -175,9 +242,10 @@ async function url(vendor, id) {
 
 // 供服务端内部使用：立即解析出当下可播的 CDN 直链（不走代理、不缓存）
 async function directUrl(vendor, id) {
-  if (!onlyNetease(vendor) || !id) return '';
+  const server = normalizeServer(vendor);
+  if (!id) return '';
   try {
-    const res = await fetchAny(`?type=url&id=${encodeURIComponent(id)}&server=netease`, {
+    const res = await fetchAny(`?type=url&id=${encodeURIComponent(id)}&server=${server}`, {
       type: 'url',
       validate: (r) => /^https?:\/\//i.test(r.url || ''),
     });
@@ -187,4 +255,4 @@ async function directUrl(vendor, id) {
   }
 }
 
-module.exports = { name: 'qmeting', search, url, directUrl };
+module.exports = { name: 'qmeting', search, url, directUrl, lyric, pic, normalizeServer, liveUrl, directPic };

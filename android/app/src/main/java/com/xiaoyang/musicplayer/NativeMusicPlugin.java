@@ -89,18 +89,29 @@ public class NativeMusicPlugin extends Plugin {
     @PluginMethod public void play(PluginCall call){ready(call,()->{if(controller.getPlaybackState()==Player.STATE_IDLE)controller.prepare();MusicService.restored=false;controller.play();});}
     // 倍速（v3.2.0）：Media3 原生变速不变调，1.0 恢复正常
     // ── 桌面歌词悬浮窗（v3.2.2）──────────────────────────────────
-    // 前端播放器每句歌词调用：{show, cur, next, playing}。
+    // 前端播放器每句歌词调用：{show, cur, next, trans, title, artist, playing, progress}。
     // show=true 且无悬浮窗权限 → resolve({needsPermission:true})，前端引导授权后重试。
+    // v3.3.0：扩展信息条（歌名/歌手）、翻译行与播放进度，供新版悬浮窗卡片渲染。
     @PluginMethod public void lyricOverlay(PluginCall call) {
         boolean show = Boolean.TRUE.equals(call.getBoolean("show", false));
         if (!show) {
             getContext().stopService(new Intent(getContext(), LyricOverlayService.class));
+            LyricOverlayService.resetClosedByUser(); // 设置里关闭 → 允许下次再开启
             call.resolve();
             return;
         }
         if (!LyricOverlayService.canDraw(getContext())) {
             JSObject result = new JSObject(); result.put("needsPermission", true);
             call.resolve(result);
+            return;
+        }
+        // 逐句推送一定带 progress 字段；设置页手动开启不带 → 视为用户显式重开
+        Float progressValue = call.getFloat("progress");
+        if (progressValue == null) LyricOverlayService.resetClosedByUser();
+        if (LyricOverlayService.isClosedByUser()) {
+            // 用户已长按关闭：不再被逐句推送重新拉起（需在设置里重新开启）
+            JSObject closed = new JSObject(); closed.put("closedByUser", true);
+            call.resolve(closed);
             return;
         }
         try {
@@ -110,8 +121,34 @@ public class NativeMusicPlugin extends Plugin {
         } catch (Exception e) { call.reject("无法启动悬浮窗：" + (e.getMessage() == null ? "系统拒绝" : e.getMessage()), e); return; }
         String cur = call.getString("cur", "");
         String next = call.getString("next", "");
+        String trans = call.getString("trans", "");
+        String title = call.getString("title", "");
+        String artist = call.getString("artist", "");
         boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", true));
-        main.post(() -> { LyricOverlayService svc = LyricOverlayService.getInstance(); if (svc != null) svc.updateLyric(cur, next, playing); });
+        final float progress = progressValue == null ? 0f : progressValue.floatValue();
+        // 服务刚启动时 onCreate 尚未执行（startService 异步），重试几次把首帧内容推上去
+        final int[] attempts = {0};
+        final Runnable push = new Runnable() {
+            @Override public void run() {
+                LyricOverlayService svc = LyricOverlayService.getInstance();
+                if (svc == null) {
+                    if (attempts[0]++ < 10) { main.postDelayed(this, 60); return; }
+                    return;
+                }
+                // 播放时间取原生 Media3 控制器（安卓真实播放源），未知时显示 --:--
+                int positionMs = -1, durationMs = -1;
+                try {
+                    if (controller != null) {
+                        positionMs = (int) controller.getCurrentPosition();
+                        long duration = controller.getDuration();
+                        if (duration != C.TIME_UNSET && duration > 0) durationMs = (int) duration;
+                    }
+                } catch (Exception ignored) {}
+                svc.setPlaybackTime(positionMs, durationMs);
+                svc.updateLyric(cur, next, trans, title, artist, playing, progress);
+            }
+        };
+        main.post(push);
         call.resolve();
     }
     // 跳系统「显示在其他应用上层」授权页

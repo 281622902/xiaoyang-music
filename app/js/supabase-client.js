@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.4.0', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.5.0', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -85,6 +85,106 @@
   }
   cloud.displayUser = user => user?.phone ? user.phone.replace(/(\d{3})\d{4}(\d{4})$/, '$1****$2') : '云端账户';
 
+  /* ---------- 资料中心：昵称 / 用户名 / 头像 / 密码 ---------- */
+  // 资料统一存在 Supabase Auth 的 user_metadata 里：
+  //   nickname  昵称（界面上显示的友好名称）
+  //   username  用户名（唯一登录别名，登录时可用手机号或用户名）
+  //   avatar_url 头像（前端压缩后的 data:image/jpeg;base64,...）
+  function profileMeta(user) {
+    const meta = (user && user.user_metadata) || {};
+    return {
+      nickname: String(meta.nickname || '').trim(),
+      username: String(meta.username || '').trim(),
+      avatar: String(meta.avatar_url || '').trim(),
+    };
+  }
+  cloud.profile = profileMeta;
+  // 昵称优先，其次用户名，其次脱敏手机号
+  cloud.displayName = user => {
+    const p = profileMeta(user);
+    if (p.nickname) return p.nickname;
+    if (p.username) return p.username;
+    return cloud.displayUser(user);
+  };
+  function validUsername(value) {
+    const name = String(value ?? '').trim();
+    if (!name) throw new Error('用户名不能为空');
+    if (name.length < 3 || name.length > 20) throw new Error('用户名长度需在 3-20 个字符之间');
+    if (!/^[a-zA-Z0-9_.@-]+$/.test(name)) throw new Error('用户名只能包含字母、数字、下划线、点、@ 和连字符');
+    return name;
+  }
+  function validNickname(value) {
+    const name = String(value ?? '').trim();
+    if (!name) throw new Error('昵称不能为空');
+    if (name.length > 24) throw new Error('昵称最多 24 个字符');
+    return name;
+  }
+  // 头像：仅接受 http(s) 直链或 data:image/... 内联图，拒绝其它协议
+  function validAvatar(value) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    if (/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(raw)) {
+      if (raw.length > 300000) throw new Error('头像图片过大，请换一张');
+      return raw;
+    }
+    if (/^https?:\/\//i.test(raw)) return raw;
+    throw new Error('头像格式不支持');
+  }
+  async function updateProfile(patch) {
+    const user = await requireUser();
+    const data = {};
+    if (patch && patch.nickname !== undefined) data.nickname = validNickname(patch.nickname);
+    if (patch && patch.username !== undefined) data.username = validUsername(patch.username);
+    if (patch && patch.avatar !== undefined) data.avatar_url = validAvatar(patch.avatar);
+    if (!Object.keys(data).length) throw new Error('没有需要保存的修改');
+    const { data: out, error } = await client().auth.updateUser({ data });
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message);
+    cloud.user = out?.user || user;
+    return cloud.user;
+  }
+  // 改密码：先验旧密码（Supabase 不返回旧密码，只能重新登录验证），再改密
+  async function changePassword(oldPassword, newPassword) {
+    const user = await requireUser();
+    if (!user.phone) throw new Error('当前账号没有绑定手机号，无法验证原密码');
+    const oldPw = passwordValue(oldPassword);
+    const newPw = passwordValue(newPassword);
+    if (newPw.length < 6) throw new Error('新密码至少 6 位');
+    if (oldPw === newPw) throw new Error('新密码不能与原密码相同');
+    const { error: signErr } = await client().auth.signInWithPassword({ phone: normalizePhone(user.phone), password: oldPw });
+    if (signErr) throw new Error('原密码不正确');
+    const { error } = await client().auth.updateUser({ password: newPw });
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message);
+    return true;
+  }
+  // 头像本地压缩：≤128×128 的 JPEG data URL（省流量 + 适配 user_metadata 体积）
+  function compressAvatar(file, size) {
+    return new Promise((resolve, reject) => {
+      if (!file || !/^image\//.test(file.type || '')) return reject(new Error('请选择图片文件'));
+      if (file.size > 8 * 1024 * 1024) return reject(new Error('图片过大，请选择 8MB 以内的图片'));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('图片读取失败'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('图片解析失败，请换一张'));
+        img.onload = () => {
+          const max = size || 128;
+          const scale = Math.min(1, max / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          try { resolve(canvas.toDataURL('image/jpeg', 0.82)); }
+          catch (e) { reject(new Error('头像处理失败')); }
+        };
+        img.src = String(reader.result || '');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   /* ---------- 云端歌单（user_playlists 表，见 supabase/playlists.sql） ---------- */
   // tracks 条目结构：{ name, url, added_at }；url 是稳定引用（provider 页面地址），
   // 播放时再解析，过期 CDN 直链不入库。
@@ -167,7 +267,8 @@
     return removed;
   }
   Object.assign(global, { registerUser, loginUser, logoutUser, addFavorite, getFavorites,
-    createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist });
+    createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist,
+    updateProfile, changePassword, compressAvatar });
   cloud.getUpdateInfo = async function () {
     let native = null, androidInfo = null;
     try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }

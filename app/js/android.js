@@ -46,7 +46,7 @@
   let route = 'discover', previousRoute = 'discover', libraryTab = 'playlists', detail = null;
   let playlists = read('uzz.playlists', []), searchHistory = read('uzz.searchHistory', []);
   let localTracks = read('xy.android.localTracks', []);
-  let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort;
+  let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort, searchArtistHint = '';
   let channel = 'recommend';
   let detailGeneration = 0, discoveryGeneration = 0, cloudGeneration = 0, authGeneration = 0, heart;
   let cloudRows = [], authMode = 'login', selectedTrack = null, lastFocus = null, sheetFocus = null, lastBack = 0;
@@ -66,7 +66,7 @@
   }
   function closeSheet() { $('sheetBackdrop').hidden=true; sheetFocus?.focus?.(); }
   function closeAccount() { $('accountBackdrop').hidden=true; $('mobilePassword').value=''; lastFocus?.focus?.(); }
-  function openAccount() { lastFocus=document.activeElement; $('accountBackdrop').hidden=false; $('mobileAuthStatus').textContent=XYCloud.error || ''; renderAuth(); $('mobileLoginTitle').tabIndex=-1; $('mobileLoginTitle').focus(); }
+  function openAccount() { lastFocus=document.activeElement; $('accountBackdrop').hidden=false; $('mobileAuthStatus').textContent=XYCloud.error || ''; renderAuth(); toggleCaptcha(); $('mobileLoginTitle').tabIndex=-1; $('mobileLoginTitle').focus(); }
   function showPlayer() { if (!Player.getState().current) return toast('先选择一首喜欢的歌曲'); $('mobilePlayer').hidden=false; $('mobileSongName').tabIndex=-1; $('mobileSongName').focus({preventScroll:true}); }
   function closePlayer() { $('mobilePlayer').hidden=true; }
   function showRoute(value) {
@@ -90,8 +90,17 @@
     renderCounts(); renderAuth();
     const pl=playlists.slice(0,4);
     $('mePlaylists').innerHTML=pl.map(p=>'<button class="me-row" data-local="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(p.cover))+'" alt=""><span><strong>'+escape(p.name)+'</strong><small>歌单 · '+(p.tracks?.length||0)+' 首</small></span></button>').join('') || '<p class="muted" style="padding:14px 4px;">还没有歌单，去首页看看推荐，或搜索喜欢的歌。</p>';
+    paintMeRecent();
     renderMeStats();
   }
+  // 「我的」页最近常听：2 列小卡，与其它页的列表/网格形态都不同
+  function paintMeRecent() {
+    const box=$('meRecent'); if(!box)return;
+    const rows=(Player.getHistory()||[]).slice(0,6);
+    box.innerHTML=rows.length?rows.map((t,i)=>'<button class="recent-card" data-recent-index="'+i+'"><img loading="lazy" src="'+escape(cover(t.pic))+'"><span><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape(t.artist||'')+'</small></span></button>').join(''):'<p class="muted" style="grid-column:1/-1;padding:6px 2px;">还没有播放记录，去首页听首歌吧。</p>';
+    recentRows=rows;
+  }
+  let recentRows=[];
   // 「我的」页四项统计（v3.4.0）：全部由真实本机数据推导，不再是写死的假数字
   function meStats() {
     const favs=Player.getFavorites()||[];
@@ -110,6 +119,13 @@
     const set=(id,v)=>{const el=$(id);if(el)el.textContent=v;};
     set('meFollow',s.follows); set('meFans',s.fans);
     const lv=$('meLevel'); if(lv) lv.textContent=s.level;
+    // 等级进度条：每 12 分升一级。score%12===0 表示刚升过级 → 还差满 12 分
+    const score=(Player.getFavorites()||[]).length*3+(Player.getHistory()||[]).length;
+    const rem=score%12;
+    const pct=rem===0?0:Math.round(rem/12*100);
+    const bar=$('meLevelBar'); if(bar)bar.style.width=pct+'%';
+    const txt=$('meLevelText');
+    if(txt)txt.textContent='Lv.'+s.level+' · 距下一级 '+(12-rem)+' 分';
   }
   // 笔记页（v3.3.0）：用发现页数据生成双列瀑布流卡片
   let notesMode='feed';
@@ -131,6 +147,10 @@
       src=mine.concat(artistCards);
     } else src=pools;
     const grid=$('notesGrid'), emptyBox=$('notesEmpty');
+    const feedTitle=$('notesFeedTitle'), feedTip=$('notesFeedTip');
+    if(feedTitle)feedTitle.textContent=notesMode==='follow'?'我的关注':'广场';
+    if(feedTip)feedTip.textContent=notesMode==='follow'?'你收藏的歌手与歌单':'正在发生的音乐话题';
+    paintNotesTimeline(src);
     const html=src.slice(0,12).map((n,i)=>{
       const d=n.data;
       const pic=n.kind==='artist'?(d.pic||'icon.svg'):(d.cover||d.pic||d.picUrl||'icon.svg');
@@ -150,9 +170,57 @@
   function renderSearchWelcome() {
     $('searchHistory').innerHTML=searchHistory.length?searchHistory.slice(0,10).map(t=>'<button data-query="'+escape(t)+'">'+escape(t)+'</button>').join(''): '<span class="muted">最近搜索会出现在这里</span>';
   }
+  /* ---------- 笔记页「今日精选」时间线（v3.5.0）---------- */
+  // 笔记页顶部是一条按天排的横向时间线，与下面的瀑布流形成层次。
+  const NOTE_DAYS = ['今天','昨天','前天','3 天前','4 天前','5 天前','一周前'];
+  function paintNotesTimeline(src) {
+    const box=$('notesTimeline'); if(!box)return;
+    const items=(src||[]).slice(0,7);
+    if(!items.length){box.innerHTML='';return;}
+    box.innerHTML=items.map((n,i)=>{
+      const d=n.data||{};
+      const pic=d.cover||d.pic||d.picUrl||'icon.svg';
+      const name=d.name||'音乐卡片';
+      const attr=n.kind==='chart'?'data-action="charts"':n.kind==='artist'?'data-action="openArtist" data-artist="'+escape(d.id||'')+'" data-artist-name="'+escape(name)+'"':(d.local?'data-local-playlist="'+escape(d.id||'')+'"':'data-online="'+escape(d.id||'')+'" data-title="'+escape(name)+'"');
+      return '<button class="tl-card" '+attr+'><img loading="lazy" src="'+escape(cover(pic))+'"><span class="tl-date">'+NOTE_DAYS[i%NOTE_DAYS.length]+'</span><strong>'+escape(name)+'</strong><small>'+escape(d.desc||(n.kind==='artist'?'你喜欢的歌手':'精选音乐卡片'))+'</small></button>';
+    }).join('');
+  }
   async function loadHot() {
-    try { const r=await UzzApi.suggest(''); $('hotSearches').innerHTML=r.hot.slice(0,12).map((t,i)=>{const name=typeof t==='string'?t:(t.searchWord||t.name||t.keyword||'');return '<button data-query="'+escape(name)+'"><b>'+String(i+1).padStart(2,'0')+'</b>'+escape(name)+'</button>';}).join('') || empty('输入关键词，发现你想听的音乐'); }
+    // 热词云：按热度分档字号（w1 最热 → w6 最冷），搜索页专属视觉
+    try {
+      const r=await UzzApi.suggest('');
+      const words=(r.hot||[]).map(t=>typeof t==='string'?t:(t.searchWord||t.name||t.keyword||'')).filter(Boolean);
+      $('hotSearches').innerHTML=words.slice(0,18).map((name,i)=>{
+        const w=i===0?'w1':i===1?'w2':i<4?'w3':i<7?'w4':i<12?'w5':'w6';
+        return '<button class="'+w+'" data-query="'+escape(name)+'"><b>'+String(i+1).padStart(2,'0')+'</b>'+escape(name)+'</button>';
+      }).join('') || empty('输入关键词，发现你想听的音乐');
+    }
     catch { $('hotSearches').innerHTML=empty('热搜暂时不可用，你仍可直接输入关键词搜索。'); }
+  }
+  // 从搜索框输入里识别「歌名 + 歌手」。
+  // 用户输入习惯有两种：
+  //   「晴天 - 周杰伦」  → 明确分隔，最可靠
+  //   「周杰伦 晴天」/「晴天 周杰伦」→ 空格分隔，靠歌手词典判断
+  // 识别出的歌手会传给后端做歌手强匹配，把该歌手的版本置顶。
+  const ARTIST_HINTS = ['周杰伦','林俊杰','陈奕迅','薛之谦','张杰','邓紫棋','五月天','王菲','张学友','李宗盛','陶喆','许巍','朴树','汪峰','毛不易','赵雷','李荣浩','周深','蔡依林','孙燕姿','莫文蔚','那英','田馥甄','许嵩','汪苏泷','张碧晨','刘惜君','单依纯','胡彦斌','梁静茹','任贤齐','刘若英','费玉清','陈奕迅','周杰伦','李宇春','韩红','张敬轩','关喆','金志文','刘瑞琦','陈鸿宇','毛不易'];
+  function parseArtistHint(keyword) {
+    const kw = String(keyword || '').trim();
+    const sep = kw.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+    if (sep) {
+      const a = sep[1].trim(), b = sep[2].trim();
+      const aHit = ARTIST_HINTS.some(h => a.includes(h));
+      const bHit = ARTIST_HINTS.some(h => b.includes(h));
+      if (bHit && !aHit) return { title: a, artist: b };
+      return { title: a, artist: b };
+    }
+    const parts = kw.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) return { title: kw, artist: '' };
+    for (const p of parts) {
+      if (ARTIST_HINTS.some(h => p.includes(h) || h.includes(p))) {
+        return { title: parts.filter(x => x !== p).join(' ') || kw, artist: p };
+      }
+    }
+    return { title: kw, artist: '' };
   }
   async function search(more=false) {
     const keyword=$('mobileSearchInput').value.trim(); if(!keyword)return;
@@ -160,13 +228,41 @@
     if(!more || keyword!==searchKeyword){searchPage=1;searchRows=[];}else searchPage++;
     searchKeyword=keyword; searchHistory=[keyword,...searchHistory.filter(s=>s!==keyword)].slice(0,20); save('uzz.searchHistory',searchHistory);
     $('searchWelcome').hidden=true; $('searchResults').hidden=false; $('searchSummary').textContent='正在寻找好声音…'; $('searchMore').hidden=true;
-    if(!more)$('mobileResults').innerHTML='';
+    if(!more){ $('mobileResults').innerHTML=''; const gb=$('searchGrid'); if(gb)gb.innerHTML=''; }
+    // 歌手识别：命中时后端会把该歌手的版本置顶（解决「搜周杰伦的歌搜到别人唱的」）
+    const hint = more ? (searchArtistHint || parseArtistHint(keyword)) : parseArtistHint(keyword);
+    searchArtistHint = hint.artist || '';
     try {
-      const r=await UzzApi.search(keyword,searchType,searchPage,20,searchAbort.signal); if(ticket!==searchGeneration)return;
+      const r=await UzzApi.search(keyword,searchType,searchPage,20,searchAbort.signal,hint.artist); if(ticket!==searchGeneration)return;
       searchRows=more?[...searchRows,...r.list]:r.list;
-      $('searchSummary').textContent=r.total?'找到 '+r.total+' 个结果':'暂未找到结果，试试其他关键词或音源';
-      $('mobileResults').innerHTML=tracksHtml(searchRows,'search'); $('searchMore').hidden=r.list.length<20||searchRows.length>=r.total;
+      const artistNote=(searchType==='song'&&hint.artist)?'（已优先展示 '+hint.artist+' 的版本）':'';
+      $('searchSummary').textContent=r.total?('找到 '+r.total+' 个结果'+artistNote):'暂未找到结果，试试其他关键词或音源';
+      paintSearchResults();
+      $('searchMore').hidden=r.list.length<20||searchRows.length>=r.total;
     } catch(e) {if(ticket!==searchGeneration)return; if(more)searchPage--; $('searchSummary').textContent='搜索失败：'+e.message; if(!more)$('mobileResults').innerHTML='<li>'+failure('检查网络后重试。','retrySearch')+'</li>';else $('searchMore').hidden=false;}
+  }
+  // 搜索结果按分类分流：单曲 → 列表（带序号）；歌手/专辑/歌单 → 大图网格
+  const SEARCH_KIND_LABEL = { artist:'歌手', album:'专辑', playlist:'歌单' };
+  function paintSearchResults() {
+    const isSong = searchType === 'song';
+    const listBox = $('mobileResults'), gridBox = $('searchGrid');
+    if (listBox) listBox.hidden = !isSong;
+    if (gridBox) {
+      gridBox.hidden = isSong;
+      if (!isSong) {
+        const kind = SEARCH_KIND_LABEL[searchType] || '结果';
+        gridBox.innerHTML = searchRows.length ? searchRows.map((t,i)=>
+          '<button data-search-index="'+i+'"><img loading="lazy" src="'+escape(cover(t.pic))+'"><strong>'+escape(t.name||'未知')+'</strong><small>'+escape(kind+' · '+(t.artist||t.album||'—'))+'</small></button>'
+        ).join('') : empty('没有找到相关'+kind);
+      }
+    }
+    if (isSong && listBox) {
+      listBox.innerHTML = searchRows.length ? searchRows.map((t,i)=>
+        '<li class="track-row"><span class="track-index">'+(i+1)+'</span>'+
+        '<button class="track-main" data-track-list="search" data-track-index="'+i+'"><img loading="lazy" src="'+escape(cover(t.pic))+'"><span><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape([t.artist,t.album].filter(Boolean).join(' · '))+'</small></span></button></li>'
+      ).join('') : empty('没有找到相关歌曲');
+      trackSets.set('search', searchRows);
+    }
   }
   async function loadDiscover() {
     const ticket=++discoveryGeneration; $('refreshDiscover').disabled=true;
@@ -180,10 +276,38 @@
     if(route==='notes')renderNotes();
     if(results[0].status==='rejected'&&!data.playlists.length&&channel==='recommend')$('recommendations').innerHTML=failure(results[0].reason.message,'settings');
     $('refreshDiscover').disabled=false;
+    loadHotArtists();
   }
   function paintDiscover(data) {
     $('recommendations').innerHTML=data.playlists.slice(0,8).map(p=>'<button class="cover-card" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><div class="cover-art"><img loading="lazy" src="'+escape(cover(p.cover||p.pic||p.picUrl))+'" alt=""><span class="cover-count">▷ '+(Number(p.playCount)>10000?Math.floor(p.playCount/10000)+'万':Number(p.playCount)||'精选')+'</span></div><strong>'+escape(p.name)+'</strong><small>精选歌单 · 发现你的下一首喜欢</small></button>').join('') || empty('暂无推荐，先去搜索喜欢的歌曲吧。');
-    $('chartCards').innerHTML=data.charts.slice(0,4).map((p,i)=>'<button class="chart-card" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><span>TOP '+String(i+1).padStart(2,'0')+'</span><strong>'+escape(p.name)+'</strong><small>'+escape(p.desc)+'</small></button>').join('');
+    // 榜单：前三名用大卡 + 金银铜名次，其余小卡（首页专属的排行榜视觉）
+    $('chartCards').innerHTML=data.charts.slice(0,4).map((p,i)=>'<button class="chart-card chart-rank-'+(i+1)+'" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><span>'+(i<3?['🥇','🥈','🥉'][i]:'TOP '+String(i+1).padStart(2,'0'))+'</span><strong>'+escape(p.name)+'</strong><small>'+escape(p.desc||'实时榜单')+'</small></button>').join('');
+    paintHotArtists(read('xy.android.hotArtists',null));
+  }
+  /* ---------- 首页「热门歌手」横滑（v3.5.0）---------- */
+  // 数据来源：取首个榜单的前 60 首，按歌手去重得到「此刻最受欢迎」，
+  // 与笔记页的「关注」不同——这里展示的是全站热度，不是本机偏好。
+  function paintHotArtists(list) {
+    const box=$('hotArtists'); if(!box)return;
+    if(!list||!list.length){box.innerHTML='';return;}
+    box.innerHTML=list.map(a=>'<button class="artist-chip" data-action="openArtist" data-artist="'+escape(a.id||'')+'" data-artist-name="'+escape(a.name)+'"><img loading="lazy" src="'+escape(cover(a.pic))+'"><span>'+escape(a.name)+'</span></button>').join('');
+  }
+  async function loadHotArtists() {
+    const box=$('hotArtists'); if(!box)return;
+    const cached=read('xy.android.hotArtists',null);
+    if(cached&&cached.length){paintHotArtists(cached);return;}
+    try{
+      const charts=await UzzApi.getCharts();
+      const chart=charts[0]; if(!chart)return;
+      const r=await UzzApi.getPlaylist(chart.id,60);
+      const seen=new Set(),list=[];
+      for(const t of (r.tracks||[])){
+        const a=(t.artist||'').trim(); if(!a||seen.has(a))continue;
+        seen.add(a); list.push({id:t.artistId||'',name:a,pic:t.pic||''});
+        if(list.length>=12)break;
+      }
+      if(list.length){save('xy.android.hotArtists',list);paintHotArtists(list);}
+    }catch(e){/* 热门歌手为增强项，失败不阻塞首页 */}
   }
   // ══════ 首页频道（v3.4.0）══════════════════════════════════
   // 网易云风格的 6 个频道 Tab，此前是静态文字、点击无反应。
@@ -273,16 +397,44 @@
   function play(track) { if(!track)return; Player.loadAndPlay(track).catch(e=>toast(e.message)); }
   function renderLibrary() {
     document.querySelectorAll('[data-library]').forEach(e=>e.classList.toggle('active',e.dataset.library===libraryTab));
+    renderLibraryStats();
     if(libraryTab==='playlists') {
-      $('libraryContent').innerHTML=playlists.length?playlists.map(p=>'<button class="saved-playlist" data-local-playlist="'+escape(p.id)+'"><img src="'+escape(cover(p.cover||p.tracks?.[0]?.pic))+'" alt=""><span><strong>'+escape(p.name)+'</strong><small>'+(p.tracks?.length||0)+' 首 · '+(p.kind==='collected'?'已保存':'我创建的')+'</small></span></button>').join(''):empty('把喜欢的音乐装进歌单。点右上角 ＋ 创建第一张歌单。');
+      // 歌单用大图网格（与「喜欢/最近」的列表形态区分）
+      $('libraryContent').innerHTML=playlists.length?'<div class="lib-grid">'+playlists.map(p=>'<button data-local-playlist="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(p.cover||p.tracks?.[0]?.pic))+'" alt=""><strong>'+escape(p.name)+'</strong><small>'+(p.tracks?.length||0)+' 首 · '+(p.kind==='collected'?'已保存':'我创建')+'</small></button>').join('')+'</div>':empty('把喜欢的音乐装进歌单。点右上角 ＋ 创建第一张歌单。');
     } else if(libraryTab==='local') {
       $('libraryContent').innerHTML='<button class="primary wide-button" data-action="importLocal">＋ 选择本机音乐文件</button><p class="muted">音频不上传。无法保存读取授权的文件会复制到应用内部（单个文件最多 256MB），卸载应用会移除副本，原文件仍保留。播放能力取决于文件编码与设备支持。</p>'+(localTracks.some(t=>!t.persistent)?'<p class="muted">部分文件是临时授权；重启后无法播放时，请重新选择文件授权。</p>':'')+'<ul class="track-list">'+tracksHtml(localTracks,'local')+'</ul>';
     } else if(libraryTab==='cloud') {
       if(!XYCloud.user){$('libraryContent').innerHTML=empty('登录后，在这里查看云端收藏。')+'<button class="wide-button" data-action="account">登录云端账户</button>';return;}
       $('libraryContent').innerHTML='<button class="wide-button" data-action="refreshCloud">刷新云端收藏</button><ul id="mobileCloudList" class="track-list">'+tracksHtml(cloudRows,'cloud')+'</ul><p class="muted">云端保存的旧音频链接可能过期；本机歌单会在播放时重新解析地址。</p>';
       if(!cloudRows.length)refreshCloud();
-    } else $('libraryContent').innerHTML='<ul class="track-list">'+tracksHtml(libraryTab==='history'?Player.getHistory():Player.getFavorites(),'library')+'</ul>';
+    } else if(libraryTab==='history') {
+      // 最近播放按时间分组（今天/昨天/更早）——列表页也有结构感
+      const rows=Player.getHistory()||[];
+      const groups=groupByDay(rows);
+      const body=Object.keys(groups).map(k=>'<div class="lib-group"><h3>'+k+'</h3><ul class="track-list">'+tracksHtml(groups[k],'library')+'</ul></div>').join('');
+      $('libraryContent').innerHTML=rows.length?body:empty('还没有播放记录，去首页听听歌吧。');
+    } else $('libraryContent').innerHTML='<ul class="track-list">'+tracksHtml(Player.getFavorites()||[],'library')+'</ul>';
     renderCounts();
+  }
+  // 音乐库统计条：四种资源一眼看清
+  function renderLibraryStats() {
+    const box=$('libraryStats'); if(!box)return;
+    const favs=(Player.getFavorites()||[]).length;
+    const hist=(Player.getHistory()||[]).length;
+    const items=[{n:playlists.length,l:'张歌单'},{n:favs,l:'首喜欢'},{n:localTracks.length,l:'首本地'},{n:hist,l:'条最近'}];
+    box.innerHTML=items.map(x=>'<div class="lib-stat"><strong>'+x.n+'</strong><span>'+x.l+'</span></div>').join('');
+  }
+  // 最近播放按天分组
+  function groupByDay(rows) {
+    const now=Date.now();
+    const g={'今天':[],'昨天':[],'更早':[]};
+    for(const t of (rows||[])){
+      const at=Number(t.at||0);
+      const days=at?Math.floor((now-at)/86400000):99;
+      if(days<=0)g['今天'].push(t); else if(days===1)g['昨天'].push(t); else g['更早'].push(t);
+    }
+    for(const k of Object.keys(g))if(!g[k].length)delete g[k];
+    return g;
   }
   async function refreshCloud() {
     if(!XYCloud.user)return;const ticket=++cloudGeneration,authTicket=authGeneration;
@@ -361,7 +513,141 @@
   }
   // 「我的」页快捷开关：浅色↔深色循环（完整三态在设置中心）
   function cycleTheme() { localStorage.setItem('xy.android.theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); }
-  function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;$('mobileMemberName').textContent=user?XYCloud.displayUser(user):'';const name=user?XYCloud.displayUser(user):'登录，让喜欢随行';$('mobileAccountName').textContent=name;$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;const av=$('meAvatar');if(av)av.textContent=(user?name:'杨').slice(0,1);}
+  function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;const shown=user?(XYCloud.displayName?XYCloud.displayName(user):XYCloud.displayUser(user)):'';$('mobileMemberName').textContent=shown;const name=shown||'登录，让喜欢随行';$('mobileAccountName').textContent=name;$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;const av=$('meAvatar');if(av&&!av.style.backgroundImage)av.textContent=(user?name:'杨').slice(0,1);if(user)fillProfile(user);refreshAccountRows();}
+  // 设置页「账号与安全」分组里的账户状态
+  function refreshAccountRows() {
+    const el=$('valAccount');
+    if(el)el.textContent=XYCloud.user?(XYCloud.displayName?XYCloud.displayName(XYCloud.user):'已登录'):'未登录';
+  }
+  // 关于
+  function showAboutSheet() {
+    const ver=(global.XYCloud?.appVersion||'').replace(/^v/,'');
+    sheet('关于小杨音乐','<div class="about-box"><img src="icon.svg" alt=""><strong>小杨音乐</strong><span class="muted">版本 v'+escape(ver)+'</span></div><div class="wiki-list"><div class="wiki-row"><span>定位</span><strong>让喜欢，随身听</strong></div><div class="wiki-row"><span>音源</span><strong>网易云音乐 · QQ 音乐 · 酷狗</strong></div><div class="wiki-row"><span>账号</span><strong>Supabase 手机号登录</strong></div><div class="wiki-row"><span>许可</span><strong>个人非商业使用</strong></div></div><p class="muted" style="margin-top:14px;">本应用所有歌曲与歌词均来自公开音乐接口，版权归原权利人所有。</p>');
+  }
+  // 设备授权（v3.5.0 防泄露机制）
+  function showDeviceAuthSheet() {
+    const da=global.XYDeviceAuth;
+    if(!da)return sheet('设备授权','<p class="muted">授权模块未加载。</p>');
+    sheet('设备授权','<div id="deviceAuthPanel" class="device-auth"><p class="muted">正在读取设备信息…</p></div>');
+    da.status().then(st=>{
+      const panel=$('deviceAuthPanel'); if(!panel)return;
+      panel.innerHTML='<div class="wiki-list">'+
+        '<div class="wiki-row"><span>设备码</span><strong>'+escape(st.deviceId||'—')+'</strong></div>'+
+        '<div class="wiki-row"><span>当前版本</span><strong>'+escape(st.version||'—')+'</strong></div>'+
+        '<div class="wiki-row"><span>授权状态</span><strong>'+(st.authorized?'已授权':'未授权')+'</strong></div>'+
+        (st.authorized&&st.authorizedAt?'<div class="wiki-row"><span>授权时间</span><strong>'+escape(String(st.authorizedAt).slice(0,10))+'</strong></div>':'')+
+        (st.renewed?'<div class="wiki-row"><span>续期方式</span><strong>同设备升级自动续期</strong></div>':'')+
+        '</div>'+
+        (st.authorized
+          ? '<button class="wide-button" id="deviceAuthReset">解除本机授权</button>'
+          : '<label>授权码<input id="deviceAuthCode" placeholder="XY3.5.0-XXXX-XXXX-XXXX" autocomplete="off"></label><button class="primary wide-button" id="deviceAuthSubmit">验证并激活</button><p class="muted" style="margin-top:10px;">首次在新设备安装时需要向作者索取本版本的授权码；同一台设备升级版本会自动续期，无需再次输入。</p>');
+      const submit=$('deviceAuthSubmit');
+      if(submit)submit.onclick=async()=>{
+        submit.disabled=true;
+        const code=($('deviceAuthCode')?.value||'').trim();
+        const r=await da.verify(code);
+        submit.disabled=false;
+        if(r.ok){toast('授权成功');closeSheet();refreshDeviceAuthRow();}
+        else toast(r.msg||'授权码无效');
+      };
+      const reset=$('deviceAuthReset');
+      if(reset)reset.onclick=async()=>{await da.reset();toast('已解除本机授权');closeSheet();refreshDeviceAuthRow();};
+    }).catch(e=>{const panel=$('deviceAuthPanel');if(panel)panel.innerHTML='<p class="muted">读取设备信息失败：'+escape(e.message||'未知错误')+'</p>';});
+  }
+  function refreshDeviceAuthRow() {
+    const el=$('valDeviceAuth'); if(!el)return;
+    const da=global.XYDeviceAuth;
+    if(!da){el.textContent='—';return;}
+    da.status().then(st=>{el.textContent=st.authorized?(st.renewed?'已授权 · 自动续期':'已授权'):'未授权';}).catch(()=>{el.textContent='—';});
+  }
+
+  /* ---------- 注册图形验证码 ---------- */
+  let captchaId = '', captchaSvg = '';
+  function paintCaptcha(svg) {
+    const box = $('mobileCaptchaBtn');
+    if (!box) return;
+    box.innerHTML = svg || '<span class="captcha-fallback">点击刷新</span>';
+    // 后端返回的 SVG 需带尺寸，这里补一层 viewBox 适配容器
+    const svgEl = box.querySelector('svg');
+    if (svgEl) { svgEl.setAttribute('preserveAspectRatio','none'); svgEl.removeAttribute('width'); svgEl.removeAttribute('height'); }
+  }
+  async function loadCaptcha() {
+    const box = $('mobileCaptchaBtn');
+    if (!box) return;
+    box.classList.add('loading');
+    try {
+      const r = await UzzApi.getCaptcha();
+      captchaId = r.id; captchaSvg = r.svg;
+      paintCaptcha(r.svg);
+      $('mobileCaptchaInput').value = '';
+    } catch (e) {
+      captchaId = ''; paintCaptcha('');
+      box.classList.remove('loading');
+      box.innerHTML = '<span class="captcha-fallback">加载失败，点此重试</span>';
+      box.title = e.message || '验证码加载失败';
+      return;
+    }
+    box.classList.remove('loading');
+  }
+  function toggleCaptcha() {
+    const row = $('mobileCaptchaRow');
+    if (!row) return;
+    const need = authMode === 'register';
+    row.hidden = !need;
+    if (need && !captchaId) loadCaptcha();
+    if (!need) $('mobileCaptchaInput').value = '';
+  }
+
+  /* ---------- 资料中心：昵称 / 用户名 / 头像 ---------- */
+  let pendingAvatar = '';          // 选好但尚未保存的头像（data URL）
+  function fillProfile(user) {
+    const p = XYCloud.profile ? XYCloud.profile(user) : { nickname:'', username:'', avatar:'' };
+    const nick = $('pfNickname'), name = $('pfUsername'), img = $('pfAvatar');
+    if (nick) nick.value = p.nickname || '';
+    if (name) name.value = p.username || '';
+    pendingAvatar = p.avatar || '';
+    paintAvatar(p.avatar || '');
+    const av = $('meAvatar');
+    if (av && p.avatar) { av.textContent = ''; av.style.backgroundImage = 'url("' + p.avatar.replace(/"/g,'%22') + '")'; av.style.backgroundSize = 'cover'; av.style.backgroundPosition = 'center'; }
+  }
+  function paintAvatar(src) {
+    const img = $('pfAvatar');
+    if (!img) return;
+    if (src) { img.src = src; img.classList.add('has-image'); img.style.backgroundImage = ''; }
+    else { img.removeAttribute('src'); img.classList.remove('has-image'); img.textContent = ((XYCloud.displayName ? XYCloud.displayName(XYCloud.user) : '杨') || '杨').slice(0,1); }
+  }
+  async function saveProfile() {
+    const btn = $('pfSave');
+    const nickname = $('pfNickname')?.value || '';
+    const username = $('pfUsername')?.value || '';
+    btn.disabled = true;
+    $('mobileAuthStatus').textContent = '正在保存资料…';
+    try {
+      await updateProfile({ nickname, username, avatar: pendingAvatar });
+      renderAuth();
+      $('mobileAuthStatus').textContent = '资料已保存';
+      toast('资料已保存');
+    } catch (e) {
+      $('mobileAuthStatus').textContent = e.message || '保存失败';
+    } finally { btn.disabled = false; }
+  }
+  async function doChangePassword() {
+    const btn = $('pfChangePwd');
+    const oldPw = $('pfOldPwd').value, newPw = $('pfNewPwd').value, newPw2 = $('pfNewPwd2').value;
+    if (!oldPw || !newPw) { $('mobileAuthStatus').textContent = '请填写原密码和新密码'; return; }
+    if (newPw !== newPw2) { $('mobileAuthStatus').textContent = '两次输入的新密码不一致'; return; }
+    btn.disabled = true;
+    $('mobileAuthStatus').textContent = '正在修改密码…';
+    try {
+      await changePassword(oldPw, newPw);
+      $('pfOldPwd').value = ''; $('pfNewPwd').value = ''; $('pfNewPwd2').value = '';
+      $('mobileAuthStatus').textContent = '密码修改成功';
+      toast('密码已修改');
+    } catch (e) {
+      $('mobileAuthStatus').textContent = e.message || '修改失败';
+    } finally { btn.disabled = false; }
+  }
+
   async function checkUpdate() {
     toast('正在检查更新…');
     let r;
@@ -440,6 +726,33 @@
   async function networkDiagnostics(){if(!$('accountBackdrop').hidden)closeAccount();sheet('网络诊断','<p class="muted">正在分别检查音乐服务和 Supabase… 不发送手机号或密码。</p>');try{const r=await XYNetwork.diagnose();if($('sheetTitle').textContent!=='网络诊断')return;const text='音乐服务：'+(r.backend||'尚未设置')+'\n'+(r.music.ok?'✓ ':'× ')+r.music.message+'\n\n云端账户：\n'+(r.cloud.ok?'✓ ':'× ')+r.cloud.message;$('sheetContent').replaceChildren();const p=document.createElement('p');p.className='form-status';p.style.whiteSpace='pre-wrap';p.textContent=text;$('sheetContent').appendChild(p);const b=document.createElement('button');b.className='wide-button';b.dataset.action='settings';b.textContent='修改音乐服务地址';$('sheetContent').appendChild(b);}catch(e){toast(e.message);}}
   // ── 设置中心（v3.2.2 网易云风格列表）────────────────────────
   let sleepTimer = null, sleepDeadline = 0, lastSleepPick = 0;
+  // 播放器面板里的倍速/定时/音质快捷入口（v3.5.0）——
+  // 这三项原来只藏在设置页，用户在播放界面找不到（用户明确诉求）。
+  const QUALITY_CHIP_LABELS = { standard: '标准', ex: '高品', lossless: '无损' };
+  function refreshPlayerChips() {
+    const chipRate = $('mobileRate'), chipSleep = $('mobileSleep'), chipQuality = $('mobileQuality');
+    if (chipRate) {
+      const r = Number(localStorage.getItem('uzz.rate') || 1) || 1;
+      chipRate.textContent = (r === 1 ? '1.0' : String(r)) + 'x';
+      chipRate.classList.toggle('active', r !== 1);
+    }
+    if (chipQuality) {
+      const q = localStorage.getItem('uzz.quality') || 'standard';
+      chipQuality.textContent = QUALITY_CHIP_LABELS[q] || '标准';
+      chipQuality.classList.toggle('active', q !== 'standard');
+    }
+    if (chipSleep) {
+      const left = sleepDeadline - Date.now();
+      if (sleepDeadline > 0 && left > 0) {
+        const m = Math.ceil(left / 60000);
+        chipSleep.textContent = m + ' 分钟后停';
+        chipSleep.classList.add('active');
+      } else {
+        chipSleep.textContent = '定时';
+        chipSleep.classList.remove('active');
+      }
+    }
+  }
   function applyQuality(q) {
     localStorage.setItem('uzz.quality', q);
     document.querySelectorAll('#qualitySeg [data-quality]').forEach(b => b.classList.toggle('active', b.dataset.quality === q));
@@ -458,6 +771,7 @@
       sleepDeadline = 0;
       if (status) { status.hidden = true; status.textContent = ''; }
       document.querySelectorAll('#sleepSeg [data-sleep]').forEach(b => b.classList.toggle('active', b.dataset.sleep === '0'));
+      refreshPlayerChips();
       toast('已取消定时关闭');
       return;
     }
@@ -475,33 +789,36 @@
       }
       const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
       if (status) { status.hidden = false; status.textContent = '将在 ' + m + ' 分 ' + String(s).padStart(2, '0') + ' 秒后停止播放'; }
+      refreshPlayerChips();
       sleepTimer = setTimeout(tick, 1000);
     };
     tick();
     toast('将在 ' + minutes + ' 分钟后停止播放');
   }
+  // 设置项显示值（模块级：setMobileLyric 等模块级函数也要刷新这些文案）
+  const QUALITY_LABELS = { standard: '标准', ex: '高品', lossless: '无损' };
+  const SPEED_LABELS = { 0.5: '0.5x', 1: '1.0x', 1.5: '1.5x', 2: '2.0x' };
+  const SLEEP_LABELS = { 0: '关闭', 15: '15分钟', 30: '30分钟', 60: '60分钟' };
+  const THEME_LABELS = { light: '浅色', dark: '深色', auto: '跟随系统' };
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  function refreshSettingsValues() {
+    const q = localStorage.getItem('uzz.quality') || 'standard';
+    const r = Number(localStorage.getItem('uzz.rate') || 1) || 1;
+    const sl = sleepDeadline > Date.now() ? Math.ceil((sleepDeadline - Date.now()) / 60000) + ' 分钟后停' : (SLEEP_LABELS[lastSleepPick] || '关闭');
+    const th = themePref();
+    const ml = localStorage.getItem('uzz.mobileLyric') === '1' ? '已开启' : '关闭';
+    setText('valQuality', QUALITY_LABELS[q] || q);
+    setText('valSpeed', SPEED_LABELS[String(r)] || r + 'x');
+    setText('valSleep', sl);
+    setText('valTheme', THEME_LABELS[th] || th);
+    setText('valMobileLyric', ml);
+    refreshPlayerChips();
+  }
   function initSettings() {
-    const QUALITY_LABELS = { standard: '标准', ex: '高品', lossless: '无损' };
-    const SPEED_LABELS = { 0.5: '0.5x', 1: '1.0x', 1.5: '1.5x', 2: '2.0x' };
-    const SLEEP_LABELS = { 0: '关闭', 15: '15分钟', 30: '30分钟', 60: '60分钟' };
-    const THEME_LABELS = { light: '浅色', dark: '深色', auto: '跟随系统' };
     // 通用：底部弹层单选（网易云风格：列表行 → sheet 选值）
     function pickSheet(title, options, current, onPick) {
       sheet(title, options.map((o) => '<button class="sheet-action" data-pick="' + o.value + '">' + (String(o.value) === String(current) ? '✓ ' : '') + escape(o.label) + '</button>').join(''));
       document.querySelectorAll('#sheetContent [data-pick]').forEach(b => { b.onclick = () => { closeSheet(); onPick(b.dataset.pick); }; });
-    }
-    const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-    function refreshSettingsValues() {
-      const q = localStorage.getItem('uzz.quality') || 'standard';
-      const r = Number(localStorage.getItem('uzz.rate') || 1) || 1;
-      const sl = sleepDeadline > Date.now() ? Math.ceil((sleepDeadline - Date.now()) / 60000) + ' 分钟后停' : (SLEEP_LABELS[lastSleepPick] || '关闭');
-      const th = themePref();
-      const ml = localStorage.getItem('uzz.mobileLyric') === '1' ? '已开启' : '关闭';
-      setText('valQuality', QUALITY_LABELS[q] || q);
-      setText('valSpeed', SPEED_LABELS[String(r)] || r + 'x');
-      setText('valSleep', sl);
-      setText('valTheme', THEME_LABELS[th] || th);
-      setText('valMobileLyric', ml);
     }
     // 恢复上次选择
     const savedRate = Number(localStorage.getItem('uzz.rate') || 1) || 1;
@@ -524,6 +841,25 @@
     ], themePref(), (v) => { localStorage.setItem('xy.android.theme', v); applyTheme(); refreshSettingsValues(); });
     const rowMobileLyric = $('rowMobileLyric');
     if (rowMobileLyric) rowMobileLyric.onclick = async () => { await setMobileLyric(localStorage.getItem('uzz.mobileLyric') === '1' ? '0' : '1'); refreshSettingsValues(); };
+    // v3.5.0：账号与安全分组
+    const rowAccount = $('rowAccount');
+    if (rowAccount) rowAccount.onclick = () => { openAccount(); };
+    const rowDeviceAuth = $('rowDeviceAuth');
+    if (rowDeviceAuth) rowDeviceAuth.onclick = () => showDeviceAuthSheet();
+    refreshAccountRows();
+    // v3.5.0：播放器面板快捷入口（倍速 / 定时关闭 / 音质）——与设置页共用同一套逻辑
+    const chipRate = $('mobileRate');
+    if (chipRate) chipRate.onclick = () => pickSheet('播放倍速', [
+      { value: '0.5', label: '0.5x 慢速' }, { value: '1', label: '1.0x 正常' }, { value: '1.5', label: '1.5x' }, { value: '2', label: '2.0x 🚀' },
+    ], String(localStorage.getItem('uzz.rate') || 1), (v) => { localStorage.setItem('uzz.rate', v); applySpeed(v); refreshSettingsValues(); refreshPlayerChips(); });
+    const chipSleep = $('mobileSleep');
+    if (chipSleep) chipSleep.onclick = () => pickSheet('定时关闭', [
+      { value: '0', label: '关闭' }, { value: '15', label: '15 分钟' }, { value: '30', label: '30 分钟' }, { value: '60', label: '60 分钟' },
+    ], String(lastSleepPick || 0), (v) => { lastSleepPick = Number(v) || 0; applySleep(lastSleepPick); refreshSettingsValues(); refreshPlayerChips(); });
+    const chipQuality = $('mobileQuality');
+    if (chipQuality) chipQuality.onclick = () => pickSheet('音质', [
+      { value: 'standard', label: '标准 128k' }, { value: 'ex', label: '高品 320k' }, { value: 'lossless', label: '无损' },
+    ], localStorage.getItem('uzz.quality') || 'standard', (v) => { applyQuality(v); refreshSettingsValues(); refreshPlayerChips(); });
     // 主题跟随系统实时切换
     systemDark.addEventListener('change', () => { if (themePref() === 'auto') applyTheme(); });
     applyTheme();
@@ -541,7 +877,13 @@
     if (!on) {
       localStorage.removeItem('uzz.mobileLyric');
       try { await XYNative.NativeMusic.lyricOverlay({ show: false }); } catch (e) {}
+      refreshSettingsValues();
       return toast('桌面歌词已关闭');
+    }
+    // 桌面歌词依赖安卓悬浮窗，桌面浏览器没有这个能力——明确告知，别让用户以为点击没生效
+    if (!XYNative.isAndroid || !XYNative.NativeMusic?.lyricOverlay) {
+      refreshSettingsValues();
+      return toast('桌面歌词仅在安卓版可用', 4000);
     }
     try {
       const r = await XYNative.NativeMusic.lyricOverlay({ show: true, cur: '小杨音乐 · 桌面歌词已开启', next: '播放歌曲后逐句显示（可拖动，长按关闭）', playing: true });
@@ -552,6 +894,7 @@
         return;
       }
       localStorage.setItem('uzz.mobileLyric', '1');
+      refreshSettingsValues();
       toast('桌面歌词已开启 🎵');
     } catch (e) {
       toast('无法开启桌面歌词：' + (e.message || '系统拒绝'), 5000);
@@ -563,6 +906,7 @@
     drawer:openDrawer,closeDrawer,mlyric:async()=>{await setMobileLyric(localStorage.getItem('uzz.mobileLyric')==='1'?'0':'1');},
     retryPlayback:async()=>{if(!Player.getState().current)return;if(audio.retry)await audio.retry();else{audio.load();await audio.play();}toast('正在重新连接音源…');},
     trackMenu:()=>trackMenu(Player.getState().current),createPlaylist,addToPlaylist,settings,networkDiagnostics,update:checkUpdate,
+    about:showAboutSheet,deviceAuth:showDeviceAuthSheet,
     back:()=>navigate(previousRoute==='detail'?'library':previousRoute),refreshDiscover:loadDiscover,retrySearch:()=>search(),refreshCloud,
     history:()=>chooseLibrary('history'),favorites:()=>chooseLibrary('favorites'),openCloud:()=>{closeAccount();chooseLibrary('cloud');},
     clearSearch:()=>{searchHistory=[];save('uzz.searchHistory',[]);renderSearchWelcome();},theme:cycleTheme,
@@ -733,11 +1077,13 @@
     if(button.dataset.notes){notesMode=button.dataset.notes;document.querySelectorAll('[data-notes]').forEach(e=>e.classList.toggle('active',e===button));renderNotes();return;}
     if(button.dataset.channel){await loadChannel(button.dataset.channel);return;}
     if(button.dataset.type){searchType=button.dataset.type;document.querySelectorAll('[data-type]').forEach(e=>e.classList.toggle('active',e===button));await search();return;}
+    if(button.dataset.searchIndex!==undefined){await openSearchResult(Number(button.dataset.searchIndex));return;}
+    if(button.dataset.recentIndex!==undefined){const t=recentRows[Number(button.dataset.recentIndex)];if(t)play(t);return;}
     if(button.dataset.trackMenu){trackMenu(trackSets.get(button.dataset.trackMenu)?.[Number(button.dataset.trackIndex)],button.dataset.trackMenu);return;}
     if(button.dataset.trackList){if(Date.now()<(click.suppressUntil||0))return;const scope=button.dataset.trackList,index=Number(button.dataset.trackIndex);if(scope==='search')await openSearchResult(index);else play(trackSets.get(scope)?.[index]);return;}
     if(button.dataset.addPlaylist){const p=playlists.find(p=>p.id===button.dataset.addPlaylist);if(!p||!selectedTrack)return;p.tracks=p.tracks||[];if(!p.tracks.some(t=>keyOf(t)===keyOf(selectedTrack)))p.tracks.push({...selectedTrack});savePlaylists();if(detail?.localId===p.id){detail.tracks=p.tracks;paintDetail();}closeSheet();toast('已添加到「'+p.name+'」');return;}
     if(button.dataset.lyricTime){audio.currentTime=Number(button.dataset.lyricTime);if(audio.paused)await audio.play().catch(()=>toast('点击播放继续'));}
-    if(button.dataset.auth){authMode=button.dataset.auth;document.querySelectorAll('[data-auth]').forEach(e=>e.classList.toggle('active',e===button));$('mobileLoginSubmit').textContent=authMode==='login'?'登录':'注册并登录';$('mobilePassword').autocomplete=authMode==='login'?'current-password':'new-password';$('mobileAuthStatus').textContent='';}
+    if(button.dataset.auth){authMode=button.dataset.auth;document.querySelectorAll('[data-auth]').forEach(e=>e.classList.toggle('active',e===button));$('mobileLoginSubmit').textContent=authMode==='login'?'登录':'注册并登录';$('mobilePassword').autocomplete=authMode==='login'?'current-password':'new-password';$('mobileAuthStatus').textContent='';toggleCaptcha();}
   }
   function back(){if(!$('accountBackdrop').hidden)return closeAccount();if(!$('sheetBackdrop').hidden)return closeSheet();if(!$('drawerBackdrop').hidden)return closeDrawer();if(!$('mobilePlayer').hidden)return closePlayer();if(route!=='discover')return navigate(route==='detail'?previousRoute:'discover');if(Date.now()-lastBack<1800){XYNative.App.exitApp();return;}lastBack=Date.now();toast('再按一次返回退出应用');}
   // 侧边抽屉（v3.3.0 网易云风格）
@@ -762,6 +1108,13 @@
   function viewport(){const v=global.visualViewport;document.documentElement.style.setProperty('--vh',(v?.height||innerHeight)+'px');document.documentElement.style.setProperty('--viewport-top',(v?.offsetTop||0)+'px');const keyboard=keyboardOpen||(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)&&innerHeight-(v?.height||innerHeight)>100);document.body.classList.toggle('keyboard-visible',keyboard);}
   document.addEventListener('DOMContentLoaded',async()=>{
     await XYNetwork.ready;
+    // v3.5.0：设备授权门禁。陌生设备首次安装必须输入本版本授权码；
+    // 同一台设备升级凭本地记录自动续期，无需再次输入。
+    // 遮罩是静态 HTML（脚本没跑也能挡住），这里只负责最终裁决放行与否。
+    if(global.XYDeviceAuth){
+      try{ await global.XYDeviceAuth.gate(); }catch(e){ console.warn('设备授权检查失败：',e&&e.message); }
+      global.XYDeviceAuth.onAuthorized=()=>{ toast('授权成功，欢迎使用'); refreshDeviceAuthRow(); };
+    }
     hydrate();Player.init({headless:true});applyTheme();const td=$('todayDate');if(td)td.textContent=new Intl.DateTimeFormat('zh-CN',{month:'short',day:'numeric'}).format(new Date());
     const diagnosticsButton=document.createElement('button');diagnosticsButton.type='button';diagnosticsButton.textContent='网络诊断';diagnosticsButton.dataset.action='networkDiagnostics';document.querySelector('.me-extra')?.appendChild(diagnosticsButton);
     const loginDiagnostic=document.createElement('button');loginDiagnostic.type='button';loginDiagnostic.className='wide-button';loginDiagnostic.textContent='登录失败？检查网络';loginDiagnostic.onclick=networkDiagnostics;$('mobileAuthStatus').after(loginDiagnostic);
@@ -843,7 +1196,26 @@
     document.addEventListener('uzz:favCurrent',async e=>{if(!XYCloud.user||!heart)return;const t=e.detail?.track;const ref=t&&XYCloud.trackReference(t);if(!ref)return;try{const cur=await checkIsFavorited(ref);if(cur===e.detail.added){heart.refresh();return;}if(e.detail.added)await addFavorite(t.name,ref);else await removeFavorite(ref);heart.refresh();if(route==='library'&&libraryTab==='cloud')refreshCloud();}catch(err){toast('云端同步失败：'+err.message);}});
     // 账号切换数据隔离：换号即用云端收藏重置本机喜欢（全量拉取，防串号）
     async function syncLocalFromCloud(){const uid=XYCloud.user?.id;if(!uid)return;try{const rows=await getFavorites();if(uid!==XYCloud.user?.id)return;const seen=new Set(),tracks=[];for(const row of rows){const t=XYCloud.favoriteToTrack(row);if(t&&t.id&&t.vendor){const key=t.vendor+'|'+t.id;if(!seen.has(key)){seen.add(key);tracks.push({...t,at:Date.now()});}}}Player.replaceFavorites(tracks);renderCounts();toast('已同步云端收藏到本机（'+tracks.length+' 首）');}catch(_){/*拉取失败保持本机现状*/}}
-    $('mobileLoginForm').onsubmit=async e=>{e.preventDefault();$('mobileLoginSubmit').disabled=true;$('mobileAuthStatus').textContent='正在连接…';try{const data=await global[authMode==='login'?'loginUser':'registerUser']($('mobilePhone').value,$('mobilePassword').value);$('mobilePassword').value='';$('mobileAuthStatus').textContent=data.session?'登录成功':'注册完成，请检查手机号确认配置后登录';}catch(error){const msg=String(error.message||error);$('mobileAuthStatus').textContent=/reset|aborted|超时|timeout|failed to connect|网络/i.test(msg)?'网络波动，连接云端被中断（已自动重试多次）。请稍等片刻再点一次，通常即可成功':msg;}finally{$('mobileLoginSubmit').disabled=!XYCloud.available;}};
+    $('mobileLoginForm').onsubmit=async e=>{e.preventDefault();$('mobileLoginSubmit').disabled=true;$('mobileAuthStatus').textContent='正在连接…';try{
+      if(authMode==='register'){
+        // 注册必须先过图形验证码（后端一次性校验，失败即作废）
+        const answer=($('mobileCaptchaInput').value||'').trim();
+        if(!answer){$('mobileAuthStatus').textContent='请输入图形验证码';await loadCaptcha();return;}
+        if(!captchaId){$('mobileAuthStatus').textContent='验证码还没加载好，请稍候重试';await loadCaptcha();return;}
+        try{await UzzApi.verifyCaptcha(captchaId,answer);}
+        catch(err){$('mobileAuthStatus').textContent='验证码错误，请重新输入';await loadCaptcha();return;}
+      }
+      const data=await global[authMode==='login'?'loginUser':'registerUser']($('mobilePhone').value,$('mobilePassword').value);
+      $('mobilePassword').value='';
+      $('mobileAuthStatus').textContent=data.session?'登录成功':'注册完成，请检查手机号确认配置后登录';
+    }catch(error){const msg=String(error.message||error);$('mobileAuthStatus').textContent=/reset|aborted|超时|timeout|failed to connect|网络/i.test(msg)?'网络波动，连接云端被中断（已自动重试多次）。请稍等片刻再点一次，通常即可成功':msg;}finally{$('mobileLoginSubmit').disabled=!XYCloud.available;}};
+    // 图形验证码：点击图片刷新
+    $('mobileCaptchaBtn').onclick=()=>{loadCaptcha();};
+    // 资料中心
+    $('pfSave').onclick=()=>{saveProfile();};
+    $('pfChangePwd').onclick=()=>{doChangePassword();};
+    $('pfAvatarClear').onclick=()=>{pendingAvatar='';paintAvatar('');const av=$('meAvatar');if(av){av.style.backgroundImage='';av.textContent=(XYCloud.displayName?XYCloud.displayName(XYCloud.user):'杨').slice(0,1);}toast('已恢复默认头像，记得点保存');};
+    $('pfAvatarInput').onchange=async e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;try{pendingAvatar=await compressAvatar(f,128);paintAvatar(pendingAvatar);toast('头像已选择，点「保存资料」生效');}catch(err){toast(err.message||'头像处理失败');}};
     $('mobileLogout').onclick=async()=>{$('mobileLogout').disabled=true;try{await logoutUser();$('mobilePassword').value='';$('mobileAuthStatus').textContent='已退出登录';}catch(e){$('mobileAuthStatus').textContent=e.message;}finally{$('mobileLogout').disabled=false;}};
     if(XYCloud.available){const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{const user=session?.user||null;const changed=XYCloud.user?.id!==user?.id;if(changed){authGeneration++;cloudGeneration++;cloudRows=[];}XYCloud.user=user;renderAuth();setTimeout(()=>{if(changed&&user)syncLocalFromCloud();if(route==='library'&&libraryTab==='cloud')renderLibrary();},0);});global.addEventListener('pagehide',()=>{subscription.unsubscribe();heart?.destroy();},{once:true});}renderAuth();
     let longPress;document.addEventListener('pointerdown',e=>{const b=e.target.closest('[data-track-list]');if(!b)return;const x=e.clientX,y=e.clientY;clearTimeout(longPress);longPress=setTimeout(()=>{click.suppressUntil=Date.now()+800;trackMenu(trackSets.get(b.dataset.trackList)?.[Number(b.dataset.trackIndex)],b.dataset.trackList);},550);const move=ev=>{if(Math.abs(ev.clientX-x)+Math.abs(ev.clientY-y)>12){clearTimeout(longPress);document.removeEventListener('pointermove',move);}};document.addEventListener('pointermove',move);document.addEventListener('pointerup',()=>{clearTimeout(longPress);document.removeEventListener('pointermove',move);},{once:true});});document.addEventListener('pointercancel',()=>clearTimeout(longPress));

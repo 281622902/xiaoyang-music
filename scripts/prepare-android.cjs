@@ -67,7 +67,7 @@ function prepareAssets(root = ROOT) {
     sha256: Object.fromEntries(['supabase.min.js', 'native-platform.js', 'android-config.js'].map(file => [file, crypto.createHash('sha256').update(fs.readFileSync(path.join(vendor, file))).digest('hex')])) }, null, 2) + '\n');
   console.log('本地 Supabase SDK 与官方 Capacitor 插件桥已生成（无 CDN）');
   const mobileWeb = path.join(root, 'capacitor/www');
-  for (const file of ['android.html', 'icon.svg', 'css/android.css', 'js/android.js', 'js/android-network.js', 'js/native-audio.js', 'js/native-auth-storage.js', 'js/player.js', 'js/api.js', 'js/supabase-client.js', 'js/cloud-features.js', 'js/cloud-state.js', 'js/favorite-button.js']) {
+  for (const file of ['android.html', 'icon.svg', 'css/android.css', 'js/android.js', 'js/android-network.js', 'js/native-audio.js', 'js/native-auth-storage.js', 'js/player.js', 'js/api.js', 'js/supabase-client.js', 'js/cloud-features.js', 'js/cloud-state.js', 'js/favorite-button.js', 'js/device-auth.js']) {
     const target = path.join(mobileWeb, file === 'android.html' ? 'index.html' : file);
     fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(path.join(root, 'app', file), target);
   }

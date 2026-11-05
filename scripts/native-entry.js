@@ -6,6 +6,8 @@ import { Keyboard } from '@capacitor/keyboard';
 import { StatusBar, Style } from '@capacitor/status-bar';
 export { Capacitor, CapacitorHttp, Browser, App, Keyboard, StatusBar };
 export const NativeMusic = registerPlugin('NativeMusic');
+// 设备授权（v3.5.0 防泄露机制）：提供设备指纹（ANDROID_ID + 包名 + 签名证书）
+export const DeviceAuth = registerPlugin('DeviceAuth');
 export const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 export async function openUpdate(value) {

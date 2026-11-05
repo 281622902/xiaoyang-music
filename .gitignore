@@ -27,5 +27,9 @@ android/.gradle/
 *.apk
 *.log
 
+# 设备授权码本地存储（生产走 Supabase；本地兜底不入库，防授权码外泄）
+server/data/licenses.json
+server/data/
+
 # WorkBuddy 工作区数据（不入库）
 .workbuddy/

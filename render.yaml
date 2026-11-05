@@ -31,3 +31,13 @@ services:
         value: 'https://codianpoqhqilkwviota.supabase.co'
       - key: SUPABASE_ANON_KEY
         value: 'sb_publishable__DRTgpxPfdR67tsFEJ_EDQ_gvZ8VvdM'
+      # 设备授权（v3.5.0 防泄露机制）：
+      #   SUPABASE_SERVICE_KEY —— 读写 app_licenses 授权表（仅服务端使用，务必在
+      #     Render 后台填入，绝不要提交进仓库）。未配置时授权表降级落到
+      #     server/data/licenses.json（本地文件，Render 重启会丢）。
+      #   XY_ADMIN_TOKEN —— 授权码签发/吊销的管理口令（同样在 Render 后台填）。
+      #     留空则管理接口关闭，只有 status/verify 两条客户端接口可用。
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: XY_ADMIN_TOKEN
+        sync: false

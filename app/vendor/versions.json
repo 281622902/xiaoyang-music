@@ -9,7 +9,7 @@
   },
   "sha256": {
     "supabase.min.js": "ee3be8de192b97cb1d73d1e95d6b82bb1f6b658c0f97c4ef757fc331996ed3d3",
-    "native-platform.js": "fb26bf165b7cc87b1701ddfd71d8f7fbb5c4f91c88662f77f914a4f2a9064f51",
-    "android-config.js": "e04d6047c201b736c6b33497ce62cd3667003902f6efbb5161592cb560bc914e"
+    "native-platform.js": "08486859ca19ec9a437356df321774d51701deee8cd7d76045bdc8823feeea29",
+    "android-config.js": "4badaa34c3b42ed2c07a7b4e4c6534b35d00ea5cbf31b556ceff4f33504b32fe"
   }
 }

@@ -59,11 +59,24 @@ async function search(keyword, type = 'song', page = 1, limit = 20) {
     name: unescapeHtml(s.SongName),
     artist: unescapeHtml(s.SingerName),
     album: unescapeHtml(s.AlbumName || ''),
-    pic: '',
+    albumId: String(s.AlbumID || ''),
+    // 封面：搜索接口直接给 AlbumImage/Image（{size} 占位需替换），
+    // 缺失时用 AlbumID 拼酷狗标准图地址——搜索结果有封面是用户明确诉求
+    // （原实现 pic 恒为空，导致列表里全是灰块，只能点进去播放才有图）。
+    pic: kugouPic(s),
     vendor: 'kugou',
     duration: Number(s.Duration) || 0,
   }));
   return { list, total: ((json && json.data && json.data.total) || list.length) };
+}
+
+// 酷狗封面直链：优先用接口给的字段，其次按 AlbumID 拼标准地址
+function kugouPic(s) {
+  const raw = String((s && (s.AlbumImage || s.Image)) || '');
+  if (raw) return raw.replace('{size}', '400').replace(/^http:/, 'https:');
+  const albumId = String((s && s.AlbumID) || '');
+  if (albumId) return `https://c1.kugou.com/albumcover/${albumId}.jpg`;
+  return '';
 }
 
 async function getdata(hash) {

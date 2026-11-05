@@ -288,30 +288,45 @@
     return localStorage.getItem('uzz.dl.enabled') === '1' && window.uzzBridge;
   }
   // 安卓桌面歌词悬浮窗（v3.2.2）：设置开启时逐句推给原生悬浮窗
-  function pushMobileLyric(cur, next, playing) {
+  // v3.3.0：扩展为 {cur,next,trans,title,artist,playing,progress}，供原生端渲染新版卡片
+  function pushMobileLyric(cur, next, trans, title, artist, playing, progress) {
     if (!global.XYNative?.isAndroid) return;
     if (!global.XYNative.NativeMusic?.lyricOverlay) return;
     if (localStorage.getItem('uzz.mobileLyric') !== '1') return;
-    global.XYNative.NativeMusic.lyricOverlay({ show: true, cur: cur || '', next: next || '', playing: !!playing }).then((r) => {
+    const p = Number(progress);
+    global.XYNative.NativeMusic.lyricOverlay({
+      show: true,
+      cur: cur || '', next: next || '', trans: trans || '',
+      title: title || '', artist: artist || '',
+      playing: !!playing,
+      progress: (isFinite(p) && p > 0) ? Math.min(1, p) : 0,
+    }).then((r) => {
       if (r && r.needsPermission) {
         localStorage.setItem('uzz.mobileLyric', ''); // 未授权：关开关，等设置里重新引导
         global.XYNative.NativeMusic.lyricOverlay({ show: false }).catch(() => {});
+      } else if (r && r.closedByUser) {
+        // 用户在悬浮窗上长按关闭了：同步关掉开关，停止后续逐句推送（设置里可再开启）
+        localStorage.setItem('uzz.mobileLyric', '');
       }
     }).catch(() => {});
   }
   function pushLyric(idx) {
     const cur = STATE.lyrics[idx] ? STATE.lyrics[idx].text : '';
     const next = STATE.lyrics[idx + 1] ? STATE.lyrics[idx + 1].text : '';
-    const audioEl = document.getElementById('audio');
-    pushMobileLyric(cur, next, !!(audioEl && !audioEl.paused && audioEl.src));
-    if (!window.uzzBridge) return;
-    // 翻译行（桌面歌词双行用）：开翻译且有译文时取当前句译文
+    // 翻译行（桌面歌词双行用）：开翻译且有译文时取当前句译文（安卓悬浮窗与 Electron 共用）
     let trans = '';
     if (transOn() && STATE.lyrics[idx] && STATE.tlyrics && STATE.tlyrics.length) {
       trans = findTrans(STATE.lyrics[idx].t);
     }
-    const audio = document.getElementById('audio');
-    window.uzzBridge.sendLyric({ cur, next, trans, playing: !!(audio && !audio.paused && audio.src) });
+    // 安卓原生播放走 Media3（NativeAudio 适配器），桌面端是 <audio>；用模块级 audio 读进度
+    const playing = !!(audio && !audio.paused && audio.src);
+    const duration = (audio && isFinite(audio.duration) && audio.duration > 0) ? audio.duration : 0;
+    const position = (audio && isFinite(audio.currentTime) && audio.currentTime > 0) ? audio.currentTime : 0;
+    const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+    const t = STATE.current;
+    pushMobileLyric(cur, next, trans, t ? (t.name || '') : '', t ? (t.artist || '') : '', playing, progress);
+    if (!window.uzzBridge) return;
+    window.uzzBridge.sendLyric({ cur, next, trans, playing });
   }
   // 把设置页的桌面歌词样式推给歌词窗
   function pushLyricStyle() {
@@ -669,21 +684,25 @@
     }
 
     // 歌词（含翻译，供「翻译歌词」开关使用）
+    // v3.5.0：把歌名/歌手一并传给后端 —— 主音源无歌词时后端会跨源
+    // （QQ音乐/酷狗索引）按「歌名+歌手」找同曲补词，解决「网络歌曲没有歌词」。
     let lyric = STATE.current.lyric || '';
     let tlyric = '';
+    const lName = track.name || '';
+    const lArtist = track.artist || '';
     if (!lyric && track.vendor !== 'device') {
       try {
         if (UzzApi.getLyricEx) {
-          const lf = await UzzApi.getLyricEx(track.id, track.vendor, signal);
+          const lf = await UzzApi.getLyricEx(track.id, track.vendor, signal, lName, lArtist);
           lyric = lf.lyric; tlyric = lf.tlyric || '';
         } else {
-          lyric = await UzzApi.getLyric(track.id, track.vendor, signal);
+          lyric = await UzzApi.getLyric(track.id, track.vendor, signal, lName, lArtist);
         }
       } catch (e) { /* 歌词失败不阻塞播放 */ }
       if (!seqAlive(seq)) return;   // 歌词期间用户又点了别的歌
       STATE.current.lyric = lyric;
     } else if (track.vendor !== 'device' && UzzApi.getLyricEx) {
-      UzzApi.getLyricEx(track.id, track.vendor, signal).then((f) => {
+      UzzApi.getLyricEx(track.id, track.vendor, signal, lName, lArtist).then((f) => {
         // 令牌校验：防止旧歌的翻译歌词串到新歌上
         if (seqAlive(seq) && STATE.current && STATE.current.id === track.id) {
           STATE.tlyrics = parseLrc(f.tlyric || '');
