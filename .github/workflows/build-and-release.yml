@@ -2,8 +2,10 @@ name: Build Windows release and sync Supabase
 
 on:
   push:
+    # 双端独立发版：pc-v* 只发 Windows；all-v* 双端同步发；mobile-v* 不触发本工作流。
     tags:
-      - 'v*'
+      - 'pc-v*'
+      - 'all-v*'
 
 permissions:
   contents: write

@@ -182,7 +182,17 @@
   let downloads = loadJSON('uzz.downloads', []);
   let searchHistory = loadJSON('uzz.searchHistory', []);
 
-  function savePlaylists() { global.XYSync?.stampPlaylists(playlists); saveJSON('uzz.playlists', playlists); renderPlaylistNav(); }
+  // v3.6.0：收藏/新建/删除歌单后，「我的收藏」卡片墙也要一起刷新，
+  // 否则左侧列表更新了、详情视图还是旧的（用户反馈「左侧没出现」的第二个原因）。
+  function savePlaylists() {
+    // v3.6.0 根因修复：这里原来写的是 global.XYSync（app.js 是 IIFE，没有 global
+    // 变量）→ 抛 ReferenceError，导致下面的落盘与左侧渲染全部不执行，表现为
+    // 「点收藏歌单没反应、左侧列表不出现」。统一改用 window。
+    window.XYSync?.stampPlaylists(playlists);
+    saveJSON('uzz.playlists', playlists);
+    renderPlaylistNav();
+    renderCollectView();
+  }
   function saveDownloads() { saveJSON('uzz.downloads', downloads.slice(0, 200)); renderDownloads(); }
 
   /* ============================================================
@@ -837,19 +847,65 @@
     if (!tracks.length) { toast('歌单还没有歌曲'); return; }
     Player.playQueue(tracks);
   }
-  function saveOnlinePlaylist() {
-    if (!curPlaylist || curPlaylist.type !== 'online') return;
+  // v3.6.0 修复：电脑端「＋ 收藏歌单」点了没反应、左侧「收藏的歌单」不出现。
+  // 根因 ① 创建的歌单对象没写 kind，plKind() 靠 cover 猜分组，封面为空就落进
+  //        「创建的歌单」；② curPlaylist 无效时静默 return，用户完全没反馈；
+  //        ③ savePlaylists() 只刷左侧导航，不刷「我的收藏」视图；
+  //        ④ 重复点击会生成多个同名歌单；⑤ 云端 user_playlists 表没接入。
+  async function saveOnlinePlaylist() {
+    if (!curPlaylist || curPlaylist.type !== 'online') {
+      return toast('当前不是在线歌单详情页，无法收藏');
+    }
     const info = curPlaylist.info || {};
+    const tracks = (curPlaylist.tracks || []).slice();
+    if (!tracks.length) {
+      return toast('歌单内容还没加载完成，请稍候再点收藏');
+    }
+    const name = String($('plpName').textContent || info.name || '收藏歌单').trim();
+    const sourceId = String(curPlaylist.plId || '');
+    // 去重：同一在线歌单（或同名）不重复收，避免左侧越点越多
+    const dup = playlists.find((p) =>
+      (sourceId && p.sourceId === sourceId) || (p.name === name && plKind(p) === 'collected'));
+    if (dup) {
+      return toast(`「${name}」已经在收藏的歌单里了`);
+    }
     const pl = {
       id: 'L' + Date.now(),
-      name: $('plpName').textContent || '收藏歌单',
+      sourceId,
+      name,
       cover: info.cover || '',
-      tracks: (curPlaylist.tracks || []).slice(),
+      tracks,
+      kind: 'collected',       // ← 关键：显式归类，不再靠封面猜
       createdAt: Date.now(),
     };
     playlists.unshift(pl);
     savePlaylists();
-    toast(`已收藏到我的歌单：「${pl.name}」`);
+    toast(`已收藏「${name}」，可在左侧「收藏的歌单」查看`);
+
+    // 已登录则顺带同步到云端 user_playlists（见 supabase/playlists.sql）；
+    // 未登录或云端失败都给明确提示，绝不静默失败。
+    try {
+      if (window.XYCloud && window.XYCloud.user && typeof window.createPlaylist === 'function') {
+        // 云端 user_playlists.tracks 要求每项 {name, url}，且 url 必须是合法
+        // http(s) 稳定引用（songUrl() 会校验，纯数字 ID 会被拒）。用
+        // XYCloud.trackReference() 生成 provider 页面地址，与 playlists.sql 对齐。
+        const ref = window.XYCloud.trackReference;
+        const cloudTracks = tracks.map((t) => ({
+          name: t.name,
+          url: (typeof ref === 'function' ? ref(t) : '') || t.url || '',
+        })).filter((t) => /^https?:\/\//i.test(t.url));
+        if (!cloudTracks.length) throw new Error('这些歌曲没有可用的云端引用');
+        await window.createPlaylist(name, cloudTracks);
+        toast(`「${name}」已同步到云端`);
+      } else {
+        toast('已保存到本机；登录云端账户后可同步');
+      }
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      toast(/已有同名歌单/.test(msg) ? '云端已有同名歌单，本机收藏已保存'
+        : /未登录|login/i.test(msg) ? '已保存到本机；请先登录云端账户再同步'
+        : '本机收藏已保存，云端同步失败：' + msg);
+    }
   }
   function deleteLocalPlaylist() {
     if (!curPlaylist || curPlaylist.type !== 'local') return;

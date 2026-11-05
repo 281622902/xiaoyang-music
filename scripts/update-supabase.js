@@ -6,17 +6,24 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const readJSON = (file, projectRoot = ROOT) => JSON.parse(fs.readFileSync(path.join(projectRoot, file), 'utf8').replace(/^\uFEFF/, ''));
 const CLIENT_VERSION = /(\bappVersion\s*:\s*)(['"])([^'"]*)\2/;
+// 双端独立发版：统一从 pc-v / mobile-v / all-v / 历史 v 前缀里剥出纯语义版本号
+const { parseReleaseTag } = require('./version-tag.cjs');
 
 function getReleaseConfig(env = process.env, packages = {}) {
   const projectRoot = packages.projectRoot || ROOT;
   const root = packages.root || readJSON('package.json', projectRoot);
   const desktop = packages.desktop || readJSON('electron/package.json', projectRoot);
   const refTag = env.GITHUB_REF?.startsWith('refs/tags/') ? env.GITHUB_REF.slice('refs/tags/'.length) : '';
-  const namedTag = env.GITHUB_REF_TYPE === 'tag' || (!env.GITHUB_REF_TYPE && env.GITHUB_REF_NAME?.startsWith('v')) ? env.GITHUB_REF_NAME : '';
+  // 旧逻辑只认以 v 开头的 ref_name，前缀 Tag（pc-/mobile-/all-）会被漏掉，
+  // 导致 CI 退回 package.json 版本、把带前缀的版本写进数据库。
+  const looksLikeTag = env.GITHUB_REF_TYPE === 'tag' || (!env.GITHUB_REF_TYPE && /^(?:(?:pc|mobile|all)-)?v/.test(env.GITHUB_REF_NAME || ''));
+  const namedTag = looksLikeTag ? env.GITHUB_REF_NAME : '';
   const suppliedTag = env.RELEASE_TAG || namedTag || refTag;
-  if (suppliedTag && !suppliedTag.startsWith('v')) throw new Error('发布 Tag 必须以 v 开头，并包含合法版本号');
   // CI 以当前 Tag 为发布版本；本机未传 Tag 时才从根 package.json 读取。
-  const version = suppliedTag ? suppliedTag.slice(1) : root.version;
+  // parseReleaseTag 会剥掉 pc-/mobile-/all- 前缀并校验合法语义版本号。
+  const release = suppliedTag ? parseReleaseTag(suppliedTag) : null;
+  const version = release ? release.version : root.version;
+  if (!release && !/^\d+\.\d+\.\d+$/.test(String(version || ''))) throw new Error('package.json 版本号不合法');
   const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
   const parsed = typeof version === 'string' && semver.exec(version);
   if (!parsed || parsed[4]?.split('.').some(x => /^0\d+$/.test(x))) throw new Error('Tag 或 package.json 必须包含合法语义版本号');

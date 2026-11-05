@@ -116,7 +116,10 @@ test('native updater and LAN publisher recognize both old and new installer name
 test('workflow parses and sends secrets only to the required steps', () => {
   const yaml = require(require.resolve('js-yaml', { paths: [path.join(root, 'electron'), root] }));
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-and-release.yml'), 'utf8'));
-  assert.deepEqual(workflow.on.push.tags, ['v*']);
+  // 双端独立发版准则：pc-v* 只发 Windows、all-v* 双端同步发、mobile-v* 不触发。
+  assert.deepEqual(workflow.on.push.tags, ['pc-v*', 'all-v*']);
+  const androidWf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/android-release.yml'), 'utf8'));
+  assert.deepEqual(androidWf.on.push.tags, ['mobile-v*', 'all-v*']);
   assert.equal(workflow.permissions.contents, 'write');
   const job = workflow.jobs['build-and-release']; assert.equal(job['runs-on'], 'windows-latest');
   const prepare = job.steps.find(step => step.run === 'node scripts/update-supabase.js --prepare');
@@ -216,13 +219,32 @@ test('release.bat passes unexpanded input to Node and rejects malformed versions
   }
 });
 test('release command prepares, stages, commits, tags and atomically pushes code plus tag', () => {
+  // 双端独立发版准则：默认目标为手机端 → Tag 带 mobile-v 前缀。
   const h = releaseHarness(); const result = releaseVersion('3.0.6', h.options);
-  assert.equal(h.prepared.env.RELEASE_TAG, 'v3.0.6');
+  assert.equal(h.prepared.env.RELEASE_TAG, 'mobile-v3.0.6');
   assert.deepEqual(h.calls.filter(a => ['add', 'commit', 'tag', 'push'].includes(a[0])), [
-    ['add', '.'], ['commit', '-m', 'release: v3.0.6'], ['tag', 'v3.0.6'],
-    ['push', '--atomic', 'origin', 'HEAD:refs/heads/main', 'refs/tags/v3.0.6']
+    ['add', '.'], ['commit', '-m', 'release: mobile-v3.0.6'], ['tag', 'mobile-v3.0.6'],
+    ['push', '--atomic', 'origin', 'HEAD:refs/heads/main', 'refs/tags/mobile-v3.0.6']
   ]);
-  assert.equal(result.tag, 'v3.0.6');
+  assert.equal(result.tag, 'mobile-v3.0.6');
+});
+
+test('release target prefixes pick the right CI workflow', () => {
+  const { parseReleaseTag, runsAndroid, runsWindows, buildTag } = require('../scripts/version-tag.cjs');
+  assert.equal(buildTag('pc', '4.0.0'), 'pc-v4.0.0');
+  assert.equal(buildTag('mobile', '3.6.0'), 'mobile-v3.6.0');
+  assert.equal(buildTag('all', '3.7.0'), 'all-v3.7.0');
+  assert.equal(parseReleaseTag('mobile-v3.6.0').version, '3.6.0');
+  assert.equal(parseReleaseTag('pc-v4.0.0').version, '4.0.0');
+  assert.equal(parseReleaseTag('all-v3.7.0').version, '3.7.0');
+  // 前缀绝不写进数据库
+  assert.ok(!parseReleaseTag('mobile-v3.6.0').version.includes('mobile'));
+  assert.equal(runsAndroid('mobile-v3.6.0'), true);
+  assert.equal(runsWindows('mobile-v3.6.0'), false);
+  assert.equal(runsAndroid('pc-v4.0.0'), false);
+  assert.equal(runsWindows('pc-v4.0.0'), true);
+  assert.equal(runsAndroid('all-v3.7.0') && runsWindows('all-v3.7.0'), true);
+  assert.throws(() => parseReleaseTag('v3.0.9-beta'), /语义版本/);
 });
 test('existing local tag prevents metadata changes and git add', () => {
   const h = releaseHarness({ localExists: true }); assert.throws(() => releaseVersion('3.0.6', h.options), /本地 Tag.*已存在/);

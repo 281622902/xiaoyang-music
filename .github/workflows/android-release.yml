@@ -1,7 +1,9 @@
 name: Android build and release
 on:
   push:
-    tags: ['v*']
+    # 双端独立发版（小杨 2026-11-05 准则）：
+    #   mobile-v* 只发安卓；all-v* 双端同步发；pc-v* 不触发本工作流。
+    tags: ['mobile-v*', 'all-v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -120,7 +122,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:ANDROID_HOME/build-tools/34.0.0/apksigner.bat" verify $apk
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $version = $env:RELEASE_TAG.Substring(1)
+          $version = (node -p "require('./scripts/version-tag.cjs').parseReleaseTag(process.env.RELEASE_TAG).version").Trim()
           Copy-Item -LiteralPath $apk -Destination "android/app/build/outputs/apk/release/xiaoyang-music-$version-android.apk"
       - name: Save APK artifact
         uses: actions/upload-artifact@v4
@@ -142,7 +144,7 @@ jobs:
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
           }
-          $version = $env:RELEASE_TAG.Substring(1)
+          $version = (node -p "require('./scripts/version-tag.cjs').parseReleaseTag(process.env.RELEASE_TAG).version").Trim()
           gh release upload "$env:RELEASE_TAG" "android/app/build/outputs/apk/release/xiaoyang-music-$version-android.apk" --repo "$env:RELEASE_REPOSITORY" --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release edit "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" --draft=false --prerelease=false

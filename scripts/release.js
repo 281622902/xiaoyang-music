@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { prepareRelease } = require('./update-supabase');
+const { buildTag } = require('./version-tag.cjs');
 const ROOT = path.resolve(__dirname, '..');
 
 function configuredRepository(projectRoot) {
@@ -15,7 +16,11 @@ function configuredRepository(projectRoot) {
 function releaseVersion(input, { projectRoot = ROOT, runGit, prepare = prepareRelease, repository, logger = console } = {}) {
   const version = String(input ?? '').trim();
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('请输入 X.Y.Z 格式版本号，例如 3.0.6；不要带 v 或其他字符');
-  const tag = 'v' + version;
+  // 双端独立发版：由 XY_RELEASE_TARGET 决定 Tag 前缀。
+  // pc → pc-v*、mobile → mobile-v*、all → all-v*（仅用户明确要求双端同步时用）。
+  const target = String(process.env.XY_RELEASE_TARGET || 'mobile').trim().toLowerCase();
+  if (!['pc', 'mobile', 'all'].includes(target)) throw new Error('XY_RELEASE_TARGET 只能是 pc / mobile / all');
+  const tag = buildTag(target, version);
   if (!runGit) runGit = (args, { capture = false } = {}) => {
     const result = spawnSync(process.platform === 'win32' ? 'git.exe' : 'git', args, {
       cwd: projectRoot, shell: false, encoding: 'utf8',

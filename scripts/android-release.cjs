@@ -1,12 +1,16 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
 const {verifyGitHubAsset,safeMessage}=require('./update-supabase');
+const {parseReleaseTag}=require('./version-tag.cjs');
 const ROOT=path.resolve(__dirname,'..');
 function config(env=process.env,root=ROOT){
  const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const tag=env.RELEASE_TAG||env.GITHUB_REF_NAME||'v'+pkg.version;
- if(!/^v\d+\.\d+\.\d+$/.test(tag))throw Error('安卓正式发布标签应为 v主版本.次版本.修订号');
- const version=tag.slice(1),repository=env.RELEASE_REPOSITORY||env.GITHUB_REPOSITORY||'281622902/xiaoyang-music';
+ // 双端独立发版：mobile-v3.6.0 / all-v3.7.0 都要剥掉前缀，
+ // 写进 Supabase 的 version 只能是纯 3.6.0，不能出现 "mobile-v3.6.0"。
+ const {version,target,legacy}=parseReleaseTag(tag);
+ if(!legacy&&target==='pc')throw Error('pc-v* 标签不应触发安卓发布');
+ const repository=env.RELEASE_REPOSITORY||env.GITHUB_REPOSITORY||'281622902/xiaoyang-music';
  if(!/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(repository)||repository.split('/').some(part=>part==='.'||part==='..'))throw Error('GitHub 仓库格式错误');
  const assetName='xiaoyang-music-'+version+'-android.apk';
  return{tag,version,repository,assetName,rootVersion:pkg.version,row:{platform:'android',version,download_url:'https://github.com/'+repository+'/releases/download/'+tag+'/'+assetName,release_notes:'安卓新版：独立手机界面、原生后台播放与本地音乐'}};
