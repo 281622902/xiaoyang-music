@@ -13,7 +13,19 @@
  function merge(left,right){left=clean(left);right=clean(right);const map=new Map(left.playlists.map(p=>[p.id,p]));for(const p of right.playlists){const old=map.get(p.id);map.set(p.id,old?{...newerMetadata(old,p),tracks:tracks([...old.tracks,...p.tracks])}:p);}return clean({playlists:[...map.values()],favorites:tracks([...left.favorites,...right.favorites]),preferences:right.preferences});}
  async function user(){if(!global.XYCloud?.available)throw Error('云端账户暂不可用');const {data,error}=await global.supabase.auth.getUser();if(error||!data.user)throw Error('请先登录云端账户');return data.user.id;}
  async function guard(id){if(await user()!==id)throw Error('账户已切换，本次同步已取消');}
- function message(error){if(['42P01','PGRST202','PGRST205'].includes(error?.code))return Error('云端歌单服务尚未启用，当前仍可使用云端收藏');return Error(error?.message||'同步失败，请检查网络');}
+ // v3.6.1：以前把「表/函数不存在」笼统说成「服务尚未启用」，用户会误以为
+ // 整个云端功能坏了；网络超时也会被吞成「同步失败」。这里按错误类型给
+ // 可操作的提示，尤其是明确告诉用户要执行哪个 SQL 文件。
+ function message(error){
+  const code=String(error?.code||''),msg=String(error?.message||'');
+  if(['42P01','PGRST202','PGRST205'].includes(code))
+   return Error('云端同步表未初始化：请在 Supabase SQL Editor 执行项目里的 supabase/music_state.sql（本机歌单不受影响）');
+  if(code==='42501'||/permission denied/i.test(msg))
+   return Error('请先登录云端账户，再同步歌单');
+  if(/timeout|abort|fetch|network|connection|502/i.test(msg)||error?.error==='connection_reset')
+   return Error('云端连接超时，请稍后重试');
+  return Error(msg||'同步失败，请检查网络');
+ }
  async function fetchState(id){const {data,error}=await global.supabase.from('user_music_state').select('payload,revision').eq('user_id',id).maybeSingle();if(error)throw message(error);return data||{payload:{},revision:0};}
  async function preview(){const id=await user(),remote=await fetchState(id);await guard(id);const a=local(),b=clean(remote.payload);return {localPlaylists:a.playlists.length,cloudPlaylists:b.playlists.length,cloudFavorites:b.favorites.length,revision:remote.revision};}
  async function push(){const id=await user();for(let attempt=0;attempt<3;attempt++){const remote=await fetchState(id);await guard(id);const payload=merge(remote.payload,local());if(JSON.stringify(payload).length>1800000)throw Error('歌单数据较多，请减少后重试');const {error}=await global.supabase.rpc('save_music_state',{expected_user:id,expected_revision:remote.revision,new_payload:payload});if(error){if(String(error.message).includes('music_state_conflict'))continue;throw message(error);}await guard(id);return {playlists:payload.playlists.length,favorites:payload.favorites.length};}throw Error('其他设备正在同步，请稍后重试');}

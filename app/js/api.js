@@ -131,20 +131,39 @@
   // artist：可选的歌手目标（前端识别「歌名 - 歌手」或「歌名 歌手」后传入），
   //   后端据此把该歌手的版本置顶——解决「搜周杰伦的歌搜到的是别人唱的」。
   async function search(keyword, type, page, limit, signal, artist) {
-    const r = await request('/api/search', {
+    const params = {
       keyword,
       type: type || 'song',
       page: page || 1,
       limit: limit || DEFAULT_LIMIT,
       vendor: getVendor(),
       artist: artist || '',
-    }, 12000, signal);
-    if (!r || r.code !== 200) throw new Error((r && r.msg) || '搜索失败');
+    };
+    // v3.6.1：Render 免费版冷启动可能让首个请求超时（日志实测可延迟 50s+）。
+    // 搜索是幂等 GET，超时自动重试一次；用户主动取消（切 Tab/新搜索）不重试。
+    let r = null, lastErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        r = await request('/api/search', params, 18000, signal);
+        break;
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        lastErr = e;
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    }
+    if (!r) throw lastErr || new Error('搜索失败');
+    if (r.code !== 200) throw new Error((r && r.msg) || '搜索失败');
     return {
       list: (r.result || []).map(normalizeTrack),
       total: r.total || (r.result ? r.result.length : 0),
       // v3.6.0：原唱守卫 / 歌手去重 / 定向加载的回执，交给搜索页做摘要提示
       noOriginal: !!r.noOriginal,
+      // v3.6.1：上游超时降级回执——不能把网络故障说成版权问题
+      networkTimeout: !!r.networkTimeout,
+      relaxed: !!r.relaxed,
+      degraded: !!r.degraded,
+      msg: r.msg || '',
       deduped: Number(r.deduped || 0),
       targeted: !!r.targeted,
     };

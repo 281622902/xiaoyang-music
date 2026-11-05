@@ -569,6 +569,32 @@ async function typedSongRows(kw, limit) {
   return rows.slice(0, limit * 4);
 }
 
+// v3.6.1：判断「国内上游是否还活着」。
+// 解析链全败时用它区分「Render→国内上游超时/风控」与「上游正常但确实没有原唱」。
+// 免费版 Render 冷启动 + 新加坡到国内链路抖动时，全部上游会一起挂；
+// 这种情况绝不能告诉用户「暂无原唱版权」，否则用户会以为歌被下架而反复重试。
+async function upstreamReachable() {
+  // 仅回归测试使用：模拟「Render → 国内上游整体不可达」，生产环境不设置
+  if (process.env.XY_FORCE_UPSTREAM_DOWN === '1') return false;
+  const probes = await Promise.allSettled([
+    withTimeout(qmeting.search('netease', '周杰伦', 1, 5), 3000),
+    withTimeout(netease.search('周杰伦', 'song', 1, 5), 3000),
+    withTimeout(gds.search('netease', '周杰伦', 1, 5), 3000),
+  ]);
+  return probes.some((p) => p.status === 'fulfilled' && Array.isArray(p.value?.list) && p.value.list.length > 0);
+}
+
+// 复用「同一关键词单曲搜索」的结果做分类兜底：切 Tab 时前端已搜过单曲，
+// /api/search 的 song 分支会额外写一份按关键词的短缓存，这里零额外网络请求。
+async function songRowsFor(kw) {
+  const cached = cacheGet('songs:' + kw);
+  if (cached && cached.length) return cached;
+  try {
+    const r = await withTimeout(searchMerged(kw, 'song', 1, 30, {}), 5500);
+    return r.list || [];
+  } catch (e) { return []; }
+}
+
 function uniqueByName(list) {
   const seen = new Set(); const out = [];
   for (const x of list || []) {
@@ -580,12 +606,21 @@ function uniqueByName(list) {
 }
 
 async function searchTyped(kw, type, page, limit, vendor) {
-  const base = await searchMulti(vendor, kw, type, page, limit);
+  // v3.6.1：主源 / 底层聚合 / 单曲缓存兜底 三路并行 + 整体硬截止。
+  // Render（新加坡）→ 国内上游常整体超时，旧版串行等待会超过前端超时，
+  // 实测线上专辑/歌单直接返回 0 条；并行后最坏 ~6.5s 就能给结果。
+  const [base, typed, songRows] = await Promise.all([
+    withTimeout(searchMulti(vendor, kw, type, page, limit), 6500).catch(() => ({ list: [], total: 0, timedOut: true })),
+    withTimeout(typedSongRows(kw, 30), 6500).catch(() => []),
+    songRowsFor(kw),
+  ]);
   const raw = (base.list || []).slice();
+  const degraded = !!base.timedOut || (!raw.length && !typed.length && !songRows.length);
+
   if (type === 'artist') {
     const lk = String(kw).trim().toLowerCase();
     const extra = [];
-    for (const t of await typedSongRows(kw, 30)) {
+    for (const t of [...typed, ...songRows]) {
       const an = String(t.artist || '').trim();
       if (!an || originalGuard.isDerivative(t.name, an)) continue;
       for (const pnRaw of originalGuard.canonicalParts(an)) {
@@ -598,18 +633,20 @@ async function searchTyped(kw, type, page, limit, vendor) {
     }
     const merged = mergeArtists([...raw, ...extra], { limit });
     return {
-      list: merged,
-      total: merged.length,
+      list: merged, total: merged.length,
       deduped: Math.max(0, raw.length + extra.length - merged.length),
-      targeted: extra.length > 0,
+      targeted: extra.length > 0, degraded,
     };
   }
   if (type === 'album') {
     // 过滤掉旧兜底生成的「XXX · 相关歌曲集」伪专辑
     const real = raw.filter((x) => !/^artistlist\s*:/.test(String(x.id || '')));
-    if (real.length >= 3) { const u = uniqueByName(real).slice(0, limit); return { list: u, total: u.length, deduped: real.length - u.length }; }
+    if (real.length >= 3) {
+      const u = uniqueByName(real).slice(0, limit);
+      return { list: u, total: u.length, deduped: real.length - u.length, degraded: false };
+    }
     const seen = new Map();
-    for (const t of await typedSongRows(kw, 40)) {
+    for (const t of [...typed, ...songRows]) {
       const an = String(t.album || '').trim();
       if (!an || originalGuard.isDerivative(an, '')) continue;
       if (!seen.has(an)) {
@@ -617,13 +654,16 @@ async function searchTyped(kw, type, page, limit, vendor) {
       }
     }
     const list = uniqueByName([...real, ...seen.values()]).slice(0, limit);
-    return { list, total: list.length, deduped: 0, targeted: seen.size > 0 };
+    return { list, total: list.length, deduped: 0, targeted: seen.size > 0, degraded: degraded || (!real.length && !seen.size) };
   }
   if (type === 'playlist') {
     const real = raw.filter((x) => !/^artistlist\s*:/.test(String(x.id || '')));
-    if (real.length >= 3) { const u = uniqueByName(real).slice(0, limit); return { list: u, total: u.length, deduped: real.length - u.length }; }
+    if (real.length >= 3) {
+      const u = uniqueByName(real).slice(0, limit);
+      return { list: u, total: u.length, deduped: real.length - u.length, degraded: false };
+    }
     let pool = [];
-    try { pool = await withTimeout(netease.topPlaylists('全部', 50), SEARCH_TIMEOUT * 2); } catch (e) { pool = []; }
+    try { pool = await withTimeout(netease.topPlaylists('全部', 50), 3500); } catch (e) { pool = []; }
     const lk = String(kw).trim().toLowerCase();
     const extra = pool.filter((p) =>
       String(p.name || '').toLowerCase().includes(lk) ||
@@ -634,10 +674,26 @@ async function searchTyped(kw, type, page, limit, vendor) {
       pic: p.cover || p.pic || '', vendor: 'netease', duration: 0,
       trackCount: p.trackCount || 0, playCount: p.playCount || 0,
     }));
-    const list = uniqueByName([...real, ...extra]).slice(0, limit);
-    return { list, total: list.length, deduped: 0, targeted: extra.length > 0 };
+    // 上游整体不可达时的最后兜底：用同一关键词的单曲结果生成「相关歌曲集」，
+    // 至少让长条卡片有内容可点，并明确回 degraded 让前端标注「网络不佳」。
+    let related = [];
+    if (!real.length && !extra.length && songRows.length) {
+      const groups = new Map();
+      for (const t of songRows) {
+        const k = String(t.artist || '相关歌曲').split('/')[0].trim() || '相关歌曲';
+        if (!groups.has(k)) groups.set(k, { artist: k, pic: t.pic || '', count: 0 });
+        groups.get(k).count += 1;
+      }
+      related = [...groups.values()].slice(0, Math.min(8, limit)).map((g) => ({
+        id: 'artistlist:' + g.artist, name: kw + ' · ' + g.artist + ' 相关歌曲集',
+        artist: g.artist, album: '', pic: g.pic, vendor: 'netease', duration: 0,
+        trackCount: g.count,
+      }));
+    }
+    const list = uniqueByName([...real, ...extra, ...related]).slice(0, limit);
+    return { list, total: list.length, deduped: 0, targeted: extra.length > 0, degraded: degraded || related.length > 0 };
   }
-  return { list: raw, total: base.total || raw.length, deduped: 0 };
+  return { list: raw, total: base.total || raw.length, deduped: 0, degraded };
 }
 
 // 热搜词：取热歌榜前 12 首歌名，缓存 1 小时（供搜索框推荐 + 热搜榜）
@@ -764,11 +820,31 @@ async function handleApi(req, res, reqUrl) {
       if (type === 'song') {
         const key = 'sm:' + kw + ':' + page + ':' + limit + ':' + artist;
         const cached = cacheGet(key);
-        if (cached) return sendJson(res, 200, { code: 200, result: cached.list, total: cached.total });
+        if (cached) {
+          cacheSet('songs:' + kw, cached.list, SEARCH_CACHE_MS);
+          return sendJson(res, 200, { code: 200, result: cached.list, total: cached.total });
+        }
         const merged = await searchMerged(kw, type, page, limit, { artist });
-        // 用户指定了歌手、但严格过滤后连一条真原唱都没有 → 明确告知，不给错歌
+        // 用户指定了歌手、但严格过滤后连一条真原唱都没有
         const noOriginal = !!artist && merged.list.length === 0;
+        if (noOriginal) {
+          const reachable = await upstreamReachable();
+          if (!reachable) {
+            // v3.6.1 降级：上游整体不可达（Render 冷启动 / 国内链路风控），
+            // 这不是「没版权」。放宽筛选给一批相关结果，并明确告知网络异常，
+            // 避免用户以为歌被下架。每条仍带 _original 标记，前端可提示辨别。
+            const relaxed = await searchMerged(kw, type, page, limit, { artist: '' });
+            cacheSet('songs:' + kw, relaxed.list, SEARCH_CACHE_MS);
+            return sendJson(res, 200, {
+              code: 200, result: relaxed.list, total: relaxed.total,
+              relaxed: true, networkTimeout: true,
+              msg: '网络超时，请稍后重试（已临时放宽筛选）',
+            });
+          }
+        }
         cacheSet(key, merged, SEARCH_CACHE_MS);
+        // 按关键词留一份短缓存，供「切到专辑/歌单 Tab」时零请求兜底
+        cacheSet('songs:' + kw, merged.list, SEARCH_CACHE_MS);
         return sendJson(res, 200, {
           code: 200, result: merged.list, total: merged.total,
           noOriginal, ...(noOriginal ? { msg: '暂无原唱版权' } : {}),
@@ -779,6 +855,8 @@ async function handleApi(req, res, reqUrl) {
       return sendJson(res, 200, {
         code: 200, result: typed.list, total: typed.total,
         deduped: typed.deduped || 0, targeted: !!typed.targeted,
+        degraded: !!typed.degraded,
+        ...(typed.degraded ? { msg: '上游响应较慢，已展示可获得的结果' } : {}),
       });
     }
 
@@ -838,8 +916,29 @@ async function handleApi(req, res, reqUrl) {
         body = Buffer.concat(chunks);
         if (body.length) headers['content-length'] = String(body.length);
       }
+      // v3.6.1：Render 免费版冷启动（可延迟 50s+）与海外到 Supabase 链路抖动
+      // 会让读请求超时。幂等的 GET/HEAD 自动重试 2 次；写请求不重试，
+      // 避免重复插入歌单/收藏。单次 10s，最坏 30s 内明确返回。
+      const retryable = ['GET', 'HEAD'].includes(req.method);
+      const attempts = retryable ? 3 : 1;
+      let up = null, lastErr = null;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const candidate = await withTimeout(rawFetch(target, { method: req.method, headers, body, redirect: 'manual' }), 10000);
+          if ((candidate.status >= 500 || candidate.status === 429) && i < attempts - 1) {
+            try { await candidate.body?.cancel?.(); } catch (_) { /* 已断开 */ }
+            lastErr = new Error('upstream ' + candidate.status);
+          } else { up = candidate; break; }
+        } catch (e) { lastErr = e; }
+        if (i < attempts - 1) await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+      }
+      if (!up) {
+        if (res.destroyed) return;
+        if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ code: 502, msg: '云端连接超时，请稍后重试（' + ((lastErr && lastErr.message) || '') + '）', error: 'connection_reset' }));
+        return;
+      }
       try {
-        const up = await withTimeout(rawFetch(target, { method: req.method, headers, body, redirect: 'manual' }), 30000);
         const resHeaders = {};
         for (const [k, v] of Object.entries(up.headers)) {
           const lk = k.toLowerCase();
@@ -1005,18 +1104,30 @@ async function handleApi(req, res, reqUrl) {
             RESOLVE_TOTAL_TIMEOUT,
           );
           if (fb && fb.url) { data.url = fb.url; data.vendor = fb.vendor; data.trial = false; }
-          if (fb && fb.blocked) data.noOriginal = true;
+          // blocked 只表示「守卫没放行」，不能直接等同于没版权：
+          // 上游整体超时时守卫同样会 block，原因由下方统一判定。
         } catch (e) {
           data.url = data.url || '';
           data.resolveTimeout = true;
+          data.networkTimeout = true;
         }
       }
       data.url = forceHttps(data.url);
-      // 全部音源都试过仍无地址（非超时）：给前端明确标记 → 提示「受版权保护或暂无音源」
+      // 全部音源都试过仍无地址（非超时）
       if (!data.url && !data.resolveTimeout) {
         data.exhausted = true;
-        // 严格模式（搜索结果点播）下没有真原唱 → 用用户指定的文案，不要含糊其辞
-        if (strictOriginal && wantArtist) { data.noOriginal = true; data.msg = '暂无原唱版权'; }
+        if (strictOriginal && wantArtist) {
+          // v3.6.1：区分「Render→国内上游大面积超时/风控」与「上游正常但确实无原唱」。
+          // 前者给网络提示 + 允许前端放宽/换源，后者才说版权。
+          const reachable = await upstreamReachable();
+          if (!reachable) {
+            data.networkTimeout = true;
+            data.msg = '网络超时，请稍后重试';
+          } else {
+            data.noOriginal = true;
+            data.msg = '暂无原唱版权';
+          }
+        }
       }
       return sendJson(res, 200, { code: 200, data });
     }
@@ -1037,12 +1148,14 @@ async function handleApi(req, res, reqUrl) {
         resolvePlayUrlCached({ vendor, id, name, artist, duration, quality, expectArtist: wantArtist, strictOriginal }, { fresh: q(reqUrl, 'fresh') === '1' }),
         RESOLVE_TOTAL_TIMEOUT,
       );
-      return sendJson(res, 200, {
-        code: 200,
-        url: forceHttps(fb.url),
-        vendor: fb.vendor,
-        ...((!fb.url && (fb.blocked || strictOriginal)) ? { noOriginal: true, msg: '暂无原唱版权' } : {}),
-      });
+      if (!fb.url && (fb.blocked || strictOriginal)) {
+        // 与 /api/song 保持一致：上游全挂是网络问题，不是版权问题
+        const reachable = await upstreamReachable();
+        return sendJson(res, 200, reachable
+          ? { code: 200, url: '', vendor: '', noOriginal: true, msg: '暂无原唱版权' }
+          : { code: 200, url: '', vendor: '', networkTimeout: true, msg: '网络超时，请稍后重试' });
+      }
+      return sendJson(res, 200, { code: 200, url: forceHttps(fb.url), vendor: fb.vendor });
     }
 
     if (pathname === '/api/lyric') {

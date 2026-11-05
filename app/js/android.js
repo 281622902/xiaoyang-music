@@ -57,15 +57,21 @@
   let route = 'discover', previousRoute = 'discover', libraryTab = 'playlists', detail = null;
   let playlists = read('uzz.playlists', []), searchHistory = read('uzz.searchHistory', []);
   let localTracks = read('xy.android.localTracks', []);
-  let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort, searchArtistHint = '', searchDeduped = 0, searchTargeted = false;
+  let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort, searchArtistHint = '', searchDeduped = 0, searchTargeted = false, searchRelaxed = false, searchDegraded = false, searchNetworkTimeout = false;
   let channel = 'recommend';
   let detailGeneration = 0, discoveryGeneration = 0, cloudGeneration = 0, authGeneration = 0, heart;
   let cloudRows = [], authMode = 'login', selectedTrack = null, lastFocus = null, sheetFocus = null, lastBack = 0;
+  // v3.6.1：云端歌单（user_playlists 表），与电脑端共用同一张表
+  let cloudPlaylists = [], cloudPlAt = 0, cloudPlPending = false;
   let selectedArtist = { id:'', name:'' };
   function toast(text) { $('toast').textContent = text; $('toast').classList.toggle('hidden', !text); clearTimeout(toast.timer); if (text) toast.timer=setTimeout(()=>$('toast').classList.add('hidden'),3500); }
   function hydrate(root = document) { root.querySelectorAll('[data-icon]').forEach(e=>{e.innerHTML=icon(e.dataset.icon);}); }
   function empty(text) { return '<div class="empty-state">'+escape(text)+'</div>'; }
   function failure(text, action) { return '<div class="error-state">'+escape(text)+(action?'<button data-action="'+action+'">重新加载</button>':'')+'</div>'; }
+  // v3.6.1：网络类失败给两个可操作出口（重试 / 切换音源），不再只丢一句「重试」
+  function networkFailureBox(text) {
+    return '<div class="error-state">'+escape(text)+'<button data-action="retrySearch">重试</button><button data-action="settings">切换音源</button></div>';
+  }
   function tracksHtml(tracks, scope) {
     trackSets.set(scope, tracks);
     if (!tracks.length) return '<li class="empty-state">还没有歌曲，去发现一些喜欢的音乐吧。</li>';
@@ -259,13 +265,18 @@
       const r=await UzzApi.search(keyword,searchType,searchPage,kindLimit,searchAbort.signal,hint.artist); if(ticket!==searchGeneration)return;
       searchRows=more?[...searchRows,...r.list]:r.list;
       searchDeduped=r.deduped||0; searchTargeted=!!r.targeted;
+      // v3.6.1：上游超时降级回执——网络问题优先于版权提示，避免误导
+      searchRelaxed=!!r.relaxed; searchDegraded=!!r.degraded; searchNetworkTimeout=!!r.networkTimeout;
       const artistNote=(searchType==='song'&&hint.artist)?' · 已锁定 '+hint.artist+' 原唱':'';
-      $('searchSummary').textContent=r.noOriginal
-        ? '暂无原唱版权：没有找到 '+(hint.artist||'该歌手')+' 的正版音源'
-        : r.total?('找到 '+r.total+' '+(SEARCH_KIND_UNIT[searchType]||'个结果')+artistNote):'暂未找到结果，试试其他关键词或音源';
+      $('searchSummary').textContent=searchNetworkTimeout
+        ? '网络超时，请稍后重试（已临时放宽筛选，请注意辨别版本）'
+        : r.noOriginal
+          ? '暂无原唱版权：没有找到 '+(hint.artist||'该歌手')+' 的正版音源'
+          : r.total?('找到 '+r.total+' '+(SEARCH_KIND_UNIT[searchType]||'个结果')+artistNote)
+          : (searchDegraded?'上游响应较慢，暂未取到结果，可重试或切换音源':'暂未找到结果，试试其他关键词或音源');
       paintSearchResults();
       $('searchMore').hidden=r.list.length<kindLimit||searchRows.length>=r.total;
-    } catch(e) {if(ticket!==searchGeneration)return; if(more)searchPage--; $('searchSummary').textContent='搜索失败：'+e.message; if(!more){$('mobileResults').hidden=false;$('mobileResults').innerHTML='<li>'+failure('检查网络后重试。','retrySearch')+'</li>';}else $('searchMore').hidden=false;}
+    } catch(e) {if(ticket!==searchGeneration)return; if(more)searchPage--; $('searchSummary').textContent='搜索失败：'+e.message; if(!more){$('mobileResults').hidden=false;$('mobileResults').innerHTML='<li>'+networkFailureBox('网络超时或服务未响应，请稍后重试。')+'</li>';}else $('searchMore').hidden=false;}
   }
   // 搜索结果四套完全不同的 UI（v3.6.0 阶段一）：
   //   单曲=带序号列表 / 歌手=圆形头像列表 / 专辑=方形图片网格 / 歌单=长条卡片
@@ -279,12 +290,15 @@
       hintBox.textContent=text; hintBox.hidden=false;
     }
     const rows=searchRows;
+    // v3.6.1：网络故障 / 原唱未命中导致空列表时，给「重试 + 切换音源」两个出口
+    const giveActions = searchNetworkTimeout || searchDegraded || (searchType==='song' && !!searchArtistHint);
+    const emptyOrActions = (txt) => giveActions ? networkFailureBox(txt) : empty(txt);
     if(searchType==='song'){
       const box=$('mobileResults'); box.hidden=false;
       box.innerHTML = rows.length ? rows.map((t,i)=>
         '<li class="track-row"><span class="track-index">'+(i+1)+'</span>'+
         '<button class="track-main" data-track-list="search" data-track-index="'+i+'"><img loading="lazy" src="'+escape(cover(t.pic))+'"><span><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape([t.artist,t.album].filter(Boolean).join(' · '))+'</small></span></button></li>'
-      ).join('') : empty(searchArtistHint?'暂无原唱版权，试试其它关键词或音源':'没有找到相关歌曲');
+      ).join('') : emptyOrActions(searchNetworkTimeout||searchDegraded?'网络超时，暂未取到歌曲，请重试或切换音源。':(searchArtistHint?'暂无原唱版权，可重试或切换音源后再试。':'没有找到相关歌曲'));
       trackSets.set('search', rows);
       return;
     }
@@ -295,7 +309,7 @@
         '<span class="artist-circle-art">'+(t.pic?'<img loading="lazy" src="'+escape(cover(t.pic))+'">':'<span>'+escape((t.name||'歌').slice(0,1))+'</span>')+'</span>'+
         '<span class="artist-circle-meta"><strong>'+escape(t.name||'未知歌手')+'</strong><small>歌手 · 点击查看热门歌曲'+(t._mergedCount>1?' · 合并 '+t._mergedCount+' 个来源':'')+'</small></span>'+
         '<span class="artist-circle-arrow">›</span></button>'
-      ).join('') : empty('没有找到相关歌手');
+      ).join('') : emptyOrActions(searchDegraded?'网络超时，暂未取到歌手，请重试或切换音源。':'没有找到相关歌手');
       return;
     }
     if(searchType==='album'){
@@ -304,7 +318,7 @@
         '<button class="album-square" data-search-index="'+i+'">'+
         '<span class="album-square-art"><img loading="lazy" src="'+escape(cover(t.pic))+'"></span>'+
         '<strong>'+escape(t.name||'未知专辑')+'</strong><small>'+escape(t.artist||'专辑')+'</small></button>'
-      ).join('') : empty('没有找到相关专辑');
+      ).join('') : emptyOrActions(searchDegraded?'网络超时，暂未取到专辑，请重试或切换音源。':'没有找到相关专辑');
       return;
     }
     const box=$('searchPlaylists'); box.hidden=false;
@@ -313,7 +327,7 @@
       '<img loading="lazy" src="'+escape(cover(t.pic))+'">'+
       '<span class="strip-meta"><strong>'+escape(t.name||'未知歌单')+'</strong><small>'+escape('歌单 · '+(t.artist||'网易云')+(t.trackCount?(' · '+t.trackCount+' 首'):''))+'</small></span>'+
       '<span class="strip-count">'+(t.playCount?('▶ '+Math.round(t.playCount/10000)+'万'):'›')+'</span></button>'
-    ).join('') : empty('没有找到相关歌单');
+    ).join('') : emptyOrActions(searchDegraded?'网络超时，暂未取到歌单，请重试或切换音源。':'没有找到相关歌单');
   }
   async function loadDiscover() {
     const ticket=++discoveryGeneration; $('refreshDiscover').disabled=true;
@@ -437,12 +451,33 @@
     try {const r=await(loader?loader():UzzApi.getPlaylist(id,100));if(ticket!==detailGeneration)return;detail={id,name:r.info?.name||name||'歌单',cover:r.info?.cover||r.info?.pic||r.tracks[0]?.pic,tracks:r.tracks||[],loading:false};paintDetail();}
     catch(e){if(ticket===detailGeneration){detail.loading=false;detail.error='加载失败：'+e.message;paintDetail();}}
   }
-  function openLocal(id) {const p=playlists.find(p=>p.id===id);if(!p)return;detailGeneration++;detail={localId:id,name:p.name,cover:p.cover,tracks:p.tracks||[]};navigate('detail');paintDetail();}
+  function openLocal(id) {
+    const p=playlists.find(p=>p.id===id)||cloudPlaylists.find(p=>p.id===id);if(!p)return;
+    detailGeneration++;detail={localId:p.cloudId?undefined:id,name:p.name,cover:p.cover,tracks:p.tracks||[]};navigate('detail');paintDetail();
+  }
+  // v3.6.1：读取电脑端也在用的 user_playlists 表。此前手机只走本地歌单 +
+  // 废弃的 user_music_state 同步，导致电脑收藏的歌单在手机上永远看不到。
+  async function loadCloudPlaylists() {
+    if(!XYCloud.user||typeof global.getPlaylists!=='function'||cloudPlPending)return;
+    cloudPlPending=true;
+    try {
+      const rows=await global.getPlaylists();
+      const conv=global.XYCloud?.favoriteToTrack;
+      cloudPlaylists=(rows||[]).map(r=>({
+        id:'cloud:'+r.id, cloudId:r.id, name:r.name||'云端歌单', cover:'', kind:'collected',
+        tracks:(r.tracks||[]).map(t=>conv?conv({song_name:t.name,song_url:t.url}):null).filter(x=>x&&x.id&&x.vendor),
+      }));
+      cloudPlAt=Date.now();
+      if(route==='library'&&libraryTab==='playlists')renderLibrary();
+    } catch(e) { /* 云端不可用时保留本机歌单，不打断使用 */ }
+    finally { cloudPlPending=false; }
+  }
   async function openSearchResult(index) {
     const t=searchRows[index];if(!t)return;
     // v3.6.0：从搜索结果点播时把「搜索词歌手 / 显示歌手」作为强约束传给播放链，
     // 解析出的音频歌手对不上，后端直接回「暂无原唱版权」，绝不放翻唱。
-    if(searchType==='song')return play(t, true);
+    // v3.6.1：上游超时且已放宽筛选时不再用严格模式点播，避免「搜得到却全被拦」
+    if(searchType==='song')return play(t, !searchRelaxed);
     if(searchType==='artist')return openOnline('artist:'+t.id,t.name,async()=>({info:{name:t.name,cover:t.pic},tracks:await UzzApi.getArtistTop(t.id,100)}));
     if(searchType==='album'){
       // 定向兜底生成的专辑卡没有平台数字 id，按专辑名拉同专辑歌曲
@@ -467,7 +502,10 @@
     renderLibraryStats();
     if(libraryTab==='playlists') {
       // 歌单用大图网格（与「喜欢/最近」的列表形态区分）
-      $('libraryContent').innerHTML=playlists.length?'<div class="lib-grid">'+playlists.map(p=>'<button data-local-playlist="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(p.cover||p.tracks?.[0]?.pic))+'" alt=""><strong>'+escape(p.name)+'</strong><small>'+(p.tracks?.length||0)+' 首 · '+(p.kind==='collected'?'已保存':'我创建')+'</small></button>').join('')+'</div>':empty('把喜欢的音乐装进歌单。点右上角 ＋ 创建第一张歌单。');
+      // v3.6.1：把云端 user_playlists（电脑端共用）与本机歌单合并展示
+      const all=[...playlists,...cloudPlaylists];
+      $('libraryContent').innerHTML=all.length?'<div class="lib-grid">'+all.map(p=>'<button data-local-playlist="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(p.cover||p.tracks?.[0]?.pic))+'" alt=""><strong>'+escape(p.name)+'</strong><small>'+(p.tracks?.length||0)+' 首 · '+(p.cloudId?'云端歌单':(p.kind==='collected'?'已保存':'我创建'))+'</small></button>').join('')+'</div>':empty('把喜欢的音乐装进歌单。点右上角 ＋ 创建第一张歌单。');
+      if(XYCloud.user&&!cloudPlPending&&Date.now()-cloudPlAt>60000)loadCloudPlaylists();
     } else if(libraryTab==='local') {
       $('libraryContent').innerHTML='<button class="primary wide-button" data-action="importLocal">＋ 选择本机音乐文件</button><p class="muted">音频不上传。无法保存读取授权的文件会复制到应用内部（单个文件最多 256MB），卸载应用会移除副本，原文件仍保留。播放能力取决于文件编码与设备支持。</p>'+(localTracks.some(t=>!t.persistent)?'<p class="muted">部分文件是临时授权；重启后无法播放时，请重新选择文件授权。</p>':'')+'<ul class="track-list">'+tracksHtml(localTracks,'local')+'</ul>';
     } else if(libraryTab==='cloud') {
@@ -580,7 +618,10 @@
   }
   // 「我的」页快捷开关：浅色↔深色循环（完整三态在设置中心）
   function cycleTheme() { localStorage.setItem('xy.android.theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); }
-  function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;const shown=user?(XYCloud.displayName?XYCloud.displayName(user):XYCloud.displayUser(user)):'';$('mobileMemberName').textContent=shown;const name=shown||'登录，让喜欢随行';$('mobileAccountName').textContent=name;$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;const av=$('meAvatar');if(av&&!av.style.backgroundImage)av.textContent=(user?name:'杨').slice(0,1);if(user)fillProfile(user);refreshAccountRows();}
+  function renderAuth() {const user=XYCloud.user;
+    // 账号切换/登录后立刻重新拉取云端歌单，避免残留上一个账号的数据
+    const uid=user?.id||'';if(uid!==(renderAuth._uid||'')){renderAuth._uid=uid;cloudPlaylists=[];cloudPlAt=0;}
+    $('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;const shown=user?(XYCloud.displayName?XYCloud.displayName(user):XYCloud.displayUser(user)):'';$('mobileMemberName').textContent=shown;const name=shown||'登录，让喜欢随行';$('mobileAccountName').textContent=name;$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;const av=$('meAvatar');if(av&&!av.style.backgroundImage)av.textContent=(user?name:'杨').slice(0,1);if(user)fillProfile(user);refreshAccountRows();}
   // 设置页「账号与安全」分组里的账户状态
   function refreshAccountRows() {
     const el=$('valAccount');

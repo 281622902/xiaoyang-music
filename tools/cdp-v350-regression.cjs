@@ -41,7 +41,10 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
   // ── 1. 版本号四处一致 ──
   {
     const v = await json(`JSON.stringify({mv:document.getElementById('mobileVersion')?.textContent,sv:document.getElementById('settingsVer')?.textContent,qn:document.querySelector('#page-settings .quiet-note p')?.textContent,app:window.XYCloud?.appVersion})`);
-    check('版本号一致(3.5.0)', v.mv === '3.5.0' && v.sv === 'v3.5.0' && /3\.5\.0/.test(v.qn || '') && v.app === '3.5.0', JSON.stringify(v));
+    // 版本从 package.json 读取，避免每次发版都要手改回归脚本
+    const APP_VER = require('../package.json').version;
+    check('版本号四处一致(' + APP_VER + ')',
+      v.mv === APP_VER && v.sv === 'v' + APP_VER && v.qn.includes(APP_VER) && v.app === APP_VER, JSON.stringify(v));
   }
 
   // ── 2. 六页可切换且内容非空 ──
@@ -86,7 +89,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
   };
   for (const [type, label] of [['artist', '歌手'], ['album', '专辑'], ['playlist', '歌单']]) {
     await val(`document.querySelector('#searchTypes [data-type=${type}]').click();1`);
-    await sleep(6000);
+    await sleep(9500);
     const [boxSel, itemSel] = TAB_BOX[type];
     const s = await json(`JSON.stringify({
       listHidden:document.getElementById('mobileResults')?.hidden,
@@ -96,7 +99,7 @@ const listTargets = () => new Promise((res, rej) => http.get(`http://127.0.0.1:$
     })`);
     check(`搜索「${label}」走专属 UI`, s.listHidden === true && s.boxHidden === false && s.items > 0 && s.others === true, JSON.stringify(s));
   }
-  await val(`document.querySelector('#searchTypes [data-type=song]').click();1`); await sleep(6000);
+  await val(`document.querySelector('#searchTypes [data-type=song]').click();1`); await sleep(9500);
 
   // ── 5. 笔记：推荐/关注 ──
   await val(`location.hash='#notes'`); await sleep(1500);

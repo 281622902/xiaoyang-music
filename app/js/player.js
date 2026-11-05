@@ -697,12 +697,21 @@
       }
     }
 
+    // v3.6.1 网络故障：上游整体超时/风控不能说成「没版权」，
+    // 给可操作提示（重试 / 切换音源），别让用户反复点一首其实能播的歌。
+    if (STATE.current.networkTimeout || STATE.current.msg === '网络超时，请稍后重试') {
+      STATE.loading = false;
+      STATE.failSeq = seq;
+      toast('网络超时，请稍后重试；也可在设置里切换音源', 5000);
+      setPlayIcon(false);
+      return;
+    }
     // v3.6.0 原唱守卫 · 后端回执：所有音源都没有真原唱 → 明确提示，
     // 不再把翻唱 / 伴奏 / 空地址当成「播放失败」含糊带过。
     if (STATE.current.noOriginal || (!STATE.current.url && STATE.current.msg === '暂无原唱版权')) {
       STATE.loading = false;
       STATE.failSeq = seq;
-      toast('暂无原唱版权：未找到该歌手的正版音源');
+      toast('暂无原唱版权：未找到该歌手的正版音源（可在设置里切换音源）', 5000);
       setPlayIcon(false);
       return;
     }
