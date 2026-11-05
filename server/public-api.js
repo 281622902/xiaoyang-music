@@ -1,6 +1,6 @@
 const {isIP}=require('node:net');
 const defaults=['163.com','126.net','qq.com','gtimg.cn','gtimg.com','kugou.com','kuwo.cn','kuwo.com','api.injahow.cn','api.qijieya.cn','music-api.gdstudio.xyz'];
-const paths=new Set(['health','search','song','url','lyric','wiki','simi','suggest','playlist','playlists','charts','artist','album','pic','stream'].map(x=>'/api/'+x));
+const paths=new Set(['health','search','song','url','lyric','wiki','simi','suggest','playlist','playlists','charts','artist','album','pic','stream','version','release-file'].map(x=>'/api/'+x));
 function mediaURL(value,env=process.env){
  const u=new URL(String(value));
  if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.hash||u.port&&!['80','443'].includes(u.port)||isIP(u.hostname)||u.hostname.startsWith('['))throw Error('公网服务不代理该地址');
@@ -27,7 +27,7 @@ function createGate(env=process.env){
  const rpm=Math.max(30,Math.min(6000,Number(env.XY_PUBLIC_RPM)||240));
  const respond=(res,code,msg)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});res.end(JSON.stringify({code,msg}));return false;};
  return(req,res,url)=>{
-  if(!paths.has(url.pathname))return respond(res,404,'公网服务仅提供在线音乐 API');
+  if(!paths.has(url.pathname)&&!url.pathname.startsWith('/api/version/'))return respond(res,404,'公网服务仅提供在线音乐 API');
   if(!['GET','HEAD','OPTIONS'].includes(req.method))return respond(res,405,'公网音乐 API 不接受写入请求');
   if(url.href.length>8192)return respond(res,414,'请求地址过长');
   if(['/api/stream','/api/pic'].includes(url.pathname)){try{mediaURL(url.searchParams.get('url'),env);}catch(e){return respond(res,403,e.message);}}

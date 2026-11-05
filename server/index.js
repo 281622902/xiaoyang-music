@@ -1,4 +1,7 @@
 const { upstreamFetch: fetch, runRequest } = require('./request-context');
+// 原生 fetch（绕过公网模式音源白名单网关）：版本检查代理访问 Supabase 用——
+// 它不是音乐音源，不应被 mediaURL 许可校验拦截。
+const rawFetch = globalThis.fetch.bind(globalThis);
 /* ============================================================
  * index.js — 音乐解析后端 + 静态资源服务（零依赖 Node）
  * 同时承担两件事：
@@ -433,6 +436,75 @@ async function handleApi(req, res, reqUrl) {
       if (!id) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
       const info = await netease.albumDetail(id);
       return sendJson(res, 200, { code: 200, info, tracks: info.tracks });
+    }
+
+    // ── 版本检查代理（2026-11-05）：国内运营商掐断 supabase.co（真机 Connection reset），
+    // 手机端「检查更新」拿不到版本号。Render（海外→海外）代替手机查 Supabase 并返回；
+    // APK 下载也一并代理（download_url 是 supabase.co 域名，同样被墙）。
+    if (pathname === '/api/version/android') {
+      const su = process.env.SUPABASE_URL;
+      const key = process.env.SUPABASE_ANON_KEY;
+      if (!su || !key || !/^https:\/\//.test(su)) return sendJson(res, 200, { code: 200, version: '', release_notes: '' });
+      const cacheKey = 'ver:android';
+      const cached = cacheGet(cacheKey);
+      if (cached) return sendJson(res, 200, { code: 200, ...cached });
+      try {
+        const r = await withTimeout(rawFetch(su + '/rest/v1/app_versions?platform=eq.android&select=version,download_url,release_notes&order=created_at.desc&limit=50', {
+          headers: { apikey: key, Authorization: 'Bearer ' + key },
+        }), 10000);
+        if (!r.ok) throw new Error('upstream ' + r.status);
+        const rows = await r.json();
+        const semver = (v) => String(v || '').split('.').map((x) => parseInt(x, 10) || 0);
+        const newer = (a, b) => { const A = semver(a), B = semver(b); for (let i = 0; i < 3; i++) { if (A[i] !== B[i]) return A[i] > B[i]; } return false; };
+        let latest = null;
+        for (const row of rows || []) {
+          if (!row || !row.version || !row.download_url) continue;
+          if (!latest || newer(row.version, latest.version)) latest = row;
+        }
+        if (!latest) return sendJson(res, 200, { code: 200, version: '', release_notes: '' });
+        // 下载地址改写为 Render 自身代理（手机直连 supabase.co 被墙，经本服务流式转发）
+        const payload = {
+          version: latest.version,
+          download_url: 'https://' + (req.headers.host || '') + '/api/release-file?v=' + encodeURIComponent(latest.version),
+          release_notes: latest.release_notes || '',
+        };
+        cacheSet(cacheKey, payload, 5 * 60e3);
+        return sendJson(res, 200, { code: 200, ...payload });
+      } catch (e) {
+        return sendJson(res, 200, { code: 200, version: '', release_notes: '', msg: '版本查询失败：' + ((e && e.message) || '') });
+      }
+    }
+
+    if (pathname === '/api/release-file') {
+      const su = process.env.SUPABASE_URL;
+      const key = process.env.SUPABASE_ANON_KEY;
+      if (!su || !key) { res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('release proxy not configured'); }
+      try {
+        const want = q(reqUrl, 'v') || '';
+        const r = await withTimeout(rawFetch(su + '/rest/v1/app_versions?platform=eq.android&select=version,download_url' + (want ? '&version=eq.' + encodeURIComponent(want) : '&order=created_at.desc&limit=1'), {
+          headers: { apikey: key, Authorization: 'Bearer ' + key },
+        }), 10000);
+        if (!r.ok) throw new Error('upstream ' + r.status);
+        const rows = await r.json();
+        const row = (rows || [])[0];
+        if (!row || !row.download_url) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('release not found'); }
+        const up = await withTimeout(rawFetch(row.download_url, { redirect: 'follow' }), 30000);
+        if (!up.ok || !up.body) throw new Error('storage ' + up.status);
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.android.package-archive',
+          ...(up.headers.get('content-length') ? { 'Content-Length': up.headers.get('content-length') } : {}),
+          'Content-Disposition': 'attachment; filename="xiaoyang-music-' + (row.version || 'latest') + '-android.apk"',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-store',
+        });
+        await pipeline(Readable.fromWeb(up.body), res);
+      } catch (e) {
+        if (res.destroyed) return;
+        if (res.headersSent) return res.destroy();
+        res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('release proxy error: ' + ((e && e.message) || ''));
+      }
+      return;
     }
 
     if (pathname === '/api/song') {

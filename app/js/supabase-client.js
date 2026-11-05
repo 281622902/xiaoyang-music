@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.1.6', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.1.7', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -163,13 +163,39 @@
   Object.assign(global, { registerUser, loginUser, logoutUser, addFavorite, getFavorites,
     createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist });
   cloud.getUpdateInfo = async function () {
-    client();
-    const native = await global.uzzBridge?.getAppVersion?.();
-    const androidInfo = global.XYNative?.isAndroid ? await global.XYNative.App.getInfo().catch(() => null) : null;
+    let native = null, androidInfo = null;
+    try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }
+    if (global.XYNative?.isAndroid && global.XYNative.App?.getInfo) {
+      androidInfo = await global.XYNative.App.getInfo().catch(() => null);
+    }
     const current = androidInfo?.version || native?.version || cloud.appVersion;
     const platform = global.Capacitor?.getPlatform?.() === 'android' || /Android/i.test(navigator.userAgent) ? 'android' : 'windows';
-    const update = await global.checkAppUpdate(current, platform);
+    let update = null, source = 'supabase';
+    try {
+      // 8 秒竞速：Supabase 被墙时 reset 通常几秒内报错，超时兜底防止长时间转圈
+      update = await Promise.race([
+        global.checkAppUpdate(current, platform),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('supabase timeout')), 8000)),
+      ]);
+    } catch (e) {
+      // Supabase 被墙降级兜底（真机实测 Connection reset）：改走音乐后端的
+      // /api/version 代理（Render 海外→海外查 Supabase），下载地址已由后端
+      // 改写为它自己的 /api/release-file 流式代理（supabase.co 域名同样被墙）。
+      const base = (global.UzzApi?.getApiBase?.() || '').trim();
+      if (!base) throw e;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15000);
+      try {
+        const r = await fetch(base + '/api/version/' + platform + '?current=' + encodeURIComponent(current), { signal: ctrl.signal });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j || j.code !== 200) throw new Error((j && j.msg) || 'HTTP ' + r.status);
+        source = 'render';
+        update = j.version && j.version !== current
+          ? { version: j.version, download_url: j.download_url, release_notes: j.release_notes }
+          : null;
+      } finally { clearTimeout(timer); }
+    }
     return { ok: true, hasUpdate: !!update, latest: update?.version, url: update?.download_url,
-      notes: update?.release_notes, cur: current, source: 'supabase' };
+      notes: update?.release_notes, cur: current, source };
   };
 })(window);

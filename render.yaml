@@ -24,3 +24,10 @@ services:
         value: '6000'
       - key: XY_RESOLVE_TIMEOUT
         value: '25000'
+      # 版本检查代理用（/api/version/android、/api/release-file）：
+      # 国内运营商掐断 supabase.co 后，由 Render 代替手机查版本并代理 APK 下载。
+      # anon key 本就是公开只读凭据（RLS 限定 anon 只能读），入仓库安全。
+      - key: SUPABASE_URL
+        value: 'https://codianpoqhqilkwviota.supabase.co'
+      - key: SUPABASE_ANON_KEY
+        value: 'sb_publishable__DRTgpxPfdR67tsFEJ_EDQ_gvZ8VvdM'
