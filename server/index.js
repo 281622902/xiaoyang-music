@@ -760,6 +760,44 @@ async function handleApi(req, res, reqUrl) {
       }
     }
 
+    // ── PC 端版本检查代理（v3.6.0 补）─────────────────────────────
+    // getUpdateInfo() 在 Supabase 被墙时会 fallback 到 /api/version/<platform>。
+    // 早期后端只实现了 android 分支，桌面端拿到 404 → 完全查不到更新。
+    // 与 android 对称实现，但下载地址保持 GitHub Release 原链不改写成
+    // /api/release-file（electron autoUpdater 读的 latest.yml 也是 GitHub 直链）。
+    if (pathname === '/api/version/windows') {
+      const su = process.env.SUPABASE_URL;
+      const key = process.env.SUPABASE_ANON_KEY;
+      if (!su || !key || !/^https:\/\//.test(su)) return sendJson(res, 200, { code: 200, version: '', release_notes: '' });
+      const cacheKey = 'ver:windows';
+      const cached = cacheGet(cacheKey);
+      if (cached) return sendJson(res, 200, { code: 200, ...cached });
+      try {
+        const r = await withTimeout(rawFetch(su + '/rest/v1/app_versions?platform=eq.windows&select=version,download_url,release_notes&order=created_at.desc&limit=50', {
+          headers: { apikey: key, Authorization: 'Bearer ' + key },
+        }), 10000);
+        if (!r.ok) throw new Error('upstream ' + r.status);
+        const rows = await r.json();
+        const semver = (v) => String(v || '').split('.').map((x) => parseInt(x, 10) || 0);
+        const newer = (a, b) => { const A = semver(a), B = semver(b); for (let i = 0; i < 3; i++) { if (A[i] !== B[i]) return A[i] > B[i]; } return false; };
+        let latest = null;
+        for (const row of rows || []) {
+          if (!row || !row.version || !row.download_url) continue;
+          if (!latest || newer(row.version, latest.version)) latest = row;
+        }
+        if (!latest) return sendJson(res, 200, { code: 200, version: '', release_notes: '' });
+        const payload = {
+          version: latest.version,
+          download_url: latest.download_url,
+          release_notes: latest.release_notes || '',
+        };
+        cacheSet(cacheKey, payload, 5 * 60e3);
+        return sendJson(res, 200, { code: 200, ...payload });
+      } catch (e) {
+        return sendJson(res, 200, { code: 200, version: '', release_notes: '', msg: '版本查询失败：' + ((e && e.message) || '') });
+      }
+    }
+
     if (pathname === '/api/release-file') {
       const su = process.env.SUPABASE_URL;
       const key = process.env.SUPABASE_ANON_KEY;
