@@ -34,6 +34,11 @@ function getReleaseConfig(env = process.env, packages = {}) {
     if (found !== version) warnings.push(file + ' 当前为 ' + (found ?? '未设置') + '，发布版本为 ' + version + '；CI 将在打包前同步。');
   }
   const tag = suppliedTag || 'v' + version;
+  // electron-builder 按 electron/package.json 的 version 生成 Release（vX.Y.Z），
+  // 与我们的发布 Tag（pc-vX.Y.Z / all-vX.Y.Z）可能不同名。CI 的发布步骤会
+  // 智能定位真实 Release 并把这个「实际 Tag」写进 RELEASE_ACTUAL_TAG。
+  // 所有下载地址与附件校验都认实际 Tag，保证 App 拉到的 URL 真实存在。
+  const actualTag = String(env.RELEASE_ACTUAL_TAG || '').trim() || tag;
   const repository = (env.RELEASE_REPOSITORY || env.GITHUB_REPOSITORY || '').trim();
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error('请设置 RELEASE_REPOSITORY 或 GITHUB_REPOSITORY，格式为 owner/repo');
   const arch = env.RELEASE_ARCH || 'x64';
@@ -48,8 +53,8 @@ function getReleaseConfig(env = process.env, packages = {}) {
   const assetName = env.RELEASE_ASSET_NAME || configuredName;
   if (!/^[A-Za-z0-9_.-]+\.exe$/i.test(assetName)) throw new Error('安装包名称必须为无路径的 ASCII .exe 文件名');
   if (assetName !== configuredName) throw new Error('RELEASE_ASSET_NAME 与 electron-builder 生成的文件名不一致');
-  const downloadUrl = 'https://github.com/' + repository + '/releases/download/' + encodeURIComponent(tag) + '/' + encodeURIComponent(assetName);
-  return { version, tag, repository, assetName, warnings, rootVersion: root.version, desktopVersion: desktop.version, clientVersion, row: {
+  const downloadUrl = 'https://github.com/' + repository + '/releases/download/' + encodeURIComponent(actualTag) + '/' + encodeURIComponent(assetName);
+  return { version, tag, actualTag, repository, assetName, warnings, rootVersion: root.version, desktopVersion: desktop.version, clientVersion, row: {
     platform: 'windows', version, download_url: downloadUrl, release_notes: '新版本发布'
   } };
 }
@@ -93,8 +98,8 @@ async function verifyGitHubAsset(config, env, fetchImpl = globalThis.fetch) {
     return response.json();
   }
   const base = 'https://api.github.com/repos/' + config.repository;
-  const release = await get(base + '/releases/tags/' + encodeURIComponent(config.tag));
-  if (release.tag_name !== config.tag) throw new Error('GitHub Release 的 Tag 与当前版本不一致');
+  const release = await get(base + '/releases/tags/' + encodeURIComponent(config.actualTag || config.tag));
+  if (release.tag_name !== (config.actualTag || config.tag)) throw new Error('GitHub Release 的 Tag 与当前版本不一致');
   if (release.draft !== false || release.prerelease !== false || !Number.isFinite(Date.parse(release.published_at))) {
     throw new Error('该 Tag 尚未正式发布（可能是草稿或预发布），此次不写入 Supabase');
   }

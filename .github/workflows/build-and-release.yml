@@ -71,10 +71,44 @@ jobs:
             electron/dist/latest.yml
           if-no-files-found: error
 
-      # electron-builder 24 可能复用同 Tag 已有的草稿；上传完成后自动正式发布。
+      # electron-builder 按 electron/package.json 的 version 生成 Release（vX.Y.Z），
+      # 与发布 Tag（pc-vX.Y.Z / all-vX.Y.Z）不一定同名。早期这里直接
+      # `gh release edit $RELEASE_TAG` 会报 "release not found"，导致 Supabase
+      # 同步不执行、App 拉不到更新。现在改成多候选智能定位 + 发布，
+      # 并把实际 Tag 透传给同步脚本（download_url 才能指向真实存在的附件）。
       - name: Ensure GitHub Release is published
         shell: pwsh
-        run: gh release edit "$env:RELEASE_TAG" --repo "$env:RELEASE_REPOSITORY" --draft=false --prerelease=false
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = $env:RELEASE_REPOSITORY
+          $wanted = $env:RELEASE_TAG
+          $version = (node -p "require('./scripts/version-tag.cjs').parseReleaseTag(process.env.RELEASE_TAG).version").Trim()
+          if (-not $version) { throw "无法从 Tag $wanted 解析版本号" }
+          # 候选顺序：我们的发布 Tag → electron-builder 默认的 vX.Y.Z → 纯 X.Y.Z
+          $candidates = New-Object System.Collections.Generic.List[string]
+          foreach ($c in @($wanted, "v$version", $version)) {
+            if ($c -and -not $candidates.Contains($c)) { $candidates.Add($c) }
+          }
+          $found = $null
+          foreach ($c in $candidates) {
+            gh release view "$c" --repo $repo *> $null
+            if ($LASTEXITCODE -eq 0) { $found = $c; break }
+          }
+          # 兜底：列出最近的 Release，找 tag 名包含本版本号的那个
+          if (-not $found) {
+            $raw = gh release list --repo $repo --limit 30 --json tagName 2>$null
+            if ($LASTEXITCODE -eq 0 -and $raw) {
+              foreach ($r in ($raw | ConvertFrom-Json)) {
+                if ($r.tagName -like "*$version*") { $found = $r.tagName; break }
+              }
+            }
+          }
+          if (-not $found) { throw "找不到 electron-builder 创建的 Release，已尝试: $($candidates -join ', ')" }
+          gh release edit "$found" --repo $repo --draft=false --prerelease=false
+          if ($LASTEXITCODE -ne 0) { throw "发布 Release 失败: $found" }
+          # 后续 Supabase 同步步骤按这个真实 Tag 校验附件并生成 download_url
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_ACTUAL_TAG=$found"
+          Write-Host "已发布 Release: $found（发布 Tag: $wanted，版本: $version）"
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 

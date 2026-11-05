@@ -48,6 +48,21 @@ test('v3.0.3 overrides all stale 3.0.1 values and generates the matching asset U
   assert.ok(config.row.download_url.includes('/v3.0.3/xiaoyang-music-3.0.3-x64-setup.exe'));
   assert.equal(config.row.version, '3.0.3'); assert.equal(config.warnings.length, 3);
 });
+test('实际 Release Tag 与发布 Tag 不同时，下载地址仍指向真实附件', () => {
+  // pc-v3.5.2 触发构建，但 electron-builder 建的 Release 叫 v3.5.2。
+  // 数据库 version 必须是纯 3.5.2，download_url 必须指向真实存在的 v3.5.2。
+  const c = getReleaseConfig({ ...env, RELEASE_TAG: 'pc-v3.5.2', RELEASE_ACTUAL_TAG: 'v3.5.2' });
+  assert.equal(c.version, '3.5.2');
+  assert.equal(c.tag, 'pc-v3.5.2');
+  assert.equal(c.actualTag, 'v3.5.2');
+  assert.equal(c.row.version, '3.5.2');
+  assert.ok(!c.row.download_url.includes('pc-v3.5.2'));
+  assert.ok(c.row.download_url.includes('/v3.5.2/xiaoyang-music-3.5.2-x64-setup.exe'));
+  // 不传实际 Tag 时保持旧行为（兼容历史 vX.Y.Z 发布）
+  const legacy = getReleaseConfig({ ...env, RELEASE_TAG: 'v3.5.2' });
+  assert.equal(legacy.actualTag, 'v3.5.2');
+  assert.ok(legacy.row.download_url.includes('/v3.5.2/'));
+});
 test('GitHub ref variables are dynamic; local use without a tag reads package.json', () => {
   const base = { RELEASE_REPOSITORY: env.RELEASE_REPOSITORY };
   assert.equal(getReleaseConfig({ ...base, GITHUB_REF_NAME: 'v7.2.1', GITHUB_REF_TYPE: 'tag' }).version, '7.2.1');
