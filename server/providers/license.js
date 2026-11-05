@@ -71,7 +71,15 @@ async function supabaseRows(env, query = {}) {
   const key = env.SUPABASE_SERVICE_KEY;
   if (!url || !key) throw new Error('Supabase 未配置（SUPABASE_URL / SUPABASE_SERVICE_KEY）');
   const target = new URL(url + '/rest/v1/app_licenses');
-  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') target.searchParams.set(k, v);
+  // 过滤器参数兼容两种调用约定：{ select, order, ... } 直接传，或
+  // { method, query: {...}, body } 嵌套传（saveRow/patchRow 用后者）。
+  // method/body 是请求本身的一部分，拼进 URL 会被 PostgREST 当成过滤器解析
+  // （实测报 400 failed to parse filter）。
+  const params = query.query && typeof query.query === 'object' ? query.query : query;
+  for (const [k, v] of Object.entries(params)) {
+    if (k === 'method' || k === 'body' || k === 'query') continue;
+    if (v !== undefined && v !== null && v !== '') target.searchParams.set(k, v);
+  }
   const res = await fetch(target.href, {
     method: query.method || 'GET',
     headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', Prefer: 'return=representation' },
