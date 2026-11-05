@@ -160,6 +160,7 @@
     if(scope==='detail'&&detail?.localId)html+='<button class="sheet-action" data-action="removeFromPlaylist">从此歌单移除</button>';
     if(scope==='queue')html+='<button class="sheet-action" data-action="removeFromQueue">移出播放队列</button>';
     if(track.cloudUrl)html+='<button class="sheet-action" data-action="removeCloud">取消云端收藏</button>';
+    if(track.vendor!=='device'&&/^https?:\/\//i.test(track.url||'')&&XYNative.NativeMusic?.downloadTrack)html+='<button class="sheet-action" data-action="downloadTrack"><span data-icon="queue"></span>下载到本机（离线可播）</button>';
     if(track.vendor==='device')html+='<button class="sheet-action" data-action="removeLocal">从本地列表移除（保留原文件）</button>';
     sheet(track.name,html);
   }
@@ -330,7 +331,29 @@
     removeFromPlaylist:()=>{const p=playlists.find(p=>p.id===detail?.localId);if(!p)return;p.tracks=p.tracks.filter(t=>keyOf(t)!==keyOf(selectedTrack));detail.tracks=p.tracks;savePlaylists();paintDetail();closeSheet();},
     removeFromQueue:()=>{Player.removeFromQueue(Player.getQueue().findIndex(t=>keyOf(t)===keyOf(selectedTrack)));showQueue();},
     clearQueue:()=>{Player.clearQueue();closeSheet();toast('播放队列已清空');},
-    removeCloud:async()=>{const user=XYCloud.user?.id,url=selectedTrack?.cloudUrl;if(!url)return;try{await removeFavorite(url);if(user!==XYCloud.user?.id)return;closeSheet();await refreshCloud();heart?.refresh();toast('已取消云端收藏');}catch(e){toast(e.message);}}
+    removeCloud:async()=>{const user=XYCloud.user?.id,url=selectedTrack?.cloudUrl;if(!url)return;try{await removeFavorite(url);if(user!==XYCloud.user?.id)return;closeSheet();await refreshCloud();heart?.refresh();toast('已取消云端收藏');}catch(e){toast(e.message);}},
+    // 下载到本机（v3.2.1）：原生下载 → MediaStore 公共音乐目录 → 自动入本地库（离线可播）
+    downloadTrack:async()=>{
+      const t=selectedTrack;closeSheet();
+      if(!t||!/^https?:\/\//i.test(t.url||''))return toast('该歌曲暂无可下载地址');
+      if(!XYNative.NativeMusic?.downloadTrack)return toast('当前版本不支持下载');
+      sheet('正在下载《'+escape((t.name||'').slice(0,20))+'》','<div class="apk-progress"><div id="dlBarFill"></div></div><p id="dlPercent" class="muted" style="text-align:center;margin-top:6px;">0%</p><p class="muted" style="text-align:center;">保存到系统音乐库 · Music/小杨音乐</p>');
+      try{
+        const prog=XYNative.NativeMusic.addListener('downloadProgress',(p)=>{
+          const pct=Math.max(0,Math.min(100,Number(p&&p.percent)||0));
+          const fill=document.getElementById('dlBarFill'),label=document.getElementById('dlPercent');
+          if(fill)fill.style.width=pct+'%';if(label)label.textContent=pct+'%';
+        });
+        const r=await XYNative.NativeMusic.downloadTrack({url:t.url,name:t.name||'未知歌曲',artist:t.artist||''});
+        if(prog&&prog.remove)prog.remove();
+        closeSheet();
+        if(r&&r.tracks&&r.tracks.length){addLocalTracks(r.tracks);toast('已下载并可离线播放，已加入「音乐库 · 本地」');}
+        else toast('下载完成');
+      }catch(e){
+        try{XYNative.NativeMusic.removeAllListeners&&XYNative.NativeMusic.removeAllListeners('downloadProgress');}catch(err){}
+        closeSheet();toast('下载失败：'+(e.message||'网络异常'),6000);
+      }
+    }
   };
   function addLocalTracks(tracks) {let added=0;for(const t of tracks||[]){if(t.vendor!=='device'||!String(t.url).startsWith('content://')||!t.id)continue;const i=localTracks.findIndex(old=>old.id===t.id);if(i<0){localTracks.push(t);added++;}else localTracks[i]={...localTracks[i],...t,persistent:!!(t.persistent||localTracks[i].persistent)};}save('xy.android.localTracks',localTracks);chooseLibrary('local');if(added)toast('已导入 '+added+' 首本地音乐');return tracks?.[0];}
   actions.importLocal=async()=>{if(!XYNative.isAndroid)return toast('请在安装的安卓版中选择本机音乐');const r=await XYNative.NativeMusic.pickFiles();addLocalTracks(r.tracks);};

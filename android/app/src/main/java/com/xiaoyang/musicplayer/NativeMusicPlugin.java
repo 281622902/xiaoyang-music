@@ -238,4 +238,99 @@ public class NativeMusicPlugin extends Plugin {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(intent);
     }
+
+    // ── 单曲下载 + 离线播放（v3.2.1）：音频流 → MediaStore 公共音乐目录（API 29+ 免存储权限），
+    //    完成后返回 device 轨目（content:// URI 跨重启有效），前端 addLocalTracks 入库即播 ──
+    @PluginMethod public void downloadTrack(PluginCall call) {
+        String url = call.getString("url");
+        String name = call.getString("name", "未知歌曲");
+        String artist = call.getString("artist", "");
+        if (url == null || url.isEmpty()) { call.reject("该歌曲没有可下载的地址"); return; }
+        getBridge().execute(() -> {
+            java.io.File tmp = null;
+            try {
+                // 1) 下载到缓存临时文件（进度事件 downloadProgress）
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(60000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) xiaoyang-music");
+                int code = conn.getResponseCode();
+                if (code < 200 || code >= 300) { conn.disconnect(); throw new Exception("HTTP " + code); }
+                String mime = conn.getContentType() == null ? "" : conn.getContentType().toLowerCase();
+                boolean flac = mime.contains("flac") || url.toLowerCase().contains(".flac");
+                boolean m4a = mime.contains("mp4") || url.toLowerCase().contains(".m4a");
+                String ext = flac ? ".flac" : m4a ? ".m4a" : ".mp3";
+                String fileMime = flac ? "audio/flac" : m4a ? "audio/mp4" : "audio/mpeg";
+                long total = conn.getContentLength();
+                tmp = new java.io.File(getContext().getCacheDir(), "dl-" + System.currentTimeMillis() + ext);
+                java.io.InputStream in = conn.getInputStream();
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(tmp);
+                byte[] buf = new byte[65536]; long done = 0; int n; int lastPercent = -1;
+                while ((n = in.read(buf)) > 0) {
+                    fos.write(buf, 0, n); done += n;
+                    if (total > 0) {
+                        int percent = (int) (done * 100 / total);
+                        if (percent != lastPercent) {
+                            lastPercent = percent;
+                            JSObject p = new JSObject(); p.put("percent", percent); p.put("name", name);
+                            notifyListeners("downloadProgress", p);
+                        }
+                    }
+                }
+                fos.close(); in.close(); conn.disconnect();
+                // 2) 写入系统媒体库
+                String safeName = (artist.isEmpty() ? name : artist + " - " + name).replaceAll("[\\\\/:*?\"<>|]", "_");
+                if (safeName.length() > 90) safeName = safeName.substring(0, 90);
+                Uri mediaUri;
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    android.content.ContentValues cv = new android.content.ContentValues();
+                    cv.put(android.provider.MediaStore.Audio.Media.DISPLAY_NAME, safeName + ext);
+                    cv.put(android.provider.MediaStore.Audio.Media.MIME_TYPE, fileMime);
+                    cv.put(android.provider.MediaStore.Audio.Media.RELATIVE_PATH, "Music/小杨音乐");
+                    cv.put(android.provider.MediaStore.Audio.Media.IS_PENDING, 1);
+                    mediaUri = getContext().getContentResolver().insert(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cv);
+                    if (mediaUri == null) throw new Exception("无法创建媒体库条目");
+                    try (java.io.OutputStream os = getContext().getContentResolver().openOutputStream(mediaUri)) {
+                        java.io.FileInputStream fi = new java.io.FileInputStream(tmp);
+                        byte[] cp = new byte[65536]; int r;
+                        while ((r = fi.read(cp)) > 0) os.write(cp, 0, r);
+                        fi.close();
+                    }
+                    android.content.ContentValues done2 = new android.content.ContentValues();
+                    done2.put(android.provider.MediaStore.Audio.Media.IS_PENDING, 0);
+                    getContext().getContentResolver().update(mediaUri, done2, null, null);
+                } else {
+                    // API <29：应用外部私有音乐目录（无需权限，卸载随 App 移除）
+                    java.io.File dir = new java.io.File(getContext().getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC), "小杨音乐");
+                    if (!dir.exists()) dir.mkdirs();
+                    java.io.File out = new java.io.File(dir, safeName + ext);
+                    java.io.FileInputStream fi = new java.io.FileInputStream(tmp);
+                    java.io.FileOutputStream fo = new java.io.FileOutputStream(out);
+                    byte[] cp = new byte[65536]; int r;
+                    while ((r = fi.read(cp)) > 0) fo.write(cp, 0, r);
+                    fi.close(); fo.close();
+                    android.media.MediaScannerConnection.scanFile(getContext(), new String[]{out.getAbsolutePath()}, new String[]{fileMime}, null);
+                    mediaUri = Uri.fromFile(out);
+                }
+                tmp.delete(); tmp = null;
+                // 3) 组装 device 轨目（与 readFiles 的 id 规则一致，跨重启 content URI 有效）
+                JSObject track = new JSObject();
+                track.put("id", "device:" + java.util.UUID.nameUUIDFromBytes(mediaUri.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                track.put("vendor", "device");
+                track.put("url", mediaUri.toString());
+                track.put("name", name);
+                track.put("artist", artist.isEmpty() ? "下载音乐" : artist);
+                track.put("album", "");
+                track.put("persistent", true);
+                track.put("storedCopy", false);
+                track.put("duration", 0);
+                JSArray tracks = new JSArray(); tracks.put(track);
+                JSObject data = new JSObject(); data.put("tracks", tracks);
+                call.resolve(data);
+            } catch (Exception e) {
+                if (tmp != null) tmp.delete();
+                call.reject("下载失败：" + (e.getMessage() == null ? "网络异常" : e.getMessage()), e);
+            }
+        });
+    }
 }
