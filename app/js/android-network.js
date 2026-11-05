@@ -35,10 +35,13 @@
  async function cloudFetch(input,init={}){
   const value=typeof input==='string'||input instanceof URL?String(input):input.url;
   const u=new URL(value);
-  // 目标校验放宽：直连 supabase.co 或音乐后端的 /api/supabase 反代都受信任
-  //（反代是用户自己配置的后端，凭据只发给自己的服务器）。
-  const allowed=[cloudOrigin,supabaseOrigin()];
-  if(!allowed.includes(u.origin)||u.username||u.password)throw Error('云端请求目标不匹配，已停止发送账户凭据');
+  // 目标校验（v3.1.10 修复）：supabaseOrigin() 带路径不能与 u.origin 直接比对
+  //（v3.1.8 的字符串不等导致合法请求被误拦——真机「云端请求目标不匹配」根因）。
+  // 正确规则：直连 supabase.co，或「音乐后端 origin + /api/supabase 路径前缀」——
+  // 后者凭据只发给自己后端的代理路径，不接受该 origin 下的任意其他路径。
+  const proxyOrigin=native()?supabaseOrigin():'';
+  const allowed=u.origin===cloudOrigin||(proxyOrigin&&u.origin===new URL(proxyOrigin).origin&&u.pathname.startsWith('/api/supabase/'));
+  if(!allowed||u.username||u.password)throw Error('云端请求目标不匹配，已停止发送账户凭据');
   if(!native()||!global.XYNative.CapacitorHttp)return global.fetch(input,init);
   const signal=init.signal||input?.signal;if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const headers=Object.fromEntries(new Headers(init.headers||input?.headers||{}).entries());
