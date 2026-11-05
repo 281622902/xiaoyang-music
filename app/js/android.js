@@ -186,7 +186,49 @@
   function applyTheme() {const dark=localStorage.getItem('xy.android.theme')==='dark';document.documentElement.dataset.theme=dark?'dark':'light';$('themeLabel').textContent=dark?'开启':'关闭';document.querySelector('meta[name=theme-color]').content=dark?'#101c1a':'#f7faf8';if(XYNative.isAndroid){XYNative.StatusBar.setStyle({style:dark?'LIGHT':'DARK'}).catch(()=>{});XYNative.StatusBar.setBackgroundColor({color:dark?'#101c1a':'#f7faf8'}).catch(()=>{});}}
   function renderAuth() {const user=XYCloud.user;$('mobileGuest').hidden=!!user;$('mobileMember').hidden=!user;$('mobileMemberName').textContent=user?XYCloud.displayUser(user):'';$('mobileAccountName').textContent=user?XYCloud.displayUser(user):'登录，让喜欢随行';$('mobileAccountHint').textContent=user?'云端账户已连接 · 喜欢随账号保存':'云端收藏 · 多端共用同一个账号';$('mobileLoginSubmit').disabled=!XYCloud.available;}
   async function checkUpdate() {
-    toast('正在检查更新…');try{const r=await XYCloud.getUpdateInfo();if(!r.hasUpdate)return toast('当前已是最新版本 '+r.cur);sheet('发现新版本 '+r.latest,'<p class="muted">'+escape(r.notes||'新版本发布')+'</p><button id="mobileUpdateDownload" class="primary wide-button">前往浏览器下载 APK</button>');$('mobileUpdateDownload').onclick=async()=>{try{await XYNative.openUpdate(r.url);closeSheet();}catch(e){toast(e.message);}};}catch(e){toast('云端连接失败，请检查网络或稍后重试（'+(e.message||'网络异常')+'）',6000);}
+    toast('正在检查更新…');
+    let r;
+    try { r = await XYCloud.getUpdateInfo(); }
+    catch (e) { return toast('云端连接失败，请检查网络或稍后重试（' + (e.message || '网络异常') + '）', 6000); }
+    if (!r.hasUpdate) return toast('当前已是最新版本 ' + r.cur);
+    if (!XYNative.isAndroid || !XYNative.NativeMusic || !XYNative.NativeMusic.downloadApk) {
+      // 无原生下载能力时兜底：浏览器下载
+      return sheet('发现新版本 ' + r.latest, '<p class="muted">' + escape(r.notes || '新版本发布') + '</p><button id="mobileUpdateDownload" class="primary wide-button">前往浏览器下载 APK</button>');
+    }
+    // App 内下载闭环（2026-11-05）：进度条 sheet → 完成自动调起系统安装器，不再跳浏览器
+    sheet('正在下载更新 v' + r.latest,
+      '<p class="muted">' + escape(r.notes || '新版本发布') + '</p>' +
+      '<div class="apk-progress"><div id="apkBarFill"></div></div>' +
+      '<p id="apkPercent" class="muted" style="text-align:center;margin-top:6px;">0%</p>' +
+      '<p id="apkStatus" class="muted" style="text-align:center;">正在连接下载服务…</p>');
+    let apkPath = '';
+    try {
+      const prog = XYNative.NativeMusic.addListener('apkProgress', (p) => {
+        const pct = Math.max(0, Math.min(100, Number(p && p.percent) || 0));
+        const fill = document.getElementById('apkBarFill');
+        const label = document.getElementById('apkPercent');
+        if (fill) fill.style.width = pct + '%';
+        if (label) label.textContent = pct + '%（' + Math.round((Number(p.received) || 0) / 1048576) + ' / ' + Math.round((Number(p.total) || 0) / 1048576) + ' MB）';
+      });
+      const res = await XYNative.NativeMusic.downloadApk({ url: r.url, version: r.latest });
+      if (prog && prog.remove) prog.remove();
+      if (!res || !res.path) throw new Error('下载未完成');
+      apkPath = res.path;
+      const st = document.getElementById('apkStatus');
+      if (st) st.textContent = '下载完成，正在启动安装…';
+      const open = await XYNative.NativeMusic.openApk({ path: apkPath });
+      if (open && open.needsPermission) {
+        // 未授予「安装未知应用」权限 → 跳系统设置，返回后可再点一次继续
+        sheet('需要安装权限', '<p class="muted">请在接下来的页面允许「来自此来源的应用」安装，返回 App 后重新点「检查版本更新」即可直接进入安装。</p><button id="apkGrant" class="primary wide-button">去授权</button>');
+        const g = document.getElementById('apkGrant');
+        if (g) g.onclick = async () => { await XYNative.NativeMusic.requestInstallPermission(); };
+      } else {
+        closeSheet();
+      }
+    } catch (e) {
+      try { XYNative.NativeMusic.removeAllListeners && XYNative.NativeMusic.removeAllListeners('apkProgress'); } catch (err) {}
+      toast('更新下载失败：' + (e.message || '网络异常'), 6000);
+    }
   }
   function settings(){const candidates=XYNetwork.config.lan||[];sheet('播放与连接设置','<form id="mobileSettingsForm"><label>音乐来源<select id="mobileVendor">'+Object.entries({auto:'自动选择',netease:'网易云音乐',tencent:'QQ 音乐',kugou:'酷狗音乐',kuwo:'酷我音乐'}).map(([v,n])=>'<option value="'+v+'" '+(UzzApi.getVendor()===v?'selected':'')+'>'+n+'</option>').join('')+'</select></label><label>音乐后端地址<input id="mobileBackend" type="url" placeholder="https://你的音乐服务 或下方电脑地址" value="'+escape(UzzApi.getApiBase())+'" required></label><p class="muted">真机的 localhost 指向手机自身。连接电脑同一 Wi-Fi 后，可选择下面的电脑地址；电脑后端须保持运行。离开该局域网后需要公网 HTTPS 音乐服务。登录与收藏直接连接 Supabase，不依赖电脑音乐后端。</p>'+candidates.map(c=>'<button type="button" class="wide-button" data-backend-suggestion="'+escape(c.url)+'">使用电脑地址 '+escape(c.url)+' · '+escape(c.label)+'</button>').join('')+'<button class="primary wide-button">保存设置</button></form><button class="wide-button" data-action="networkDiagnostics">诊断音乐与登录网络</button>');}
   async function networkDiagnostics(){if(!$('accountBackdrop').hidden)closeAccount();sheet('网络诊断','<p class="muted">正在分别检查音乐服务和 Supabase… 不发送手机号或密码。</p>');try{const r=await XYNetwork.diagnose();if($('sheetTitle').textContent!=='网络诊断')return;const text='音乐服务：'+(r.backend||'尚未设置')+'\n'+(r.music.ok?'✓ ':'× ')+r.music.message+'\n\n云端账户：\n'+(r.cloud.ok?'✓ ':'× ')+r.cloud.message;$('sheetContent').replaceChildren();const p=document.createElement('p');p.className='form-status';p.style.whiteSpace='pre-wrap';p.textContent=text;$('sheetContent').appendChild(p);const b=document.createElement('button');b.className='wide-button';b.dataset.action='settings';b.textContent='修改音乐服务地址';$('sheetContent').appendChild(b);}catch(e){toast(e.message);}}

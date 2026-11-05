@@ -148,4 +148,86 @@ public class NativeMusicPlugin extends Plugin {
     @Override protected void handleOnPause(){visible=false;}
     @Override protected void handleOnResume(){visible=true;main.post(()->{connect();lastQueueSignature="";emit();});}
     @Override protected void handleOnDestroy(){destroyed=true;main.removeCallbacksAndMessages(null);files.shutdownNow();authFiles.shutdown();if(future!=null)MediaController.releaseFuture(future);controller=null;}
+
+    // ── App 内更新（2026-11-05）：下载 APK 到缓存目录 → 调系统安装器，全程不经浏览器 ──
+    private final java.util.concurrent.atomic.AtomicBoolean apkDownloading = new java.util.concurrent.atomic.AtomicBoolean(false);
+    @PluginMethod public void downloadApk(PluginCall call) {
+        String url = call.getString("url");
+        String version = call.getString("version", "latest");
+        if (url == null || url.isEmpty()) { call.reject("缺少下载地址"); return; }
+        if (!apkDownloading.compareAndSet(false, true)) { call.reject("已有下载任务进行中"); return; }
+        getBridge().execute(() -> {
+            java.io.File out = null;
+            try {
+                java.io.File dir = getContext().getCacheDir();
+                out = new java.io.File(dir, "xiaoyang-music-" + version + "-android.apk");
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(60000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) xiaoyang-music-updater");
+                int code = conn.getResponseCode();
+                if (code < 200 || code >= 300) { conn.disconnect(); throw new Exception("HTTP " + code); }
+                long total = conn.getContentLength();
+                java.io.InputStream in = conn.getInputStream();
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(out);
+                byte[] buf = new byte[65536]; long done = 0; int n; int lastPercent = -1;
+                while ((n = in.read(buf)) > 0) {
+                    fos.write(buf, 0, n); done += n;
+                    if (total > 0) {
+                        int percent = (int) (done * 100 / total);
+                        if (percent != lastPercent) {
+                            lastPercent = percent;
+                            JSObject p = new JSObject(); p.put("percent", percent); p.put("received", done); p.put("total", total);
+                            notifyListeners("apkProgress", p);
+                        }
+                    }
+                }
+                fos.close(); in.close(); conn.disconnect();
+                JSObject result = new JSObject();
+                result.put("path", out.getAbsolutePath());
+                result.put("size", out.length());
+                call.resolve(result);
+            } catch (Exception e) {
+                if (out != null) out.delete();
+                call.reject("下载失败：" + (e.getMessage() == null ? "网络异常" : e.getMessage()), e);
+            } finally {
+                apkDownloading.set(false);
+            }
+        });
+    }
+    @PluginMethod public void openApk(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) { call.reject("缺少安装包路径"); return; }
+        try {
+            java.io.File file = new java.io.File(path);
+            if (!file.exists() || file.length() < 1024) { call.reject("安装包不存在或已损坏，请重新下载"); return; }
+            android.content.Context ctx = getContext();
+            if (android.os.Build.VERSION.SDK_INT >= 26 && !ctx.getPackageManager().canRequestPackageInstalls()) {
+                JSObject result = new JSObject(); result.put("needsPermission", true);
+                call.resolve(result);
+                return;
+            }
+            installApk(file);
+            call.resolve();
+        } catch (Exception e) { call.reject("无法启动安装：" + (e.getMessage() == null ? "系统拒绝" : e.getMessage()), e); }
+    }
+    @PluginMethod public void requestInstallPermission(PluginCall call) {
+        try {
+            android.content.Context ctx = getContext();
+            if (android.os.Build.VERSION.SDK_INT >= 26 && !ctx.getPackageManager().canRequestPackageInstalls()) {
+                Intent i = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+            }
+            call.resolve();
+        } catch (Exception e) { call.reject("无法跳转安装权限设置：" + (e.getMessage() == null ? "系统拒绝" : e.getMessage()), e); }
+    }
+    private void installApk(java.io.File file) throws Exception {
+        android.content.Context ctx = getContext();
+        Uri uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", file);
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(uri, "application/vnd.android.package-archive");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(intent);
+    }
 }
