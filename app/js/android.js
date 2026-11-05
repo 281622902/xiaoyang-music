@@ -213,6 +213,14 @@
       // 无原生下载能力时兜底：浏览器下载
       return sheet('发现新版本 ' + r.latest, '<p class="muted">' + escape(r.notes || '新版本发布') + '</p><button id="mobileUpdateDownload" class="primary wide-button">前往浏览器下载 APK</button>');
     }
+    // 防御性拦截（v3.2.3 热修）：绝不把 supabase.co 直链交给原生下载器/浏览器
+    //（该域名国内被墙，真机 15s connect 超时）。一律改写为音乐后端 /api/release-file 代理。
+    let dlUrl = r.url || '';
+    if (/supabase\.co/i.test(dlUrl)) {
+      const base = (UzzApi.getApiBase() || '').replace(/\/+$/, '');
+      if (!base) return toast('下载地址为被墙的云端直链，请先在「播放与连接设置」配置音乐后端地址', 6000);
+      dlUrl = base + '/api/release-file?v=' + encodeURIComponent(r.latest || '');
+    }
     // App 内下载闭环（2026-11-05）：进度条 sheet → 完成自动调起系统安装器，不再跳浏览器
     sheet('正在下载更新 v' + r.latest,
       '<p class="muted">' + escape(r.notes || '新版本发布') + '</p>' +
@@ -232,7 +240,7 @@
       let res = null, lastErr = null;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          res = await XYNative.NativeMusic.downloadApk({ url: r.url, version: r.latest });
+          res = await XYNative.NativeMusic.downloadApk({ url: dlUrl, version: r.latest });
           break;
         } catch (e) {
           lastErr = e;
@@ -249,7 +257,7 @@
         // 双次失败 → 终极兜底：系统浏览器打开下载链接（浏览器下载可断点续传）
         closeSheet();
         toast('App 内下载失败（' + ((lastErr && lastErr.message) || '连接被重置') + '），已转系统浏览器下载，下载完成后请点击安装', 7000);
-        try { await XYNative.openUpdate(r.url); } catch (e2) { toast('浏览器打开失败，请手动访问下载链接', 5000); }
+        try { await XYNative.openUpdate(dlUrl); } catch (e2) { toast('浏览器打开失败，请手动访问下载链接', 5000); }
         return;
       }
       apkPath = res.path;

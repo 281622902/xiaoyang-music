@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.2.2', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.2.3', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -200,6 +200,15 @@
           ? { version: j.version, download_url: j.download_url, release_notes: j.release_notes }
           : null;
       } finally { clearTimeout(timer); }
+    }
+    // 防御性净化（v3.2.3 热修）：安卓端任何来源的 supabase.co 下载直链一律改写为
+    // 音乐后端 /api/release-file 流式代理。v3.1.8 后 Supabase 查询经 /api/supabase
+    // 反代可成功，返回的是 DB 原始 supabase.co 直链——原生下载器直连被墙
+    // （真机实测 15s connect 超时）。改写后下载流量经 Render（国内可达）转发。
+    if (update && update.download_url && /supabase\.co/i.test(update.download_url)
+        && (platform === 'android' || global.XYNative?.isAndroid)) {
+      const base = (global.UzzApi?.getApiBase?.() || '').replace(/\/+$/, '');
+      if (base) update.download_url = base + '/api/release-file?v=' + encodeURIComponent(update.version);
     }
     return { ok: true, hasUpdate: !!update, latest: update?.version, url: update?.download_url,
       notes: update?.release_notes, cur: current, source };
