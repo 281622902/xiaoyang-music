@@ -1,12 +1,18 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.1.7', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.1.8', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
+      // 手机端走音乐后端的 Supabase 反向代理（/api/supabase/*）：国内运营商掐断
+      // supabase.co（登录 Connection reset），由 Render/电脑后端（海外→海外或国内直连）
+      // 原样透传 auth/rest/storage。桌面与无后端时保持直连。
+      const apiBase = (global.UzzApi?.getApiBase?.() || '').trim();
+      const useProxy = global.XYNative?.isAndroid && !!apiBase && global.XYNetwork?.supabaseProxyAvailable !== false;
+      const suBase = useProxy ? (global.XYNetwork?.supabaseOrigin ? global.XYNetwork.supabaseOrigin() : apiBase.replace(/\/+$/, '') + '/api/supabase') : 'https://codianpoqhqilkwviota.supabase.co';
       global.supabase = global.supabase.createClient(
-        'https://codianpoqhqilkwviota.supabase.co',
+        suBase,
         'sb_publishable__DRTgpxPfdR67tsFEJ_EDQ_gvZ8VvdM',
         { ...(global.XYNetwork ? {global:{fetch:global.XYNetwork.cloudFetch}} : {}), auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
           storage: global.XYAuthStorage || global.localStorage, storageKey: 'xiaoyang.supabase.auth.v1' } }

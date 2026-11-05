@@ -332,6 +332,29 @@ async function searchMulti(vendor, kw, type, page, limit) {
       } catch (e) { /* 重试 */ }
       if (attempt === 0) await new Promise((r2) => setTimeout(r2, 1000));
     }
+    // 海外兜底（仅歌手分类）：网易被风控时用国内 meting 歌曲数据聚合出歌手分类——
+    // 每个去重歌手带「name:」前缀 ID，/api/artist 识别后按名字搜索其歌曲（直链可播）。
+    // 专辑/歌单 meting 无对应数据，海外时段仍依赖网易直连。
+    if (type === 'artist') {
+      try {
+        const r = await withTimeout(qmeting.search('netease', kw, 1, 50), SEARCH_TIMEOUT * 2);
+        const seen = new Map();
+        const lkw = kw.trim().toLowerCase();
+        for (const t of r.list || []) {
+          const an = (t.artist || '').trim();
+          if (!an || seen.has(an)) continue;
+          const lk = an.toLowerCase();
+          if (!lk.includes(lkw) && !lkw.includes(lk)) continue;
+          seen.set(an, { id: 'name:' + an, name: an, artist: an, album: '', pic: t.pic || '', vendor: 'netease', duration: 0 });
+          if (seen.size >= limit) break;
+        }
+        if (seen.size) {
+          const r2 = { list: [...seen.values()], total: seen.size };
+          cacheSet(key, r2, SEARCH_CACHE_MS);
+          return r2;
+        }
+      } catch (e) { /* 忽略 */ }
+    }
     return { list: [], total: 0 };
   }
   if (vendor === 'auto' || vendor === 'netease') {
@@ -426,6 +449,18 @@ async function handleApi(req, res, reqUrl) {
       const id = q(reqUrl, 'id');
       if (!id) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
       const limit = Math.min(100, Math.max(1, parseInt(q(reqUrl, 'limit') || '50', 10)));
+      // 海外兜底：「name:歌手名」ID 来自 meting 聚合的歌手分类——按名字搜索其歌曲
+      if (String(id).startsWith('name:')) {
+        const name = String(id).slice(5).trim();
+        if (!name) return sendJson(res, 400, { code: 400, msg: '歌手名无效' });
+        try {
+          const r = await withTimeout(qmeting.search('netease', name, 1, 100), SEARCH_TIMEOUT * 2);
+          const tracks = (r.list || []).filter((t) => (t.artist || '').toLowerCase().includes(name.toLowerCase())).slice(0, limit);
+          return sendJson(res, 200, { code: 200, tracks });
+        } catch (e) {
+          return sendJson(res, 200, { code: 200, tracks: [] });
+        }
+      }
       const tracks = await netease.artistTop(id, limit);
       return sendJson(res, 200, { code: 200, tracks });
     }
@@ -436,6 +471,52 @@ async function handleApi(req, res, reqUrl) {
       if (!id) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
       const info = await netease.albumDetail(id);
       return sendJson(res, 200, { code: 200, info, tracks: info.tracks });
+    }
+
+    // ── Supabase 全量反向代理（2026-11-05）：国内运营商掐断 supabase.co（真机
+    // 登录 Connection reset），手机端把 Supabase 客户端的 URL 指到本服务
+    // /api/supabase/*，这里原样透传到真实 Supabase（海外→海外，稳定）。
+    // 覆盖 auth（登录/注册/token 刷新）、rest（红心/歌单）、storage（头像）。
+    if (pathname.startsWith('/api/supabase/')) {
+      const su = process.env.SUPABASE_URL;
+      if (!su || !/^https:\/\//.test(su)) return sendJson(res, 502, { code: 502, msg: 'Supabase 代理未配置' });
+      const target = su.replace(/\/+$/, '') + pathname.slice('/api/supabase'.length) + (reqUrl.search || '');
+      const headers = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        const lk = k.toLowerCase();
+        if (['host', 'content-length', 'connection', 'accept-encoding', 'origin', 'referer'].includes(lk)) continue;
+        headers[k] = v;
+      }
+      let body;
+      if (!['GET', 'HEAD'].includes(req.method)) {
+        const chunks = [];
+        let size = 0;
+        for await (const chunk of req) {
+          size += chunk.length;
+          if (size > 5 * 1024 * 1024) { res.writeHead(413, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ code: 413, msg: '请求体过大' })); }
+          chunks.push(chunk);
+        }
+        body = Buffer.concat(chunks);
+        if (body.length) headers['content-length'] = String(body.length);
+      }
+      try {
+        const up = await withTimeout(rawFetch(target, { method: req.method, headers, body, redirect: 'manual' }), 30000);
+        const resHeaders = {};
+        for (const [k, v] of Object.entries(up.headers)) {
+          const lk = k.toLowerCase();
+          if (['content-length', 'transfer-encoding', 'connection', 'content-encoding'].includes(lk)) continue;
+          resHeaders[k] = v;
+        }
+        resHeaders['access-control-allow-origin'] = '*';
+        res.writeHead(up.status, resHeaders);
+        if (up.body) await pipeline(Readable.fromWeb(up.body), res);
+        else res.end();
+      } catch (e) {
+        if (res.destroyed) return;
+        if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ code: 502, msg: '云端代理连接失败：' + ((e && e.message) || ''), error: 'connection_reset' }));
+      }
+      return;
     }
 
     // ── 版本检查代理（2026-11-05）：国内运营商掐断 supabase.co（真机 Connection reset），

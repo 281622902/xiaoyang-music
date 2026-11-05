@@ -1,6 +1,18 @@
 /* Android presentation layer. Playback, HTTP API and Supabase functions are shared with desktop. */
 (function (global) {
   'use strict';
+  // 封面加载失败兜底（2026-11-05）：安卓直连图床/qijieya 图片接口失败时，
+  // 自动换音乐后端 /api/pic 代理重试一次（error 事件不冒泡，用捕获阶段全局接）。
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG' || img.dataset.fbf) return;
+    const src = img.getAttribute('src') || '';
+    if (!/^https?:\/\//i.test(src) || src.includes('/api/pic')) return;
+    const base = localStorage.getItem('uzz.apiBase') || '';
+    if (!base) return;
+    img.dataset.fbf = '1';
+    img.src = base.replace(/\/+$/, '') + '/api/pic?url=' + encodeURIComponent(src);
+  }, true);
   const $ = id => document.getElementById(id), audio = global.XYAudio || $('audio');
   const icons = {
     search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',

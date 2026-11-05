@@ -4,6 +4,13 @@
  const native=()=>!!global.XYNative?.isAndroid;
  const cloudOrigin='https://codianpoqhqilkwviota.supabase.co';
  const publicKey='sb_publishable__DRTgpxPfdR67tsFEJ_EDQ_gvZ8VvdM';
+ // Supabase 反向代理目标（2026-11-05）：国内运营商掐断 supabase.co 后，手机端
+ // Supabase 请求改走音乐后端的 /api/supabase/* 透传代理（后端海外→海外稳定）。
+ function supabaseOrigin(){
+  const base=localStorage.getItem('uzz.apiBase')||'';
+  if(native()&&base)return base.replace(/\/+$/,'')+'/api/supabase';
+  return cloudOrigin;
+ }
  function backendURL(value){
   let u;try{u=new URL(String(value||'').trim());}catch{throw Error('请填写音乐服务地址，或选择下方的电脑地址');}
   if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.search||u.hash)throw Error('服务地址必须是无账号、参数和片段的 HTTP / HTTPS 地址');
@@ -28,7 +35,10 @@
  async function cloudFetch(input,init={}){
   const value=typeof input==='string'||input instanceof URL?String(input):input.url;
   const u=new URL(value);
-  if(u.origin!==cloudOrigin||u.username||u.password)throw Error('云端请求目标不匹配，已停止发送账户凭据');
+  // 目标校验放宽：直连 supabase.co 或音乐后端的 /api/supabase 反代都受信任
+  //（反代是用户自己配置的后端，凭据只发给自己的服务器）。
+  const allowed=[cloudOrigin,supabaseOrigin()];
+  if(!allowed.includes(u.origin)||u.username||u.password)throw Error('云端请求目标不匹配，已停止发送账户凭据');
   if(!native()||!global.XYNative.CapacitorHttp)return global.fetch(input,init);
   const signal=init.signal||input?.signal;if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const headers=Object.fromEntries(new Headers(init.headers||input?.headers||{}).entries());
@@ -47,12 +57,12 @@
   const base=localStorage.getItem('uzz.apiBase')||'';
   const results=await Promise.allSettled([
    (async()=>{requireBackend();if(!base)throw Error('未设置音乐服务地址');const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),8000);try{const r=await fetch(base+'/api/health',{signal:ctrl.signal});const json=await r.json();if(!r.ok||json.code!==200)throw Error('地址未返回音乐后端健康接口');return '音乐服务可达';}finally{clearTimeout(timer);}})(),
-   (async()=>{const r=await cloudFetch(cloudOrigin+'/auth/v1/health',{headers:{apikey:publicKey}});if(!r.ok)throw Error('Supabase HTTP '+r.status);return 'Supabase 账户服务可达（不代表账号密码已验证）';})()
+   (async()=>{const r=await cloudFetch(supabaseOrigin()+'/auth/v1/health',{headers:{apikey:publicKey}});if(!r.ok)throw Error('Supabase HTTP '+r.status);return '云端账户服务可达（'+(supabaseOrigin()===cloudOrigin?'直连':'经后端代理')+'）';})()
   ]);
   return{backend:base,music:{ok:results[0].status==='fulfilled',message:results[0].status==='fulfilled'?results[0].value:describe(results[0].reason,'music')},cloud:{ok:results[1].status==='fulfilled',message:results[1].status==='fulfilled'?results[1].value:describe(results[1].reason)}};
  }
  const ready=(async()=>{if(!native())return;let launch={};try{launch=await global.XYNative.NativeMusic.getLaunchConfig();}catch{}
   if(!localStorage.getItem('uzz.apiBase')){const value=config.defaultBackend||launch.developmentBackend;if(value)localStorage.setItem('uzz.apiBase',backendURL(value));}
  })();
- global.XYNetwork={config,ready,backendURL,requireBackend,describe,cloudFetch,diagnose};
+ global.XYNetwork={config,ready,backendURL,requireBackend,describe,cloudFetch,diagnose,supabaseOrigin};
 })(window);
