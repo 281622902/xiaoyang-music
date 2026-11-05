@@ -331,3 +331,93 @@
 .pf-pwd .wide-button{margin:4px 0 14px}
 .account-dialog .member-name{font-size:15px;font-weight:650;margin:2px 0 4px;word-break:break-all}
 
+/* ══════════════════ v3.7.0 阶段二：三大页面深度重构 ══════════════════ */
+/* 所有图片容器统一渐变底，加载失败也不会出现刺眼白块 */
+.cover-art>img,.note-card>img,.artist-chip img,.recent-card img,.channel-music img,.channel-podcast img,.channel-audiobook img,.channel-radio img,.tl-card img{background:linear-gradient(135deg,var(--soft),var(--surface))}
+
+/* ── 首页：排行榜 2x2 宫格（点击整块进独立榜单页）── */
+.chart-palace{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.chart-palace .cp-card{position:relative;min-height:116px;padding:15px;border-radius:18px;overflow:hidden;text-align:left;background:linear-gradient(140deg,var(--surface),var(--soft));border:1px solid var(--line);box-shadow:var(--shadow)}
+.chart-palace .cp-card::after{content:"";position:absolute;right:-20px;bottom:-28px;width:100px;height:100px;border-radius:50%;background:radial-gradient(circle,rgba(47,191,159,.20),transparent 70%)}
+.chart-palace .cp-icon{display:block;font-size:23px;line-height:1;margin-bottom:11px}
+.chart-palace .cp-rank{position:absolute;top:13px;right:14px;font-size:9px;letter-spacing:1px;color:var(--accent)}
+.chart-palace .cp-card strong{display:block;font-size:13px;font-weight:650;position:relative;z-index:1}
+.chart-palace .cp-card small{display:block;font-size:10px;color:var(--sub);margin-top:6px;position:relative;z-index:1}
+
+/* ── 排行榜独立页 ── */
+.charts-hero{margin-bottom:18px}
+.charts-hero h1{font-size:25px;margin:8px 0 6px}
+.charts-hero .muted{font-size:11px}
+.charts-palace{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:6px}
+.charts-palace button{display:flex;align-items:center;gap:10px;min-height:66px;padding:10px 12px;text-align:left;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.charts-palace button.active{border-color:var(--accent);background:var(--soft)}
+.charts-palace .cps-icon{font-size:21px;flex-shrink:0}
+.charts-palace .cps-meta{min-width:0}
+.charts-palace .cps-meta strong{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.charts-palace .cps-meta small{display:block;font-size:9px;color:var(--sub);margin-top:4px}
+@media(min-width:620px){.charts-palace{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* ── 首页五频道：每套完全不同的内容形态 ── */
+.channel-music{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.cm-row{display:flex;align-items:center;gap:11px;width:100%;min-height:66px;padding:8px 2px;text-align:left;border-bottom:1px solid var(--line)}
+.cm-row .cm-idx{width:24px;text-align:center;font-size:14px;font-style:italic;font-weight:750;color:var(--accent);flex-shrink:0}
+.cm-row img{width:48px;height:48px;border-radius:12px;object-fit:cover;flex-shrink:0}
+.cm-row .cm-meta{flex:1;min-width:0}
+.cm-row .cm-meta strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-row .cm-meta small{display:block;font-size:10px;color:var(--sub);margin-top:5px}
+.channel-podcast{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.pod-card{display:flex;align-items:center;gap:13px;width:100%;padding:12px;text-align:left;border:1px solid var(--line);border-radius:16px;background:var(--surface);min-height:88px}
+.pod-card img{width:64px;height:64px;border-radius:14px;object-fit:cover;flex-shrink:0}
+.pod-card .pod-meta{flex:1;min-width:0}
+.pod-card .pod-tag{display:inline-block;font-size:9px;color:var(--accent);background:var(--soft);border-radius:5px;padding:2px 6px;margin-bottom:6px}
+.pod-card .pod-meta strong{display:block;font-size:13px;line-height:1.4}
+.pod-card .pod-meta small{display:block;font-size:10px;color:var(--sub);margin-top:6px}
+.channel-audiobook{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px;margin-top:6px}
+.ab-card{text-align:left;min-width:0}
+.ab-cover{position:relative;aspect-ratio:3/4;border-radius:6px 12px 12px 6px;overflow:hidden;background:linear-gradient(135deg,var(--soft),var(--surface));box-shadow:4px 5px 14px #0002}
+.ab-cover::before{content:"";position:absolute;left:7px;top:0;bottom:0;width:2px;background:#00000012}
+.ab-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.ab-card strong{display:block;font-size:12px;margin-top:9px;line-height:1.4}
+.ab-card small{display:block;font-size:10px;color:var(--sub);margin-top:4px}
+.channel-radio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px;margin-top:8px}
+.radio-card{text-align:left;display:grid;justify-items:center;gap:8px;min-width:0}
+.radio-art{width:100%;max-width:96px;aspect-ratio:1;border-radius:50%;overflow:hidden;position:relative;background:radial-gradient(circle,var(--soft),var(--surface));border:3px solid var(--surface);box-shadow:0 4px 14px #0002}
+.radio-art img{width:100%;height:100%;object-fit:cover;display:block}
+.radio-art::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:var(--bg);box-shadow:inset 0 0 0 2px var(--surface)}
+.radio-card strong{font-size:11px;text-align:center;line-height:1.35}
+@media(min-width:620px){.channel-audiobook{grid-template-columns:repeat(4,minmax(0,1fr))}.channel-radio{grid-template-columns:repeat(5,minmax(0,1fr))}}
+
+/* ── 笔记页：真正的双列瀑布流（CSS columns，卡片不等高）── */
+.notes-grid.waterfall{display:block;columns:2;column-gap:12px}
+.notes-grid.waterfall .note-card{display:inline-block;width:100%;break-inside:avoid;-webkit-column-break-inside:avoid;margin:0 0 12px;vertical-align:top}
+.notes-grid.waterfall .note-card>img{aspect-ratio:auto;display:block;width:100%;object-fit:cover}
+/* 四种图高轮转 → 形成真实落差，同时每张卡配不同来源的真实封面 */
+.notes-grid.waterfall .note-card:nth-child(4n+1)>img{height:172px}
+.notes-grid.waterfall .note-card:nth-child(4n+2)>img{height:128px}
+.notes-grid.waterfall .note-card:nth-child(4n+3)>img{height:198px}
+.notes-grid.waterfall .note-card:nth-child(4n+4)>img{height:150px}
+/* 用户要求「双列」瀑布流：任何屏宽都保持 2 列，不随宽屏变 3 列 */
+
+/* ── 我的页：汉堡移到左上角，杂项全部收进抽屉 ── */
+.me-topbar{justify-content:flex-start;gap:10px;margin:2px 0 14px}
+.me-topbar h1{font-size:19px;margin:0;font-weight:750}
+.me-topbar .me-topbar-tip{margin-left:auto;font-size:10px;color:var(--sub)}
+.me-topbar .hamburger{border:1px solid var(--line);background:var(--surface)}
+.me-clean-note{margin-top:26px;text-align:center;font-size:10px;color:var(--sub)}
+.drawer{overflow-y:auto;overscroll-behavior:contain}
+/* 旧规则 .drawer-list{flex:1;overflow:auto} 在只有一个列表时没事，
+   阶段二抽屉有两个列表后会互相压缩、把工具项裁掉 → 统一改为整体滚动 */
+.drawer>*{flex-shrink:0}
+.drawer>.drawer-list{flex:0 0 auto;overflow:visible}
+.drawer-tools button{font-size:13px}
+.drawer-group-title{font-size:10px;color:var(--sub);letter-spacing:1px;padding:14px 18px 6px;margin:0}
+.drawer-tools button small{margin-left:auto;font-size:10px;color:var(--sub)}
+.drawer-recent{padding:0 14px 8px;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.drawer-recent .recent-card{padding:8px}
+.drawer-recent .recent-card img{width:42px;height:42px}
+.drawer-recent .recent-card strong{font-size:11px}
+.drawer-version{display:grid;justify-items:center;gap:6px;padding:14px 18px 8px;margin-top:6px;border-top:1px solid var(--line);text-align:center}
+.drawer-version img{width:30px;height:30px;opacity:.8}
+.drawer-version span{font-size:11px;color:var(--ink)}
+.drawer-version small{font-size:9px;color:var(--sub);line-height:1.6}
+

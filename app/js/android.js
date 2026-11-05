@@ -59,6 +59,10 @@
   let localTracks = read('xy.android.localTracks', []);
   let searchType = 'song', searchKeyword = '', searchPage = 1, searchRows = [], searchGeneration = 0, searchAbort, searchArtistHint = '', searchDeduped = 0, searchTargeted = false, searchRelaxed = false, searchDegraded = false, searchNetworkTimeout = false;
   let channel = 'recommend';
+  // v3.7.0 阶段二：首页推荐池 / 换一批游标、独立榜单页数据、频道缓存
+  let discoveryPool = [], discoveryOffset = 0;
+  let chartsData = [], activeChartId = '', pendingChartId = '';
+  const channelCache = new Map();
   let detailGeneration = 0, discoveryGeneration = 0, cloudGeneration = 0, authGeneration = 0, heart;
   let cloudRows = [], authMode = 'login', selectedTrack = null, lastFocus = null, sheetFocus = null, lastBack = 0;
   // v3.6.1：云端歌单（user_playlists 表），与电脑端共用同一张表
@@ -86,8 +90,9 @@
   function openAccount() { lastFocus=document.activeElement; $('accountBackdrop').hidden=false; $('mobileAuthStatus').textContent=XYCloud.error || ''; renderAuth(); toggleCaptcha(); $('mobileLoginTitle').tabIndex=-1; $('mobileLoginTitle').focus(); }
   function showPlayer() { if (!Player.getState().current) return toast('先选择一首喜欢的歌曲'); $('mobilePlayer').hidden=false; $('mobileSongName').tabIndex=-1; $('mobileSongName').focus({preventScroll:true}); }
   function closePlayer() { $('mobilePlayer').hidden=true; }
+  function picOf(p) { return (p && (p.cover || p.pic || p.picUrl || p.coverImgUrl || p.tracks?.[0]?.pic)) || ''; }
   function showRoute(value) {
-    value=['discover','search','notes','library','me','settings','detail'].includes(value)?value:'discover';
+    value=['discover','search','notes','library','me','settings','detail','charts'].includes(value)?value:'discover';
     if (value==='detail' && !detail) value='library';
     route=value;
     document.querySelectorAll('.m-page').forEach(e=>{e.hidden=e.id!=='page-'+route;});
@@ -98,6 +103,7 @@
     if(route==='me') renderMe();
     if(route==='notes') renderNotes();
     if(route==='search') renderSearchWelcome();
+    if(route==='charts') loadChartsPage();
   }
   function navigate(value) { if(value!==route) { previousRoute=route==='detail'?previousRoute:route; location.hash=value; } else showRoute(value); }
   function savePlaylists() { global.XYSync?.stampPlaylists(playlists); save('uzz.playlists',playlists); renderCounts(); if(route==='library')renderLibrary(); }
@@ -105,8 +111,8 @@
   // 我的页（v3.3.0 网易云风格）：数据 + 歌单列表（左图右文）
   function renderMe() {
     renderCounts(); renderAuth();
-    const pl=playlists.slice(0,4);
-    $('mePlaylists').innerHTML=pl.map(p=>'<button class="me-row" data-local="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(p.cover))+'" alt=""><span><strong>'+escape(p.name)+'</strong><small>歌单 · '+(p.tracks?.length||0)+' 首</small></span></button>').join('') || '<p class="muted" style="padding:14px 4px;">还没有歌单，去首页看看推荐，或搜索喜欢的歌。</p>';
+    const pl=[...playlists,...cloudPlaylists].slice(0,8);
+    $('mePlaylists').innerHTML=pl.map(p=>'<button class="me-row" data-local="'+escape(p.id)+'"><img loading="lazy" src="'+escape(cover(picOf(p)||p.cover))+'" alt=""><span><strong>'+escape(p.name)+'</strong><small>歌单 · '+(p.tracks?.length||0)+' 首'+(p.cloudId?' · 云端':'')+'</small></span></button>').join('') || '<p class="muted" style="padding:14px 4px;">还没有歌单，去首页看看推荐，或搜索喜欢的歌。</p>';
     paintMeRecent();
     renderMeStats();
   }
@@ -146,6 +152,17 @@
   }
   // 笔记页（v3.3.0）：用发现页数据生成双列瀑布流卡片
   let notesMode='feed';
+  // v3.7.0：从本机已有的真实封面里建配图池，让每张笔记拿到不同的图
+  function noteImagePool(){
+    const out=[],push=v=>{if(typeof v==='string'&&/^https?:/.test(v)&&!out.includes(v))out.push(v);};
+    const d=read('xy.android.discovery',null)||{};
+    (d.playlists||[]).forEach(p=>push(picOf(p)));
+    (d.charts||[]).forEach(c=>push(c.cover||c.pic));
+    (Player.getHistory()||[]).forEach(t=>push(t.pic));
+    (Player.getFavorites()||[]).forEach(t=>push(t.pic));
+    (read('xy.android.hotArtists',[])||[]).forEach(a=>push(a.pic));
+    return out;
+  }
   function renderNotes() {
     const cached=read('xy.android.discovery',null);
     const pools=[];
@@ -168,9 +185,13 @@
     if(feedTitle)feedTitle.textContent=notesMode==='follow'?'我的关注':'广场';
     if(feedTip)feedTip.textContent=notesMode==='follow'?'你收藏的歌手与歌单':'正在发生的音乐话题';
     paintNotesTimeline(src);
+    const imgPool=noteImagePool(), usedPic=new Set();
     const html=src.slice(0,12).map((n,i)=>{
       const d=n.data;
-      const pic=n.kind==='artist'?(d.pic||'icon.svg'):(d.cover||d.pic||d.picUrl||'icon.svg');
+      // 每条笔记优先用自己的封面；缺失或重复时从真实封面池里取一张没用过的
+      let pic=n.kind==='artist'?(d.pic||''):(d.cover||d.pic||d.picUrl||'');
+      if(!pic||usedPic.has(pic))pic=imgPool.find(u=>!usedPic.has(u))||imgPool[i%Math.max(1,imgPool.length)]||'';
+      if(pic)usedPic.add(pic);
       const name=d.name||'音乐卡片';
       const desc=n.kind==='chart'?(d.desc||'热歌榜单'):n.kind==='artist'?'你喜欢的歌手':(d.local?'我创建的歌单':'精选歌单 · '+(d.playCount?Math.floor(Number(d.playCount)/10000)+'万次播放':'值得一听'));
       const likes=n.kind==='artist'?0:(1200+i*337);
@@ -194,9 +215,11 @@
     const box=$('notesTimeline'); if(!box)return;
     const items=(src||[]).slice(0,7);
     if(!items.length){box.innerHTML='';return;}
+    const pool=noteImagePool();
     box.innerHTML=items.map((n,i)=>{
       const d=n.data||{};
-      const pic=d.cover||d.pic||d.picUrl||'icon.svg';
+      let pic=d.cover||d.pic||d.picUrl||'';
+      if(!pic)pic=pool[i%Math.max(1,pool.length)]||'';
       const name=d.name||'音乐卡片';
       const attr=n.kind==='chart'?'data-action="charts"':n.kind==='artist'?'data-action="openArtist" data-artist="'+escape(d.id||'')+'" data-artist-name="'+escape(name)+'"':(d.local?'data-local-playlist="'+escape(d.id||'')+'"':'data-online="'+escape(d.id||'')+'" data-title="'+escape(name)+'"');
       return '<button class="tl-card" '+attr+'><img loading="lazy" src="'+escape(cover(pic))+'"><span class="tl-date">'+NOTE_DAYS[i%NOTE_DAYS.length]+'</span><strong>'+escape(name)+'</strong><small>'+escape(d.desc||(n.kind==='artist'?'你喜欢的歌手':'精选音乐卡片'))+'</small></button>';
@@ -329,29 +352,60 @@
       '<span class="strip-count">'+(t.playCount?('▶ '+Math.round(t.playCount/10000)+'万'):'›')+'</span></button>'
     ).join('') : emptyOrActions(searchDegraded?'网络超时，暂未取到歌单，请重试或切换音源。':'没有找到相关歌单');
   }
-  async function loadDiscover() {
-    const ticket=++discoveryGeneration; $('refreshDiscover').disabled=true;
-    const cached=read('xy.android.discovery',null); if(cached)paintDiscover(cached);
-    else { $('recommendations').innerHTML=empty('正在准备你的音乐首页…'); $('chartCards').innerHTML=''; }
-    const results=await Promise.allSettled([UzzApi.getPlaylists('全部',12),UzzApi.getCharts()]); if(ticket!==discoveryGeneration)return;
-    const data={playlists:results[0].status==='fulfilled'?results[0].value:cached?.playlists || [],charts:results[1].status==='fulfilled'?results[1].value:cached?.charts || []};
-    // 当前不在「推荐」频道时，不覆盖用户已切换的频道内容
+  // ══════ 首页推荐池（v3.7.0）：一次拉大池，「换一批」本地轮换 + 后台刷新 ══════
+  function rotateDiscover() {
+    // 非推荐频道时「换一批」= 清空该频道缓存并重新拉专属内容，
+    // 不能把别的频道容器覆盖成推荐歌单网格
+    if(channel!=='recommend'&&CHANNELS[channel]){
+      channelCache.delete(channel);
+      loadChannel(channel);
+      toast('已刷新「'+CHANNELS[channel].title+'」');
+      return;
+    }
+    if (discoveryPool.length > 8) {
+      discoveryOffset = (discoveryOffset + 8) % discoveryPool.length;
+      paintDiscover({ playlists: discoveryPool, charts: chartsData });
+      toast('已换一批推荐');
+    }
+    loadDiscover(true);   // 后台拉新池，不阻塞点击反馈
+  }
+  async function loadDiscover(force) {
+    const ticket=++discoveryGeneration; const btn=$('refreshDiscover'); if(btn)btn.disabled=true;
+    const cached=read('xy.android.discovery',null);
+    if(cached){
+      if(!discoveryPool.length)discoveryPool=cached.playlists||[];
+      if(!chartsData.length)chartsData=cached.charts||[];
+      if(channel==='recommend')paintDiscover(cached);
+    } else { $('recommendations').innerHTML=empty('正在准备你的音乐首页…'); $('chartCards').innerHTML=''; }
+    const results=await Promise.allSettled([UzzApi.getPlaylists('全部',30),UzzApi.getCharts()]); if(ticket!==discoveryGeneration)return;
+    const data={playlists:results[0].status==='fulfilled'?results[0].value:cached?.playlists||[],charts:results[1].status==='fulfilled'?results[1].value:cached?.charts||[]};
+    if(data.playlists.length){
+      discoveryPool=data.playlists;
+      // 后台刷新池时保留当前「换一批」的位置，否则刚换的那批会被立刻覆盖回去
+      discoveryOffset=discoveryOffset%Math.max(1,data.playlists.length);
+    }
+    if(data.charts.length)chartsData=data.charts;
     if(channel==='recommend')paintDiscover(data);
     if(data.playlists.length||data.charts.length)save('xy.android.discovery',data);
     if(route==='notes')renderNotes();
-    if(results[0].status==='rejected'&&!data.playlists.length&&channel==='recommend')$('recommendations').innerHTML=failure(results[0].reason.message,'settings');
-    $('refreshDiscover').disabled=false;
-    loadHotArtists();
+    if(results[0].status==='rejected'&&!data.playlists.length&&channel==='recommend')$('recommendations').innerHTML=networkFailureBox('推荐歌单暂时没取到，请重试或切换音源。');
+    if(btn)btn.disabled=false;
+    loadHotArtists();   // 每次进首页都实时刷新热门歌手
   }
   function paintDiscover(data) {
-    $('recommendations').innerHTML=data.playlists.slice(0,8).map(p=>'<button class="cover-card" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><div class="cover-art"><img loading="lazy" src="'+escape(cover(p.cover||p.pic||p.picUrl))+'" alt=""><span class="cover-count">▷ '+(Number(p.playCount)>10000?Math.floor(p.playCount/10000)+'万':Number(p.playCount)||'精选')+'</span></div><strong>'+escape(p.name)+'</strong><small>精选歌单 · 发现你的下一首喜欢</small></button>').join('') || empty('暂无推荐，先去搜索喜欢的歌曲吧。');
-    // 榜单：前三名用大卡 + 金银铜名次，其余小卡（首页专属的排行榜视觉）
-    $('chartCards').innerHTML=data.charts.slice(0,4).map((p,i)=>'<button class="chart-card chart-rank-'+(i+1)+'" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><span>'+(i<3?['🥇','🥈','🥉'][i]:'TOP '+String(i+1).padStart(2,'0'))+'</span><strong>'+escape(p.name)+'</strong><small>'+escape(p.desc||'实时榜单')+'</small></button>').join('');
+    const pool=discoveryPool.length?discoveryPool:(data.playlists||[]);
+    const picks=pool.length>8?Array.from({length:8},(_,i)=>pool[(discoveryOffset+i)%pool.length]):pool;
+    $('recommendations').innerHTML=picks.filter(p=>picOf(p)).map(p=>
+      '<button class="cover-card" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><div class="cover-art"><img loading="lazy" src="'+escape(cover(picOf(p)))+'" alt=""><span class="cover-count">▷ '+(Number(p.playCount)>10000?Math.floor(p.playCount/10000)+'万':Number(p.playCount)||'精选')+'</span></div><strong>'+escape(p.name)+'</strong><small>精选歌单 · 发现你的下一首喜欢</small></button>'
+    ).join('') || empty('暂无推荐，先去搜索喜欢的歌曲吧。');
+    // 排行榜 2x2 宫格：整块跳独立榜单页，不再在首页滚动
+    const cs=(chartsData.length?chartsData:(data.charts||[])).slice(0,4);
+    $('chartCards').innerHTML=cs.length?cs.map((c,i)=>
+      '<button class="cp-card" data-nav="charts" data-chart-id="'+escape(c.id)+'"><span class="cp-rank">TOP '+String(i+1).padStart(2,'0')+'</span><span class="cp-icon">'+escape(c.icon||'🎵')+'</span><strong>'+escape(c.name)+'</strong><small>'+escape(c.desc||'实时榜单')+'</small></button>'
+    ).join(''):'<button class="cp-card" data-nav="charts"><span class="cp-icon">🎵</span><strong>全部榜单</strong><small>查看各大实时榜单</small></button>';
     paintHotArtists(read('xy.android.hotArtists',null));
   }
-  /* ---------- 首页「热门歌手」横滑（v3.5.0）---------- */
-  // 数据来源：取首个榜单的前 60 首，按歌手去重得到「此刻最受欢迎」，
-  // 与笔记页的「关注」不同——这里展示的是全站热度，不是本机偏好。
+  /* ---------- 首页「热门歌手」横滑（v3.7.0 实时拉取）---------- */
   function paintHotArtists(list) {
     const box=$('hotArtists'); if(!box)return;
     if(!list||!list.length){box.innerHTML='';return;}
@@ -359,10 +413,12 @@
   }
   async function loadHotArtists() {
     const box=$('hotArtists'); if(!box)return;
+    // 先画缓存保证首屏不空，但不再 return —— 每次都发起网络请求刷新真实热歌榜
     const cached=read('xy.android.hotArtists',null);
-    if(cached&&cached.length){paintHotArtists(cached);return;}
+    if(cached&&cached.length)paintHotArtists(cached);
     try{
-      const charts=await UzzApi.getCharts();
+      const charts=chartsData.length?chartsData:await UzzApi.getCharts();
+      if(charts.length&&!chartsData.length)chartsData=charts;
       const chart=charts[0]; if(!chart)return;
       const r=await UzzApi.getPlaylist(chart.id,60);
       const seen=new Set(),list=[];
@@ -372,18 +428,89 @@
         if(list.length>=12)break;
       }
       if(list.length){save('xy.android.hotArtists',list);paintHotArtists(list);}
-    }catch(e){/* 热门歌手为增强项，失败不阻塞首页 */}
+    }catch(e){/* 热门歌手为增强项，失败保留上次结果 */}
   }
-  // ══════ 首页频道（v3.4.0）══════════════════════════════════
-  // 网易云风格的 6 个频道 Tab，此前是静态文字、点击无反应。
-  // 现在每个频道都有真实内容来源与加载逻辑。
+  // ══════ 排行榜独立页（v3.7.0）：榜单宫格 + 页内 Top10，不再跳走 ══════
+  async function loadChartsPage() {
+    const box=$('chartsFullGrid'); if(!box)return;
+    if(!chartsData.length){
+      box.innerHTML=empty('正在加载各大榜单…');
+      try{ chartsData=await UzzApi.getCharts(); }
+      catch(e){ box.innerHTML=failure(e.message||'榜单加载失败','charts'); return; }
+    }
+    paintChartsPage();
+    const want=pendingChartId||activeChartId||chartsData[0]?.id||'';
+    pendingChartId='';
+    if(want)await selectChart(want);
+  }
+  function paintChartsPage() {
+    const box=$('chartsFullGrid'); if(!box)return;
+    box.innerHTML=chartsData.map(c=>
+      '<button data-chart-pick="'+escape(c.id)+'" class="'+(String(c.id)===String(activeChartId)?'active':'')+'"><span class="cps-icon">'+escape(c.icon||'🎵')+'</span><span class="cps-meta"><strong>'+escape(c.name)+'</strong><small>'+escape(c.desc||'实时榜单')+'</small></span></button>'
+    ).join('')||empty('暂无榜单数据');
+    hydrate(box);
+  }
+  async function selectChart(id) {
+    activeChartId=String(id);
+    const chart=chartsData.find(c=>String(c.id)===String(id))||chartsData[0];
+    document.querySelectorAll('#chartsFullGrid button').forEach(b=>b.classList.toggle('active',b.dataset.chartPick===String(id)));
+    const title=$('chartsDetailTitle'), tip=$('chartsDetailTip'), ul=$('chartsTracks');
+    if(title)title.textContent=chart?.name||'榜单金曲';
+    if(tip)tip.textContent='实时 Top 10';
+    if(ul)ul.innerHTML=empty('正在加载「'+(chart?.name||'榜单')+'」…');
+    try{
+      const r=await UzzApi.getPlaylist(id,10);
+      const tracks=r.tracks||[];
+      trackSets.set('charts',tracks);
+      if(ul)ul.innerHTML=tracks.length?tracks.map((t,i)=>
+        '<li class="track-row"><span class="track-index">'+(i+1)+'</span><button class="track-main" data-track-list="charts" data-track-index="'+i+'"><img loading="lazy" src="'+escape(cover(picOf(t)))+'" alt=""><span><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape(t.artist||'')+'</small></span></button></li>'
+      ).join(''):empty('暂无曲目，换个榜单看看');
+    }catch(e){ if(ul)ul.innerHTML=failure(e.message||'榜单曲目加载失败','charts'); }
+  }
+  // ══════ 首页频道（v3.7.0）：五个 Tab 的数据源 + 渲染形态完全区分 ══════
   const CHANNELS = {
-    recommend: { title:'为你推荐', cat:'全部', tip:'根据你的口味 · 每日更新' },
-    music:     { title:'音乐',     cat:'华语', tip:'华语热歌 · 每周更新' },
-    podcast:   { title:'播客',     cat:'其他', tip:'有声节目与故事' },    audiobook: { title:'听书',     cat:'学习', tip:'文学作品与知识' },
-    radio:     { title:'电台',     cat:'轻音乐', tip:'背景音乐与电台' },
-    fm:        { title:'私人FM',   cat:'全部', tip:'根据你的红心随机推荐' },
+    recommend: { title:'为你推荐',        cls:'cover-grid',        tip:'根据你的口味 · 每日更新' },
+    music:     { title:'音乐 · 新歌速递', cls:'channel-music',     tip:'热歌榜实时金曲' },
+    podcast:   { title:'播客 · 声音节目', cls:'channel-podcast',   tip:'有声节目与故事',   kw:'播客' },
+    audiobook: { title:'听书 · 知识有声', cls:'channel-audiobook', tip:'文学作品与知识',   kw:'有声书' },
+    radio:     { title:'电台 · 频率',     cls:'channel-radio',     tip:'背景音乐与电台',   kw:'电台' },
+    fm:        { title:'私人FM',          cls:'fm-list',           tip:'根据你的红心随机推荐' },
   };
+  // 每个频道用不同 API 组合拿数据，避免六个 Tab 只是同一批歌单换分类名
+  async function channelLoad(key,cfg){
+    if(channelCache.has(key))return channelCache.get(key);
+    let rows=[];
+    if(key==='music'){
+      const charts=chartsData.length?chartsData:await UzzApi.getCharts();
+      const id=charts[1]?.id||charts[0]?.id;   // 新歌榜 → 真实单曲
+      if(id){const r=await UzzApi.getPlaylist(id,20);rows=r.tracks||[];}
+    }else{
+      const r=await UzzApi.search(cfg.kw,'playlist',1,12);
+      rows=(r.list||[]).filter(p=>p&&p.id);
+      if(!rows.length)rows=await UzzApi.getPlaylists('全部',12);
+    }
+    channelCache.set(key,rows);
+    return rows;
+  }
+  function channelPaint(key,rows,cfg){
+    if(key==='music'){
+      trackSets.set('channelMusic',rows);
+      return rows.length?rows.slice(0,20).map((t,i)=>
+        '<button class="cm-row" data-track-list="channelMusic" data-track-index="'+i+'"><span class="cm-idx">'+String(i+1).padStart(2,'0')+'</span><img loading="lazy" src="'+escape(cover(picOf(t)))+'" alt=""><span class="cm-meta"><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape([t.artist,t.album].filter(Boolean).join(' · '))+'</small></span></button>'
+      ).join(''):empty('新歌榜暂时没有内容');
+    }
+    const open=(p)=>'data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"';
+    const pic=(p)=>escape(cover(picOf(p)));
+    if(key==='podcast')return rows.map(p=>
+      '<button class="pod-card" '+open(p)+'><img loading="lazy" src="'+pic(p)+'" alt=""><span class="pod-meta"><span class="pod-tag">播客节目</span><strong>'+escape(p.name)+'</strong><small>'+escape(p.artist||cfg.tip)+'</small></span></button>'
+    ).join('')||empty('暂无播客内容');
+    if(key==='audiobook')return rows.map(p=>
+      '<button class="ab-card" '+open(p)+'><span class="ab-cover"><img loading="lazy" src="'+pic(p)+'" alt=""></span><strong>'+escape(p.name)+'</strong><small>'+escape(p.artist||'有声书')+'</small></button>'
+    ).join('')||empty('暂无听书内容');
+    return rows.map(p=>
+      '<button class="radio-card" '+open(p)+'><span class="radio-art"><img loading="lazy" src="'+pic(p)+'" alt=""></span><strong>'+escape(p.name)+'</strong></button>'
+    ).join('')||empty('暂无电台内容');
+  }
   async function loadChannel(key) {
     channel = key;
     const cfg = CHANNELS[key] || CHANNELS.recommend;
@@ -393,17 +520,17 @@
       if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
     });
     const title=$('discoverSectionTitle'); if(title) title.textContent=cfg.title;
-    const box=$('recommendations');
-    if(!box)return;
-    // 「推荐」频道：复用首页原有的推荐/榜单数据，无需额外请求
+    const box=$('recommendations'); if(!box)return;
+    box.className='';
+    // 「推荐」频道：复用首页推荐池 / 榜单宫格
     if(key==='recommend'){
-      box.classList.remove('fm-list'); box.classList.add('cover-grid');
+      box.classList.add('cover-grid');
       const cached=read('xy.android.discovery',null);
       if(cached)paintDiscover(cached); else await loadDiscover();
       return;
     }
     if(key==='fm'){
-      // 私人FM：基于本机红心 + 收藏歌曲的相似推荐，无红心则用热歌榜兜底
+      box.classList.add('fm-list');
       box.innerHTML=empty('正在为你挑选私人FM…');
       try{
         const favs=Player.getFavorites()||[];
@@ -411,26 +538,25 @@
         let tracks=[];
         if(seed&&seed.id&&seed.vendor) tracks=await UzzApi.getSimi(seed.id,seed.vendor,12).catch(()=>[]);
         if(!tracks.length){
-          const charts=await UzzApi.getCharts();
+          const charts=chartsData.length?chartsData:await UzzApi.getCharts();
           const chart=charts[0];
           if(chart) tracks=(await UzzApi.getPlaylist(chart.id,12).catch(()=>({tracks:[]}))).tracks||[];
         }
-        box.classList.remove('cover-grid'); box.classList.add('fm-list');
-        box.innerHTML=tracks.length?tracks.map((t,i)=>'<button class="fm-row" data-fm-index="'+i+'"><span class="fm-idx">'+String(i+1).padStart(2,'0')+'</span><img loading="lazy" src="'+escape(cover(t.pic))+'" alt=""><span class="fm-meta"><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape(t.artist||'')+'</small></span><span class="fm-play" data-icon="play"></span></button>').join(''):empty('还没有足够的红心数据，先去收藏几首歌，私人FM会更懂你。');
+        box.innerHTML=tracks.length?tracks.map((t,i)=>'<button class="fm-row" data-fm-index="'+i+'"><span class="fm-idx">'+String(i+1).padStart(2,'0')+'</span><img loading="lazy" src="'+escape(cover(picOf(t)))+'" alt=""><span class="fm-meta"><strong>'+escape(t.name||'未知歌曲')+'</strong><small>'+escape(t.artist||'')+'</small></span><span class="fm-play" data-icon="play"></span></button>').join(''):empty('还没有足够的红心数据，先去收藏几首歌，私人FM会更懂你。');
         hydrate(box);
-        const fmSet=trackSets.get('fm')||[]; trackSets.set('fm',tracks);
-        void fmSet;
+        trackSets.set('fm',tracks);
         bindFmRows();
-      }catch(e){ box.classList.remove('fm-list'); box.classList.add('cover-grid'); box.innerHTML=failure(e.message||'私人FM加载失败','refreshDiscover'); }
+      }catch(e){ box.className='cover-grid'; box.innerHTML=failure(e.message||'私人FM加载失败','retryChannel'); }
       return;
     }
-    box.classList.remove('fm-list'); box.classList.add('cover-grid');
+    // 音乐 / 播客 / 听书 / 电台：各自专属容器类 + 专属卡片结构
+    box.className=cfg.cls;
     box.innerHTML=empty('正在加载「'+cfg.title+'」…');
     try{
-      const list=await UzzApi.getPlaylists(cfg.cat,12);
-      if(!list.length){ box.innerHTML=empty('「'+cfg.title+'」暂无内容，换个频道看看'); return; }
-      box.innerHTML=list.map((p,i)=>'<button class="cover-card" data-online="'+escape(p.id)+'" data-title="'+escape(p.name)+'"><div class="cover-art"><img loading="lazy" src="'+escape(cover(p.cover||p.pic||p.picUrl))+'" alt=""><span class="cover-count">▷ '+(Number(p.playCount)>10000?Math.floor(p.playCount/10000)+'万':Number(p.playCount)||'精选')+'</span></div><strong>'+escape(p.name)+'</strong><small>'+escape(cfg.tip)+'</small></button>').join('');
-    }catch(e){ box.innerHTML=failure(e.message||'频道加载失败','refreshDiscover'); }
+      const rows=await channelLoad(key,cfg);
+      box.innerHTML=channelPaint(key,rows,cfg);
+      hydrate(box);
+    }catch(e){ box.innerHTML=failure(e.message||'频道加载失败','retryChannel'); }
   }
   function bindFmRows(){
     const list=trackSets.get('fm')||[];
@@ -1015,7 +1141,7 @@
     retryPlayback:async()=>{if(!Player.getState().current)return;if(audio.retry)await audio.retry();else{audio.load();await audio.play();}toast('正在重新连接音源…');},
     trackMenu:()=>trackMenu(Player.getState().current),createPlaylist,addToPlaylist,settings,networkDiagnostics,update:checkUpdate,
     about:showAboutSheet,deviceAuth:showDeviceAuthSheet,
-    back:()=>navigate(previousRoute==='detail'?'library':previousRoute),refreshDiscover:loadDiscover,retrySearch:()=>search(),refreshCloud,
+    back:()=>navigate(previousRoute==='detail'?'library':previousRoute),refreshDiscover:rotateDiscover,retryChannel:()=>loadChannel(channel),retrySearch:()=>search(),refreshCloud,
     history:()=>chooseLibrary('history'),favorites:()=>chooseLibrary('favorites'),openCloud:()=>{closeAccount();chooseLibrary('cloud');},
     clearSearch:()=>{searchHistory=[];save('uzz.searchHistory',[]);renderSearchWelcome();},theme:cycleTheme,
     // v3.4.0：语音搜索（Web Speech API，桌面浏览器可用；安卓原生不支持时给出明确指引）
@@ -1130,7 +1256,7 @@
         finally{ if(btn){btn.disabled=false;btn.textContent='解析并导入';} }
       };
     },
-    charts:()=>{navigate('discover');$('chartCards').scrollIntoView({behavior:'smooth',block:'center'});},
+    charts:()=>navigate('charts'),
     enqueue:()=>{Player.enqueueTrack(selectedTrack);closeSheet();toast('已加入播放队列');},
     // 本机收藏（双写）：本机列表确定性增删 + 登录态下同步云端（失败不回滚本机）
     deviceFavorite:async()=>{const t=selectedTrack;if(!t||typeof t.id!=='string'||!t.vendor){closeSheet();toast('该来源暂不支持收藏');return;}
@@ -1170,7 +1296,8 @@
   async function click(event) {
     const button=event.target.closest('button,a');if(!button)return;
     if(button.dataset.backendSuggestion){$('mobileBackend').value=button.dataset.backendSuggestion;return;}
-    if(button.dataset.nav){navigate(button.dataset.nav);return;}
+    if(button.dataset.nav){if(button.dataset.nav==='charts'&&button.dataset.chartId)pendingChartId=button.dataset.chartId;navigate(button.dataset.nav);return;}
+    if(button.dataset.chartPick){await selectChart(button.dataset.chartPick);return;}
     if(button.dataset.action){
       const action=button.dataset.action;
       // 需要元素上下文的动作：先把 data-* 注入 selected* 状态
@@ -1195,7 +1322,7 @@
   }
   function back(){if(!$('accountBackdrop').hidden)return closeAccount();if(!$('sheetBackdrop').hidden)return closeSheet();if(!$('drawerBackdrop').hidden)return closeDrawer();if(!$('mobilePlayer').hidden)return closePlayer();if(route!=='discover')return navigate(route==='detail'?previousRoute:'discover');if(Date.now()-lastBack<1800){XYNative.App.exitApp();return;}lastBack=Date.now();toast('再按一次返回退出应用');}
   // 侧边抽屉（v3.3.0 网易云风格）
-  function openDrawer(){$('drawerBackdrop').hidden=false;const u=XYCloud.user;if(u){$('drawerName').textContent=XYCloud.displayUser(u);$('drawerAvatar').textContent=(XYCloud.displayUser(u)||'杨').slice(0,1);}}
+  function openDrawer(){$('drawerBackdrop').hidden=false;const u=XYCloud.user;if(u){$('drawerName').textContent=XYCloud.displayUser(u);$('drawerAvatar').textContent=(XYCloud.displayUser(u)||'杨').slice(0,1);}paintMeRecent();hydrate($('drawerBackdrop'));}
   function closeDrawer(){const d=$('drawerBackdrop');if(d)d.hidden=true;}
   let keyboardOpen=false;
   let playbackStatusKey='',bufferSince=0,bufferTimer;
@@ -1234,7 +1361,7 @@
     document.addEventListener('click',e=>{click(e).catch(error=>toast(error.message));});
     document.addEventListener('error',e=>{if(e.target instanceof HTMLImageElement&&e.target.getAttribute('src')!=='icon.svg')e.target.src='icon.svg';},true);
     global.addEventListener('hashchange',()=>showRoute(location.hash.slice(1)));showRoute(location.hash.slice(1));
-    $('mobileSearchForm').onsubmit=e=>{e.preventDefault();$('mobileSearchInput').blur();search();};$('searchMore').onclick=()=>search(true);$('refreshDiscover').onclick=loadDiscover;
+    $('mobileSearchForm').onsubmit=e=>{e.preventDefault();$('mobileSearchInput').blur();search();};$('searchMore').onclick=()=>search(true);$('refreshDiscover').onclick=rotateDiscover;
     $('mobileSearchInput').addEventListener('input',()=>{if(!$('mobileSearchInput').value.trim()){searchGeneration++;searchAbort?.abort();$('searchResults').hidden=true;$('searchWelcome').hidden=false;renderSearchWelcome();}});
     $('detailPlayAll').onclick=()=>{if(detail?.tracks.length){Player.playQueue(detail.tracks).catch(e=>toast(e.message));showPlayer();}};
     $('detailSave').onclick=()=>{if(!detail||!detail.tracks.length)return;const existing=playlists.find(p=>p.sourceId===detail.id);if(existing)return toast('此歌单已保存');playlists.unshift({id:'L'+crypto.randomUUID(),sourceId:detail.id,name:detail.name,cover:detail.cover,tracks:detail.tracks.slice(),kind:'collected',createdAt:Date.now()});savePlaylists();toast('歌单已保存到音乐库');};
