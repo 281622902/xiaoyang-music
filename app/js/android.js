@@ -677,7 +677,7 @@
   function createPlaylist() { sheet('新建歌单','<form id="playlistCreateForm"><label>歌单名称<input id="newPlaylistName" maxlength="60" placeholder="给喜欢的音乐起个名字" required></label><button class="primary wide-button" type="submit">创建歌单</button></form>'); }
   function trackMenu(track,scope) {
     if(!track)return;selectedTrack=track;
-    let html='<p class="muted">'+escape(track.artist||'小杨音乐')+'</p><button class="sheet-action" data-action="enqueue"><span data-icon="queue"></span>加入播放队列</button><button class="sheet-action" data-action="addToPlaylist"><span data-icon="plus"></span>添加到歌单</button><button class="sheet-action" data-action="deviceFavorite"><span data-icon="heart"></span>'+(Player.getFavorites().some(t=>keyOf(t)===keyOf(track))?'取消本机喜欢':'保存到本机喜欢')+'</button>';
+    let html='<p class="muted">'+escape(track.artist||'xymusic')+'</p><button class="sheet-action" data-action="enqueue"><span data-icon="queue"></span>加入播放队列</button><button class="sheet-action" data-action="addToPlaylist"><span data-icon="plus"></span>添加到歌单</button><button class="sheet-action" data-action="deviceFavorite"><span data-icon="heart"></span>'+(Player.getFavorites().some(t=>keyOf(t)===keyOf(track))?'取消本机喜欢':'保存到本机喜欢')+'</button>';
     // v3.4.0：接入进阶功能（桌面端已有，移动端此前完全缺失）
     if(track.vendor!=='device'&&track.id)html+='<button class="sheet-action" data-action="songWiki"><span data-icon="spark"></span>歌曲百科</button><button class="sheet-action" data-action="similarSongs"><span data-icon="library"></span>相似推荐</button>';
     if(scope==='detail'&&detail?.localId)html+='<button class="sheet-action" data-action="removeFromPlaylist">从此歌单移除</button>';
@@ -693,8 +693,9 @@
     const state=Player.getState(),t=state.current;
     $('mobileMini').hidden=!t;
     if(kind==='openFull')return showPlayer(); if(kind==='closeFull')return closePlayer();
-    if(t){$('mobileMiniName').textContent=$('mobileSongName').textContent=t.name||'未知歌曲';$('mobileMiniArtist').textContent=$('mobileSongArtist').textContent=t.artist||'';$('mobileSource').textContent=({netease:'网易云音乐',tencent:'QQ 音乐',kugou:'酷狗音乐',kuwo:'酷我音乐',cloud:'云端收藏'})[t.vendor]||'小杨音乐';
+    if(t){$('mobileMiniName').textContent=$('mobileSongName').textContent=t.name||'未知歌曲';$('mobileMiniArtist').textContent=$('mobileSongArtist').textContent=t.artist||'';$('mobileSource').textContent=({netease:'网易云音乐',tencent:'QQ 音乐',kugou:'酷狗音乐',kuwo:'酷我音乐',cloud:'云端收藏'})[t.vendor]||'xymusic';
       const image=cover(t.pic);for(const id of ['mobileCover','mobileMiniCover'])if($(id).getAttribute('src')!==image)$(id).src=image;
+      const bgEl=$('mobilePlayerBg');if(bgEl)bgEl.style.backgroundImage='url("'+image+'")';
     } else closePlayer();
     const playing=!audio.paused&&!!audio.currentSrc;
     for(const id of ['mobilePlay','mobileMiniPlay']){$(id).innerHTML=icon(playing?'pause':'play');$(id).setAttribute('aria-label',playing?'暂停':'播放');}
@@ -756,7 +757,7 @@
   // 关于
   function showAboutSheet() {
     const ver=(global.XYCloud?.appVersion||'').replace(/^v/,'');
-    sheet('关于小杨音乐','<div class="about-box"><img src="icon.svg" alt=""><strong>小杨音乐</strong><span class="muted">版本 v'+escape(ver)+'</span></div><div class="wiki-list"><div class="wiki-row"><span>定位</span><strong>让喜欢，随身听</strong></div><div class="wiki-row"><span>音源</span><strong>网易云音乐 · QQ 音乐 · 酷狗</strong></div><div class="wiki-row"><span>账号</span><strong>Supabase 手机号登录</strong></div><div class="wiki-row"><span>许可</span><strong>个人非商业使用</strong></div></div><p class="muted" style="margin-top:14px;">本应用所有歌曲与歌词均来自公开音乐接口，版权归原权利人所有。</p>');
+    sheet('关于 xymusic','<div class="about-box"><img src="icon.svg" alt=""><strong>xymusic</strong><span class="muted">版本 v'+escape(ver)+'</span></div><div class="wiki-list"><div class="wiki-row"><span>定位</span><strong>让喜欢，随身听</strong></div><div class="wiki-row"><span>音源</span><strong>网易云音乐 · QQ 音乐 · 酷狗</strong></div><div class="wiki-row"><span>账号</span><strong>Supabase 手机号登录</strong></div><div class="wiki-row"><span>许可</span><strong>个人非商业使用</strong></div></div><p class="muted" style="margin-top:14px;">本应用所有歌曲与歌词均来自公开音乐接口，版权归原权利人所有。</p>');
   }
   // 设备授权（v3.5.0 防泄露机制）
   function showDeviceAuthSheet() {
@@ -1120,7 +1121,7 @@
       return toast('桌面歌词仅在安卓版可用', 4000);
     }
     try {
-      const r = await XYNative.NativeMusic.lyricOverlay({ show: true, cur: '小杨音乐 · 桌面歌词已开启', next: '播放歌曲后逐句显示（可拖动，长按关闭）', playing: true });
+      const r = await XYNative.NativeMusic.lyricOverlay({ show: true, cur: 'xymusic · 桌面歌词已开启', next: '播放歌曲后逐句显示（可拖动，长按关闭）', playing: true });
       if (r && r.needsPermission) {
         sheet('需要悬浮窗权限', '<p class="muted">请在接下来的页面允许「显示在其他应用上层」，返回后再打开桌面歌词。</p><button id="overlayGrant" class="primary wide-button">去授权</button>');
         const g = document.getElementById('overlayGrant');
@@ -1271,7 +1272,7 @@
       const t=selectedTrack;closeSheet();
       if(!t||!/^https?:\/\//i.test(t.url||''))return toast('该歌曲暂无可下载地址');
       if(!XYNative.NativeMusic?.downloadTrack)return toast('当前版本不支持下载');
-      sheet('正在下载《'+escape((t.name||'').slice(0,20))+'》','<div class="apk-progress"><div id="dlBarFill"></div></div><p id="dlPercent" class="muted" style="text-align:center;margin-top:6px;">0%</p><p class="muted" style="text-align:center;">保存到系统音乐库 · Music/小杨音乐</p>');
+      sheet('正在下载《'+escape((t.name||'').slice(0,20))+'》','<div class="apk-progress"><div id="dlBarFill"></div></div><p id="dlPercent" class="muted" style="text-align:center;margin-top:6px;">0%</p><p class="muted" style="text-align:center;">保存到系统音乐库 · Music/xymusic</p>');
       try{
         const prog=XYNative.NativeMusic.addListener('downloadProgress',(p)=>{
           const pct=Math.max(0,Math.min(100,Number(p&&p.percent)||0));

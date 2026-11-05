@@ -1,13 +1,13 @@
 {
-  "name": "小杨音乐",
-  "short_name": "小杨音乐",
-  "description": "小杨音乐 · 你的个人音乐空间",
+  "name": "xymusic",
+  "short_name": "xymusic",
+  "description": "xymusic · 你的个人音乐空间",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0c151c",
-  "theme_color": "#0c151c",
+  "background_color": "#0c1c18",
+  "theme_color": "#0c1c18",
   "icons": [
     {
       "src": "icon.svg",

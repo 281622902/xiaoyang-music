@@ -1,1 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#203e47"/><stop offset="1" stop-color="#0b2027"/></linearGradient><linearGradient id="mint" x2="1" y2="1"><stop stop-color="#c2f7d9"/><stop offset="1" stop-color="#57cdbb"/></linearGradient></defs><rect x="8" y="8" width="496" height="496" rx="126" fill="url(#bg)"/><circle cx="256" cy="256" r="164" fill="none" stroke="#53776f" stroke-width="2"/><path d="M132 286c42 0 45-118 88-118s32 176 76 176 40-118 84-118" fill="none" stroke="url(#mint)" stroke-width="44" stroke-linecap="round"/><circle cx="380" cy="160" r="19" fill="#b9f1d4"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#163a30"/>
+      <stop offset="1" stop-color="#081310"/>
+    </linearGradient>
+    <radialGradient id="disc" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#1d201e"/>
+      <stop offset="1" stop-color="#090b0a"/>
+    </radialGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8df0d6"/>
+      <stop offset="1" stop-color="#3fbfa1"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="168" fill="url(#disc)"/>
+  <g stroke="#ffffff" stroke-opacity="0.06" fill="none" stroke-width="2">
+    <circle cx="256" cy="256" r="150"/>
+    <circle cx="256" cy="256" r="132"/>
+    <circle cx="256" cy="256" r="114"/>
+    <circle cx="256" cy="256" r="96"/>
+    <circle cx="256" cy="256" r="78"/>
+  </g>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="url(#mint)" stroke-width="6" stroke-opacity="0.92"/>
+  <circle cx="256" cy="256" r="58" fill="url(#mint)"/>
+  <circle cx="256" cy="256" r="16" fill="#0a0c0b"/>
+  <path d="M138 152 A150 150 0 0 1 304 110" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="11" stroke-linecap="round"/>
+</svg>

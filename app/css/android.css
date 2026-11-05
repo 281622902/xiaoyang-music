@@ -421,3 +421,35 @@
 .drawer-version span{font-size:11px;color:var(--ink)}
 .drawer-version small{font-size:9px;color:var(--sub);line-height:1.6}
 
+/* ═══════════ v3.8.0 黑胶唱片全屏播放器 ═══════════ */
+.player-screen{background:transparent;color:#eef7f2}
+.player-screen .player-bg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;filter:blur(64px) brightness(.42) saturate(1.5);transform:scale(1.25)}
+.player-screen::after{content:"";position:absolute;inset:0;z-index:0;background:linear-gradient(180deg,rgba(6,16,13,.5) 0%,rgba(6,16,13,.78) 55%,rgba(6,16,13,.92) 100%)}
+.player-screen .player-top,.player-screen .player-stage,.player-screen .player-bottom{position:relative;z-index:1}
+.player-top>span{color:#d7ece4}
+.player-top>span small{color:#9fbfb4}
+.player-info h1{color:#fff}
+.player-info p{color:#b9d6cc}
+/* 大黑胶唱片：黑胶纹理外圈 + 中心封面 */
+.artwork{width:min(82vw,340px,48vh);height:min(82vw,340px,48vh);padding:0;border-radius:50%;flex-shrink:0;background:repeating-radial-gradient(circle at 50% 50%,#0c0d0c 0 3px,#1a1b1a 3px 6px);box-shadow:0 36px 70px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);display:grid;place-items:center;overflow:hidden;animation:vinyl-turn 22s linear infinite;animation-play-state:paused}
+.is-playing .artwork{animation-play-state:running}
+.artwork::after{content:"";position:absolute;inset:0;border-radius:50%;background:linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,0) 45%);pointer-events:none}
+.artwork img{width:62%;height:62%;border-radius:50%;object-fit:cover;box-shadow:0 0 0 5px rgba(0,0,0,.45),0 8px 22px rgba(0,0,0,.5);z-index:1}
+/* 极简线条控制栏 + 音质 / 倍速 / 定时胶囊 */
+.player-tools{margin:2px 0 12px;gap:9px}
+.player-tools .heart-button{color:#eef7f2}
+.player-tools .muted{color:#aecdbf}
+.player-chip{color:#dbeee6;border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.08);border-radius:999px;padding:5px 13px;min-height:28px;font-size:11px;backdrop-filter:blur(6px)}
+.player-chip.active{color:#081310;background:#5fe0c0;border-color:#5fe0c0;font-weight:650}
+.player-bottom input[type=range]{accent-color:#5fe0c0;height:22px}
+.time-labels{color:#aecdbf;font-size:11px}
+.player-controls{margin:14px 0 0}
+.player-controls .round-button{color:#eef7f2}
+.player-controls .round-button:hover{color:#fff}
+.big-play{width:68px;height:68px;background:#eef7f2;color:#081310;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.big-play svg{width:30px;height:30px}
+.skip svg{width:28px;height:28px}
+.lyric-toggle{color:#bcd9cf}
+.lyric-tools .lyric-toggle[aria-pressed=true]{color:#5fe0c0}
+@media(min-width:760px) and (max-height:650px){.player-screen .artwork{width:min(34vw,260px,42vh);height:min(34vw,260px,42vh)}}
+

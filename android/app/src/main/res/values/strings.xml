@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">小杨音乐</string>
-    <string name="title_activity_main">小杨音乐</string>
+    <string name="app_name">xymusic</string>
+    <string name="title_activity_main">xymusic</string>
     <string name="package_name">com.xiaoyang.musicplayer</string>
     <string name="custom_url_scheme">com.xiaoyang.musicplayer</string>
 </resources>
