@@ -111,6 +111,9 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.8.2': [
+    '修复 v3.8.1 启动时 GitHub 更新检测函数作用域错误导致的启动崩溃',
+  ],
   '3.8.1': [
     '榜单精选新增「汽水音乐榜」入口，点击可查看演示榜单',
     '搜索「汽水 / 汽水音乐」展示专属演示结果',
@@ -1154,34 +1157,6 @@ function bindIpc() {
     };
   });
 
-  // GitHub 自动检测：启动后 8s 查一次，之后每 6 小时轮询；只提示不静默下载
-  function initGitHubUpdater(mainWin) {
-    if (!autoUpdater || !app.isPackaged) return;
-    const send = (status, extra) => {
-      try {
-        if (mainWin && !mainWin.isDestroyed()) {
-          mainWin.webContents.send('upd:githubStatus', Object.assign({ status }, extra || {}));
-        }
-      } catch (e) { /* 忽略 */ }
-    };
-    autoUpdater.on('checking-for-update', () => send('checking'));
-    autoUpdater.on('update-available', (info) => send('available', { version: info && info.version, releaseUrl: info && info.releaseUrl }));
-    autoUpdater.on('update-not-available', (info) => send('latest', { version: info && info.version }));
-    autoUpdater.on('download-progress', (p) => send('downloading', { percent: p && p.percent }));
-    autoUpdater.on('update-downloaded', (info) => send('downloaded', { version: info && info.version }));
-    autoUpdater.on('error', (err) => {
-      const msg = (err && err.message) || String(err);
-      send('error', { msg });
-      softFail('GitHub autoUpdater', err);
-    });
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch((e) => softFail('GitHub autoUpdater check', e));
-    }, 8000);
-    setInterval(() => {
-      autoUpdater.checkForUpdates().catch((e) => softFail('GitHub autoUpdater poll', e));
-    }, 6 * 60 * 60 * 1000);
-  }
-
   // ── 升级包下载器：Chromium net 栈（自动跟随系统代理）+ 4 线程分段并行 + 状态落盘断点续传 + 可取消 ──
   const updDownload = { active: false, aborted: false, inFlight: new Set() };
 
@@ -2002,6 +1977,35 @@ if (!gotLock || quitForInstall) {
   });
   // macOS 关联文件
   app.on('open-file', (e, p) => { e.preventDefault(); openLocalFile(p); });
+}
+
+// GitHub 自动检测：启动后 8s 查一次，之后每 6 小时轮询；只提示不静默下载。
+// 必须定义在顶层：app.whenReady() 中调用，不能放在 bindIpc() 内部。
+function initGitHubUpdater(mainWin) {
+  if (!autoUpdater || !app.isPackaged) return;
+  const send = (status, extra) => {
+    try {
+      if (mainWin && !mainWin.isDestroyed()) {
+        mainWin.webContents.send('upd:githubStatus', Object.assign({ status }, extra || {}));
+      }
+    } catch (e) { /* 忽略 */ }
+  };
+  autoUpdater.on('checking-for-update', () => send('checking'));
+  autoUpdater.on('update-available', (info) => send('available', { version: info && info.version, releaseUrl: info && info.releaseUrl }));
+  autoUpdater.on('update-not-available', (info) => send('latest', { version: info && info.version }));
+  autoUpdater.on('download-progress', (p) => send('downloading', { percent: p && p.percent }));
+  autoUpdater.on('update-downloaded', (info) => send('downloaded', { version: info && info.version }));
+  autoUpdater.on('error', (err) => {
+    const msg = (err && err.message) || String(err);
+    send('error', { msg });
+    softFail('GitHub autoUpdater', err);
+  });
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((e) => softFail('GitHub autoUpdater check', e));
+  }, 8000);
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch((e) => softFail('GitHub autoUpdater poll', e));
+  }, 6 * 60 * 60 * 1000);
 }
 
 app.whenReady().then(async () => {
