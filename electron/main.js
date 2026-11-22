@@ -20,6 +20,14 @@ const { listenAvailable } = require('./backend-start');
 const GITHUB_FEED = Object.freeze({
   provider: 'github', owner: '281622902', repo: 'xiaoyang-music', releaseType: 'release',
 });
+// electron-updater 的 files[].url 通常是相对文件名（如 xiaoyang-music-3.8.3-x64-setup.exe），
+// 下载器 net.request 只接受绝对 URL，必须在这里补全成 GitHub Releases 下载地址。
+function githubAssetUrl(version, raw) {
+  const s = String(raw || '').trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  const file = s.split(/[\\/]/).pop() || `xiaoyang-music-${version}-x64-setup.exe`;
+  return `https://github.com/${GITHUB_FEED.owner}/${GITHUB_FEED.repo}/releases/download/v${version}/${file}`;
+}
 let autoUpdater = null;
 try {
   autoUpdater = require('electron-updater').autoUpdater;
@@ -111,6 +119,9 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.8.4': [
+    '修复一键升级时 GitHub 更新源返回相对地址导致的 Invalid URL 错误',
+  ],
   '3.8.3': [
     '汽水音乐榜改为真实可播放热歌，去掉 Mock 占位曲目',
     '搜索「汽水 / 汽水音乐」返回真实可播放曲目',
@@ -1099,7 +1110,7 @@ function bindIpc() {
           return {
             ok: true, cur, latest, source: 'GitHub Releases',
             hasUpdate: cmpVersion(latest, cur) > 0,
-            url: (exe && exe.url) || (info.releaseUrl || ''),
+            url: githubAssetUrl(latest, (exe && exe.url) || `xiaoyang-music-${latest}-x64-setup.exe`),
             notes: String((info && info.releaseNotes) || '').replace(/<[^>]+>/g, '').slice(0, 2000),
           };
         }
@@ -1243,6 +1254,9 @@ function bindIpc() {
   ipcMain.handle('upd:downloadInstall', async (e, fileUrl) => {
     let fd = null;
     try {
+      const normalized = String(fileUrl || '').trim();
+      if (!/^https?:\/\//i.test(normalized)) throw new Error('升级包地址无效：' + (normalized || '空地址'));
+      fileUrl = normalized;
       updDownload.active = true; updDownload.aborted = false; updDownload.inFlight.clear();
       const paths = updPaths(fileUrl);
       const probe = await updProbe(fileUrl);
