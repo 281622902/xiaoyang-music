@@ -2701,12 +2701,20 @@
     updInfo = null;
     $('updNewRow')?.classList.add('hidden');
     const br = window.uzzBridge, statusEl = $('updStatus');
-    if (!silent) statusEl.textContent = '正在检查云端版本…';
+    if (!silent) statusEl.textContent = '正在检查更新…';
     let r;
     try {
-      if (window.XYCloud?.getUpdateInfo) r = await window.XYCloud.getUpdateInfo();
-      else if (br?.checkUpdate) r = await br.checkUpdate();
-      else throw new Error('更新服务未就绪');
+      // 桌面端优先走主进程（GitHub Releases → 局域网兜底）；网页端走云端版本表。
+      if (br?.checkUpdate) {
+        r = await br.checkUpdate();
+        // GitHub 不可达且本地也无升级包时，再用 Supabase 版本记录兜底
+        if (r && r.ok && r.noPackage && window.XYCloud?.getUpdateInfo) {
+          const cloudR = await window.XYCloud.getUpdateInfo();
+          if (cloudR && cloudR.ok && cloudR.hasUpdate) r = cloudR;
+        }
+      } else if (window.XYCloud?.getUpdateInfo) {
+        r = await window.XYCloud.getUpdateInfo();
+      } else throw new Error('更新服务未就绪');
     } catch (error) { r = { ok: false, msg: '检查更新失败：' + error.message }; }
     finally { checkingUpdate = false; controls.forEach(button => { button.disabled = false; }); }
     if (!r || !r.ok) {
