@@ -1387,7 +1387,11 @@ function serveStatic(req, res, reqUrl) {
       return res.end('404 Not Found');
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      // PWA：静态资源不做浏览器强缓存，刷新即取最新版本
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
     if (req.method === 'HEAD') return res.end();
     const stream = fs.createReadStream(filePath);
     stream.on('error', () => res.destroy());

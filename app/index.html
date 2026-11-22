@@ -1191,5 +1191,11 @@
   <script defer src="js/cloud-state.js"></script>
   <script defer src="js/favorite-button.js"></script>
   <script defer src="js/cloud-player.js"></script>
+  <script>
+    // PWA：注册网络优先 Service Worker，刷新页面即获取最新前端资源
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+  </script>
 </body>
 </html>
