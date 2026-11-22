@@ -685,10 +685,50 @@
             <div class="ch-desc">${escapeHtml(c.desc || '')}</div>
             <div class="ch-play">▶ 立即听榜</div>
           </div>
-        </div>`).join('');
+        </div>`).join('') + `
+        <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（演示）">
+          <div class="ch-ic qishui-ic">${QISHUI_SVG}</div>
+          <div class="ch-txt">
+            <div class="ch-name">汽水音乐榜</div>
+            <div class="ch-desc">汽水音乐 · 演示榜单</div>
+            <div class="ch-play">▶ 查看演示榜单</div>
+          </div>
+        </div>`;
     } catch (e) {
-      row.innerHTML = '<div class="loading-pad">榜单加载失败：' + escapeHtml(e.message || e) + '</div>';
+      row.innerHTML = chartsFallbackHtml();
     }
+  }
+  // 后端榜单不可用时仍保留汽水入口，点击不报错
+  function chartsFallbackHtml() {
+    return '<div class="loading-pad">在线榜单加载失败，仅显示演示入口</div>' + qishuiCardHtml();
+  }
+  function qishuiCardHtml() {
+    return `
+      <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（演示）">
+        <div class="ch-ic qishui-ic">${QISHUI_SVG}</div>
+        <div class="ch-txt">
+          <div class="ch-name">汽水音乐榜</div>
+          <div class="ch-desc">汽水音乐 · 演示榜单</div>
+          <div class="ch-play">▶ 查看演示榜单</div>
+        </div>
+      </div>`;
+  }
+  const QISHUI_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="qsg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6d8"/><stop offset="1" stop-color="#ffd0e6"/></linearGradient></defs><rect x="18" y="13" width="28" height="41" rx="9" fill="url(#qsg)"/><path d="M18 23h28" stroke="#ff6b9a" stroke-width="3"/><rect x="26" y="8" width="12" height="7" rx="3" fill="#ffe9a8"/><circle cx="27" cy="35" r="3" fill="#ff6b9a" opacity=".9"/><circle cx="38" cy="42" r="2.6" fill="#65c8ff" opacity=".9"/><circle cx="30" cy="48" r="2" fill="#fff" opacity=".9"/></svg>';
+  const QISHUI_MOCK_TRACKS = [
+    { name: '气泡夏日', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 213 },
+    { name: '晚风汽水', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 198 },
+    { name: '冰镇心跳', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 224 },
+    { name: '橘子气泡', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 186 },
+    { name: '罐装星光', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 241 },
+  ];
+  function isQishuiKeyword(kw) {
+    return /^汽水(?:音乐(?:榜)?)?$/i.test(String(kw || '').replace(/\s+/g, ''));
+  }
+  function qishuiDemoRows(limit, tag) {
+    const el = tag || 'li';
+    return QISHUI_MOCK_TRACKS.slice(0, limit || QISHUI_MOCK_TRACKS.length)
+      .map((t, i) => `<${el} class="qishui-demo-row"><span class="idx">${i + 1}</span><span class="qs-cov">🥤</span><span class="info"><span class="name">${escapeHtml(t.name)}</span><span class="sub">${escapeHtml(t.artist)} · ${escapeHtml(t.album)}</span></span><span class="dur">${fmtDur(t.duration)}</span></${el}>`)
+      .join('');
   }
   const CHART_COLORS = {
     3778678: 'linear-gradient(135deg,#ff6a3d,#c73e1d)',
@@ -760,6 +800,18 @@
     } catch (e) {
       $('plpTracks').innerHTML = `<li class="loading-pad">加载失败：${escapeHtml(e.message || e)}<br><small class="hint">检查网络后重试，或先去搜索听歌</small></li>`;
     }
+  }
+  // 汽水音乐榜：无真实接口，打开演示详情视图（不可播放，点击不报错）
+  function openQishuiChart() {
+    curPlaylist = { type: 'mock', plId: 'qishui:demo', info: null, tracks: [] };
+    showView('playlist');
+    $('plpName').textContent = '汽水音乐榜';
+    $('plpStats').textContent = '演示数据 · 暂不支持播放';
+    $('plpDesc').textContent = '汽水音乐暂未开放接口，以下为占位榜单。';
+    $('plpCover').removeAttribute('src');
+    $('plpSave').classList.add('hidden');
+    $('plpDelete').classList.add('hidden');
+    $('plpTracks').innerHTML = '<li class="qishui-notice">汽水音乐暂未开放接口 · 以下为 Mock 演示数据</li>' + qishuiDemoRows();
   }
   function openLocalPlaylist(localId) {
     const pl = playlists.find((p) => p.id === localId);
@@ -2899,6 +2951,7 @@
   let curPage = 1;
   let curTotal = 0;
   let loading = false;
+  let qishuiMode = false;
 
   function renderResults(list) {
     const ul = $('resultList');
@@ -2935,6 +2988,30 @@
       $('resultList').innerHTML = '<li class="loading-pad"><span class="spin"></span> 搜索中…</li>';
       $('searchMeta').textContent = '';
     }
+    // 汽水音乐：无真实第三方接口，走前端专属演示结果，不向后端发无效请求
+    if (isQishuiKeyword(curKeyword)) {
+      qishuiMode = true;
+      $('searchTabsBar').classList.add('hidden');
+      $('searchMeta').textContent = '汽水音乐 · 演示结果';
+      $('loadMore').classList.add('hidden');
+      $('resultList').innerHTML = `
+        <li class="qishui-search-panel">
+          <div class="qs-head">
+            <div class="qs-icon">${QISHUI_SVG}</div>
+            <div>
+              <div class="qs-title">汽水音乐 · 演示结果</div>
+              <div class="qs-sub">汽水音乐暂未开放接口 · 以下为 Mock 占位数据，不可播放</div>
+            </div>
+          </div>
+          <div class="qs-kw">已识别关键词「${escapeHtml(curKeyword)}」为汽水音乐专属搜索</div>
+          ${qishuiDemoRows(4, 'div')}
+          <button type="button" class="qs-go" data-action="qishui-chart">查看汽水音乐榜 →</button>
+        </li>`;
+      loading = false;
+      return;
+    }
+    qishuiMode = false;
+    $('searchTabsBar').classList.remove('hidden');
     try {
       const { list, total } = await UzzApi.search(curKeyword, curType, curPage, 20);
       curTotal = total;
@@ -3113,7 +3190,9 @@
     // 榜单精选（发现页横向卡片）
     $('chartsRow').addEventListener('click', (e) => {
       const c = e.target.closest('.chart-card');
-      if (c) openOnlinePlaylist(c.dataset.id, { title: c.dataset.name });
+      if (!c) return;
+      if (c.dataset.vendor === 'qishui') { openQishuiChart(); return; }
+      openOnlinePlaylist(c.dataset.id, { title: c.dataset.name });
     });
     $('plGrid').addEventListener('click', (e) => {
       const c = e.target.closest('.pl-card');
@@ -3278,6 +3357,7 @@
     // ── 列表点击 ──
     // 搜索结果列表：单曲行直接播放；歌手/专辑/歌单实体行进入对应歌曲列表
     $('resultList').addEventListener('click', (e) => {
+      if (e.target.closest('[data-action="qishui-chart"]')) { openQishuiChart(); return; }
       const li = e.target.closest('li.song');
       if (!li) return;
       if (li.dataset.etype) {

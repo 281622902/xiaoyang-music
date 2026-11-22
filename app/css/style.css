@@ -1112,21 +1112,62 @@ body.is-playing .pb-cover { animation: pb-cover-spin 12s linear infinite; }
 .charts-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 14px; }
 .charts-row .chart-card {
   cursor: pointer; display: flex; flex-direction: row; align-items: center; gap: 14px;
-  padding: 14px; border-radius: 14px; background: var(--bg-1);
-  border: 1px solid var(--line); transition: transform .15s, border-color .15s, box-shadow .15s;
+  padding: 14px; border-radius: 16px; background: var(--bg-1);
+  border: 1px solid var(--line);
+  transition: transform .18s cubic-bezier(.2,.7,.3,1), border-color .18s, box-shadow .18s;
 }
-.charts-row .chart-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 26px rgba(0,0,0,.18); }
+.charts-row .chart-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px rgba(180, 92, 56, .16), 0 4px 10px rgba(180, 92, 56, .10);
+}
 .charts-row .ch-ic {
-  flex: 0 0 64px; width: 64px; height: 64px; border-radius: 16px;
+  flex: 0 0 64px; width: 64px; height: 64px; border-radius: 20px;
   display: flex; align-items: center; justify-content: center;
   font-size: 30px; color: #fff;
   box-shadow: 0 6px 16px rgba(0,0,0,.22);
 }
 .charts-row .ch-txt { flex: 1; min-width: 0; }
-.charts-row .ch-name { font-size: 14px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.charts-row .ch-desc { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
+.charts-row .ch-name { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: .2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.charts-row .ch-desc { font-size: 12px; color: var(--text-2); opacity: .78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
 .charts-row .ch-play { font-size: 11px; color: var(--accent); margin-top: 2px; opacity: 0; transition: opacity .15s; }
 .charts-row .chart-card:hover .ch-play { opacity: 1; }
+
+/* ── 汽水音乐：榜单入口 + 演示详情 + 专属搜索结果 ── */
+.charts-row .qishui-card .qishui-ic {
+  background: linear-gradient(135deg, #ffb457, #ff6b9a 55%, #a855f7);
+  border-radius: 20px;
+}
+.charts-row .qishui-ic svg { width: 42px; height: 42px; }
+.charts-row .qishui-card .ch-name { color: #ff7aa8; }
+.qishui-notice {
+  list-style: none; padding: 10px 14px; margin-bottom: 8px;
+  border-radius: 12px; font-size: 12px; color: #ffb457;
+  background: rgba(255, 180, 87, .12); border: 1px solid rgba(255, 180, 87, .28);
+}
+.qishui-demo-row {
+  list-style: none; display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px; border-radius: 12px; color: var(--text);
+}
+.qishui-demo-row:nth-child(odd) { background: var(--bg-2); }
+.qishui-demo-row .idx { width: 24px; text-align: right; color: var(--text-2); font-size: 12px; flex: 0 0 auto; }
+.qishui-demo-row .qs-cov { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #ffb457, #ff6b9a); font-size: 20px; flex: 0 0 auto; }
+.qishui-demo-row .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.qishui-demo-row .name { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qishui-demo-row .sub { font-size: 11px; color: var(--text-2); opacity: .78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qishui-demo-row .dur { font-size: 11px; color: var(--text-2); }
+.qishui-search-panel {
+  list-style: none; padding: 18px; border-radius: 16px;
+  background: var(--bg-1); border: 1px solid var(--line);
+}
+.qishui-search-panel .qs-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.qishui-search-panel .qs-icon { width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #ffb457, #ff6b9a 55%, #a855f7); flex: 0 0 auto; }
+.qishui-search-panel .qs-icon svg { width: 38px; height: 38px; }
+.qishui-search-panel .qs-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.qishui-search-panel .qs-sub { font-size: 12px; color: var(--text-2); opacity: .78; margin-top: 4px; }
+.qishui-search-panel .qs-kw { font-size: 12px; color: #ffb457; margin-bottom: 10px; }
+.qishui-search-panel .qs-go { margin-top: 14px; padding: 8px 16px; border-radius: 10px; background: var(--accent-weak); color: var(--accent); font-size: 12px; font-weight: 700; }
+.qishui-search-panel .qs-go:hover { filter: brightness(1.15); }
 
 /* ── #7 设置：左侧子分类导航 + 右侧可滚动面板 ── */
 .settings-body { display: flex; gap: 22px; flex: 1; min-height: 0; align-items: stretch; }
