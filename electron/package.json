@@ -102,5 +102,8 @@
     "electron": "30.5.1",
     "electron-builder": "^24.13.3",
     "playwright": "^1.48.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

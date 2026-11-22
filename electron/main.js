@@ -14,6 +14,23 @@ const os = require('os');
 const crypto = require('crypto');
 const { launchInstaller } = require('./installer-launcher');
 const { listenAvailable } = require('./backend-start');
+
+// ── GitHub Releases 自动更新（electron-updater）──
+// 与原有局域网升级链路并存：GitHub 作为最高优先级来源，失败自动回退旧链路。
+const GITHUB_FEED = Object.freeze({
+  provider: 'github', owner: '281622902', repo: 'xiaoyang-music', releaseType: 'release',
+});
+let autoUpdater = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.autoDownload = false;      // 仅检测，不静默下载；沿用现有下载/安装入口
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.setFeedURL(GITHUB_FEED);
+} catch (e) {
+  // 依赖缺失不阻断启动，原有升级方式继续可用
+  try { console.warn('[updater] electron-updater 不可用：' + ((e && e.message) || e)); } catch (e2) {}
+}
+
 const RENDERER_ORIGIN = 'http://localhost:35211';
 const rendererRequests = new Map();
 
@@ -1057,6 +1074,27 @@ function bindIpc() {
     const dir = updSrvDir();
     const configured = (loadCfg().updateUrl || '').trim();
 
+    // 来源⓪：GitHub Releases（electron-updater）。发布新 Release 后优先命中；
+    // 网络失败 / 无 Release 时继续走下面原有的三级来源，不影响离线升级。
+    if (autoUpdater && app.isPackaged) {
+      try {
+        const r = await autoUpdater.checkForUpdates();
+        const info = (r && r.updateInfo) || null;
+        const latest = String((info && info.version) || '').trim();
+        if (latest) {
+          const exe = info.files && info.files.find((f) => /\.exe$/i.test(f.url || ''));
+          return {
+            ok: true, cur, latest, source: 'GitHub Releases',
+            hasUpdate: cmpVersion(latest, cur) > 0,
+            url: (exe && exe.url) || (info.releaseUrl || ''),
+            notes: String((info && info.releaseNotes) || '').replace(/<[^>]+>/g, '').slice(0, 2000),
+          };
+        }
+      } catch (err) {
+        softFail('GitHub upd:check', err);
+      }
+    }
+
     // 来源①：用户填写的更新源
     if (configured) {
       try {
@@ -1109,6 +1147,35 @@ function bindIpc() {
       url: '', notes: '',
     };
   });
+
+  // GitHub 自动检测：启动后 8s 查一次，之后每 6 小时轮询；只提示不静默下载
+  function initGitHubUpdater(mainWin) {
+    if (!autoUpdater || !app.isPackaged) return;
+    const send = (status, extra) => {
+      try {
+        if (mainWin && !mainWin.isDestroyed()) {
+          mainWin.webContents.send('upd:githubStatus', Object.assign({ status }, extra || {}));
+        }
+      } catch (e) { /* 忽略 */ }
+    };
+    autoUpdater.on('checking-for-update', () => send('checking'));
+    autoUpdater.on('update-available', (info) => send('available', { version: info && info.version, releaseUrl: info && info.releaseUrl }));
+    autoUpdater.on('update-not-available', (info) => send('latest', { version: info && info.version }));
+    autoUpdater.on('download-progress', (p) => send('downloading', { percent: p && p.percent }));
+    autoUpdater.on('update-downloaded', (info) => send('downloaded', { version: info && info.version }));
+    autoUpdater.on('error', (err) => {
+      const msg = (err && err.message) || String(err);
+      send('error', { msg });
+      softFail('GitHub autoUpdater', err);
+    });
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch((e) => softFail('GitHub autoUpdater check', e));
+    }, 8000);
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch((e) => softFail('GitHub autoUpdater poll', e));
+    }, 6 * 60 * 60 * 1000);
+  }
+
   // ── 升级包下载器：Chromium net 栈（自动跟随系统代理）+ 4 线程分段并行 + 状态落盘断点续传 + 可取消 ──
   const updDownload = { active: false, aborted: false, inFlight: new Set() };
 
@@ -1937,6 +2004,7 @@ app.whenReady().then(async () => {
     // 1) 先建窗口（无论如何双击都先出现窗口，避免后端异常导致“完全打不开”）
     createWindow();
     bindIpc();
+    initGitHubUpdater(win);
     bindDownload();
     bindGlobalShortcuts();
     // 1.5) 读取持久化设置：最小化到托盘 + 开机启动
