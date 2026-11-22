@@ -1145,6 +1145,11 @@ body.is-playing .pb-cover { animation: pb-cover-spin 12s linear infinite; }
   border-radius: 12px; font-size: 12px; color: #ffb457;
   background: rgba(255, 180, 87, .12); border: 1px solid rgba(255, 180, 87, .28);
 }
+.qishui-live {
+  list-style: none; padding: 10px 14px; margin-bottom: 8px;
+  border-radius: 12px; font-size: 12px; color: #2fae61;
+  background: rgba(47, 174, 97, .12); border: 1px solid rgba(47, 174, 97, .28);
+}
 .qishui-demo-row {
   list-style: none; display: flex; align-items: center; gap: 12px;
   padding: 9px 12px; border-radius: 12px; color: var(--text);

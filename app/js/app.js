@@ -686,12 +686,12 @@
             <div class="ch-play">▶ 立即听榜</div>
           </div>
         </div>`).join('') + `
-        <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（演示）">
+        <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（聚合热歌）">
           <div class="ch-ic qishui-ic">${QISHUI_SVG}</div>
           <div class="ch-txt">
             <div class="ch-name">汽水音乐榜</div>
-            <div class="ch-desc">汽水音乐 · 演示榜单</div>
-            <div class="ch-play">▶ 查看演示榜单</div>
+            <div class="ch-desc">聚合热歌 · 点击即听</div>
+            <div class="ch-play">▶ 立即听榜</div>
           </div>
         </div>`;
     } catch (e) {
@@ -704,31 +704,39 @@
   }
   function qishuiCardHtml() {
     return `
-      <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（演示）">
+      <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（聚合热歌）">
         <div class="ch-ic qishui-ic">${QISHUI_SVG}</div>
         <div class="ch-txt">
           <div class="ch-name">汽水音乐榜</div>
-          <div class="ch-desc">汽水音乐 · 演示榜单</div>
-          <div class="ch-play">▶ 查看演示榜单</div>
+          <div class="ch-desc">聚合热歌 · 点击即听</div>
+          <div class="ch-play">▶ 立即听榜</div>
         </div>
       </div>`;
   }
   const QISHUI_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="qsg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6d8"/><stop offset="1" stop-color="#ffd0e6"/></linearGradient></defs><rect x="18" y="13" width="28" height="41" rx="9" fill="url(#qsg)"/><path d="M18 23h28" stroke="#ff6b9a" stroke-width="3"/><rect x="26" y="8" width="12" height="7" rx="3" fill="#ffe9a8"/><circle cx="27" cy="35" r="3" fill="#ff6b9a" opacity=".9"/><circle cx="38" cy="42" r="2.6" fill="#65c8ff" opacity=".9"/><circle cx="30" cy="48" r="2" fill="#fff" opacity=".9"/></svg>';
-  const QISHUI_MOCK_TRACKS = [
-    { name: '气泡夏日', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 213 },
-    { name: '晚风汽水', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 198 },
-    { name: '冰镇心跳', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 224 },
-    { name: '橘子气泡', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 186 },
-    { name: '罐装星光', artist: '汽水音乐 · 演示', album: '汽水精选 Vol.1', duration: 241 },
+  // 汽水音乐榜没有独立开放 API，改用已有可播放音源聚合真实热歌。
+  // 后端热歌榜 ID 3778678；静态兜底也是真实曲目 ID，断网时仍可交给后端解析播放。
+  const QISHUI_FALLBACK_TRACKS = [
+    { id: '1973665667', name: '海屿你', artist: '马也_Crabbit', album: '热歌榜', vendor: 'netease', duration: 0 },
+    { id: '167691', name: '天龙八部之宿敌', artist: '许嵩', album: '热歌榜', vendor: 'netease', duration: 0 },
+    { id: '1303464858', name: '于是', artist: '郑润泽', album: '热歌榜', vendor: 'netease', duration: 0 },
+    { id: '181222', name: '晴天', artist: '周杰伦', album: '热歌榜', vendor: 'netease', duration: 0 },
+    { id: '186075', name: '稻香', artist: '周杰伦', album: '热歌榜', vendor: 'netease', duration: 0 },
   ];
   function isQishuiKeyword(kw) {
     return /^汽水(?:音乐(?:榜)?)?$/i.test(String(kw || '').replace(/\s+/g, ''));
   }
-  function qishuiDemoRows(limit, tag) {
-    const el = tag || 'li';
-    return QISHUI_MOCK_TRACKS.slice(0, limit || QISHUI_MOCK_TRACKS.length)
-      .map((t, i) => `<${el} class="qishui-demo-row"><span class="idx">${i + 1}</span><span class="qs-cov">🥤</span><span class="info"><span class="name">${escapeHtml(t.name)}</span><span class="sub">${escapeHtml(t.artist)} · ${escapeHtml(t.album)}</span></span><span class="dur">${fmtDur(t.duration)}</span></${el}>`)
-      .join('');
+  async function loadQishuiTracks(limit) {
+    const n = Math.max(1, Number(limit) || 30);
+    try {
+      const { tracks } = await UzzApi.getPlaylist('3778678', Math.max(n, 30));
+      if (tracks && tracks.length) return tracks.slice(0, n);
+    } catch (e) { /* 落到搜索 / 静态真实曲目兜底 */ }
+    try {
+      const r = await UzzApi.search('汽水', 'song', 1, n);
+      if (r.list && r.list.length) return r.list.slice(0, n);
+    } catch (e) { /* 落到静态真实曲目兜底 */ }
+    return QISHUI_FALLBACK_TRACKS.slice(0, n);
   }
   const CHART_COLORS = {
     3778678: 'linear-gradient(135deg,#ff6a3d,#c73e1d)',
@@ -801,17 +809,24 @@
       $('plpTracks').innerHTML = `<li class="loading-pad">加载失败：${escapeHtml(e.message || e)}<br><small class="hint">检查网络后重试，或先去搜索听歌</small></li>`;
     }
   }
-  // 汽水音乐榜：无真实接口，打开演示详情视图（不可播放，点击不报错）
-  function openQishuiChart() {
-    curPlaylist = { type: 'mock', plId: 'qishui:demo', info: null, tracks: [] };
+  // 汽水音乐榜：用真实可播放热歌聚合，不再展示 Mock 占位曲目
+  async function openQishuiChart() {
+    const key = 'qishui:hot';
+    curPlaylist = { type: 'online', plId: key, info: null, tracks: [] };
     showView('playlist');
     $('plpName').textContent = '汽水音乐榜';
-    $('plpStats').textContent = '演示数据 · 暂不支持播放';
-    $('plpDesc').textContent = '汽水音乐暂未开放接口，以下为占位榜单。';
-    $('plpCover').removeAttribute('src');
+    $('plpStats').textContent = '加载中…';
+    $('plpDesc').textContent = '聚合热歌 · 点击即可播放';
+    $('plpCover').src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(QISHUI_SVG);
     $('plpSave').classList.add('hidden');
     $('plpDelete').classList.add('hidden');
-    $('plpTracks').innerHTML = '<li class="qishui-notice">汽水音乐暂未开放接口 · 以下为 Mock 演示数据</li>' + qishuiDemoRows();
+    $('plpTracks').innerHTML = '<li class="loading-pad"><span class="spin"></span> 汽水音乐榜加载中…</li>';
+    const tracks = await loadQishuiTracks(50);
+    if (!curPlaylist || curPlaylist.plId !== key) return;
+    curPlaylist.tracks = tracks;
+    $('plpStats').textContent = `共 ${tracks.length} 首 · 聚合热歌榜`;
+    $('plpTracks').innerHTML = '<li class="qishui-live">汽水音乐榜 · 聚合热歌，点击即可播放</li>'
+      + tracks.map((t, i) => trackLi(t, i)).join('');
   }
   function openLocalPlaylist(localId) {
     const pl = playlists.find((p) => p.id === localId);
@@ -2996,25 +3011,31 @@
       $('resultList').innerHTML = '<li class="loading-pad"><span class="spin"></span> 搜索中…</li>';
       $('searchMeta').textContent = '';
     }
-    // 汽水音乐：无真实第三方接口，走前端专属演示结果，不向后端发无效请求
+    // 汽水音乐：无独立开放接口，改走真实可播放的聚合搜索结果
     if (isQishuiKeyword(curKeyword)) {
       qishuiMode = true;
       $('searchTabsBar').classList.add('hidden');
-      $('searchMeta').textContent = '汽水音乐 · 演示结果';
+      $('searchMeta').textContent = '汽水音乐 · 聚合结果';
       $('loadMore').classList.add('hidden');
+      let list = [];
+      try {
+        const r = await UzzApi.search('汽水', 'song', 1, 20);
+        list = r.list || [];
+      } catch (e) { /* 网络失败时用真实热歌兜底 */ }
+      if (!list.length) list = await loadQishuiTracks(8);
+      curTotal = list.length;
       $('resultList').innerHTML = `
         <li class="qishui-search-panel">
           <div class="qs-head">
             <div class="qs-icon">${QISHUI_SVG}</div>
             <div>
-              <div class="qs-title">汽水音乐 · 演示结果</div>
-              <div class="qs-sub">汽水音乐暂未开放接口 · 以下为 Mock 占位数据，不可播放</div>
+              <div class="qs-title">汽水音乐 · 可播放结果</div>
+              <div class="qs-sub">已聚合汽水相关曲目，点击即可播放</div>
             </div>
           </div>
-          <div class="qs-kw">已识别关键词「${escapeHtml(curKeyword)}」为汽水音乐专属搜索</div>
-          ${qishuiDemoRows(4, 'div')}
+          <div class="qs-kw">已识别关键词「${escapeHtml(curKeyword)}」→ 当前展示 ${list.length} 首可播放曲目</div>
           <button type="button" class="qs-go" data-action="qishui-chart">查看汽水音乐榜 →</button>
-        </li>`;
+        </li>` + list.map((t, i) => trackLi(t, i)).join('');
       loading = false;
       return;
     }
