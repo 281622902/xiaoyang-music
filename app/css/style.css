@@ -795,6 +795,29 @@ html[data-theme="light"] .fp-bg { filter: blur(60px) brightness(1.25); opacity: 
 .fp-meta-line b.fp-link { color: var(--accent); cursor: pointer; }
 .fp-meta-line b.fp-link:hover { text-decoration: underline; }
 
+/* ── 播放页布局变体：与整包皮肤叠加，只改结构不改配色 ── */
+html[data-player-layout="cover"] .vinyl {
+  border-radius: 26px; animation: none;
+  background: linear-gradient(145deg, var(--bg-2), var(--bg-0));
+  box-shadow: 0 28px 70px rgba(0,0,0,.32), inset 0 0 0 1px rgba(255,255,255,.08);
+}
+html[data-player-layout="cover"] .vinyl-groove,
+html[data-player-layout="cover"] .vinyl-hole { display: none; }
+html[data-player-layout="cover"] .vinyl-label {
+  width: 78%; height: 78%; border-radius: 18px; inset: 11%;
+}
+html[data-player-layout="cover"] .vinyl-viz { display: none; }
+html[data-player-layout="focus"] .fp-vinyl-wrap { display: none; }
+html[data-player-layout="focus"] .fp-info { flex: 1; max-width: 860px; margin: 0 auto; }
+html[data-player-layout="focus"] .fp-lyric { padding-top: 20px; }
+html[data-player-layout="focus"] .fp-lyric p { font-size: 17px; padding: 11px 0; }
+html[data-player-layout="focus"] .fp-lyric p.active { font-size: 21px; }
+html[data-player-layout="minimal"] .fp-bg { opacity: .16; filter: blur(80px); }
+html[data-player-layout="minimal"] .vinyl { box-shadow: none; background: var(--bg-1); }
+html[data-player-layout="minimal"] .vinyl-viz { display: none; }
+html[data-player-layout="minimal"] .fp-bottom { background: transparent; border-top-color: transparent; }
+html[data-player-layout="minimal"] .fp-tabs { border-bottom-color: transparent; }
+
 /* 全屏播放页底部控制栏：歌名+歌手 / 居中播放器 / 右侧功能
    三栏 grid：中栏恒为屏幕正中（左右内容宽度不对称也居中） */
 .fp-bottom {

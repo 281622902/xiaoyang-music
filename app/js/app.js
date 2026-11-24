@@ -70,6 +70,14 @@
       Object.entries(pal).forEach(([k, v]) => rootStyle.setProperty(k, v));
       document.querySelector('meta[name=theme-color]').setAttribute('content', skin.pal['--bg-0'] || (mode === 'light' ? '#f4f5f7' : '#12141a'));
     }
+    applyPlayerLayout();
+  }
+  // 播放页布局：与整包皮肤叠加，只改结构不改配色
+  function applyPlayerLayout() {
+    const v = localStorage.getItem('uzz.player.layout') || 'classic';
+    document.documentElement.dataset.playerLayout = v;
+    const el = $('stPlayerLayout');
+    if (el) el.value = v;
   }
   function bindThemeSettings() {
     const mode = localStorage.getItem('uzz.theme.mode') || 'dark';
@@ -2326,6 +2334,7 @@
     bindStSel('stLyricColor', 'uzz.dl.color', 'gradient', () => { pushLyricCfg(); applyLyricPreview(); });
     bindStSel('stLyricScale', 'uzz.dl.fontScale', '标准', pushLyricCfg);
     bindStSel('stLyricBg', 'uzz.dl.bg', '无', pushLyricCfg);
+    bindStSel('stPlayerLayout', 'uzz.player.layout', 'classic', applyPlayerLayout);
     applyLyricPreview();
 
     // ── 桌面与歌词 ──
