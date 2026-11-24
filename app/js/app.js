@@ -42,6 +42,71 @@
   }
 
   /* ============================================================
+   * 发现页模块管理：显示/隐藏、排序、推荐偏好
+   * ============================================================ */
+  const HOME_MODULES = [
+    { id: 'hero', name: '欢迎横幅' },
+    { id: 'banners', name: '快捷入口' },
+    { id: 'charts', name: '榜单精选' },
+    { id: 'playlists', name: '推荐歌单' },
+  ];
+  function getHomeCfg() {
+    const all = HOME_MODULES.map((m) => m.id);
+    let c = {};
+    try { c = JSON.parse(localStorage.getItem('uzz.home.cfg') || '{}') || {}; } catch (e) { c = {}; }
+    const order = Array.isArray(c.order) ? c.order.filter((id) => all.includes(id)) : [];
+    all.forEach((id) => { if (!order.includes(id)) order.push(id); });
+    return { order, hidden: Array.isArray(c.hidden) ? c.hidden.filter((id) => all.includes(id)) : [], mode: c.mode || 'default' };
+  }
+  function saveHomeCfg(cfg) { localStorage.setItem('uzz.home.cfg', JSON.stringify(cfg)); }
+  function applyHomeModules() {
+    const cfg = getHomeCfg(), view = $('viewDiscover');
+    if (!view) return;
+    cfg.order.forEach((id) => {
+      const el = view.querySelector(`[data-module="${id}"]`);
+      if (!el) return;
+      el.classList.toggle('hidden', cfg.hidden.includes(id));
+      view.appendChild(el);
+    });
+    const mode = $('stRecMode'); if (mode) mode.value = cfg.mode;
+  }
+  function renderHomeModulePanel() {
+    const cfg = getHomeCfg(), list = $('homeModuleList');
+    if (!list) return;
+    list.innerHTML = cfg.order.map((id, i) => {
+      const m = HOME_MODULES.find((x) => x.id === id), off = cfg.hidden.includes(id);
+      return `<div class="hm-row ${off ? 'off' : ''}" data-id="${id}"><span class="hm-name">${m.name}</span>`
+        + `<button data-act="up" ${i === 0 ? 'disabled' : ''} title="上移">↑</button>`
+        + `<button data-act="down" ${i === cfg.order.length - 1 ? 'disabled' : ''} title="下移">↓</button>`
+        + `<button data-act="vis" title="${off ? '显示' : '隐藏'}">${off ? '○' : '●'}</button></div>`;
+    }).join('');
+    const mode = $('stRecMode'); if (mode) mode.value = cfg.mode;
+  }
+  function bindHomeModuleSettings() {
+    const modal = $('homeModuleModal');
+    $('homeModuleBtn')?.addEventListener('click', () => { renderHomeModulePanel(); modal?.classList.remove('hidden'); });
+    $('homeModuleClose')?.addEventListener('click', () => modal?.classList.add('hidden'));
+    $('homeModuleDone')?.addEventListener('click', () => modal?.classList.add('hidden'));
+    modal?.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    $('stRecMode')?.addEventListener('change', (e) => {
+      const cfg = getHomeCfg(); cfg.mode = e.target.value; saveHomeCfg(cfg);
+      loadRecommend();
+    });
+    $('homeModuleList')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-act]'); if (!btn) return;
+      const row = btn.closest('.hm-row'), id = row && row.dataset.id;
+      if (!id) return;
+      const cfg = getHomeCfg();
+      if (btn.dataset.act === 'vis') cfg.hidden = cfg.hidden.includes(id) ? cfg.hidden.filter((x) => x !== id) : cfg.hidden.concat(id);
+      if (btn.dataset.act === 'up' || btn.dataset.act === 'down') {
+        const i = cfg.order.indexOf(id), j = btn.dataset.act === 'up' ? i - 1 : i + 1;
+        if (i >= 0 && j >= 0 && j < cfg.order.length) { [cfg.order[i], cfg.order[j]] = [cfg.order[j], cfg.order[i]]; }
+      }
+      saveHomeCfg(cfg); applyHomeModules(); renderHomeModulePanel();
+    });
+  }
+
+  /* ============================================================
    * 主题（深色/浅色 + 主题色）
    * ============================================================ */
   function hexToRgba(hex, a) {
@@ -71,6 +136,7 @@
       document.querySelector('meta[name=theme-color]').setAttribute('content', skin.pal['--bg-0'] || (mode === 'light' ? '#f4f5f7' : '#12141a'));
     }
     applyPlayerLayout();
+    applyHomeModules();
   }
   // 播放页布局：与整包皮肤叠加，只改结构不改配色
   function applyPlayerLayout() {
@@ -767,7 +833,13 @@
       // 上游 highquality/list 忽略 offset，改为每日轮换真实分类并合并两个分类池
       const { y, m, day } = dailyDate();
       const seed = y * 10000 + m * 100 + day;
-      const cats = ['全部', '华语', '流行', '民谣', '古风', '电子', '轻音乐', '治愈', '摇滚', '说唱', '古典', '爵士'];
+      const modeCats = {
+        default: ['全部', '华语', '流行', '民谣', '古风', '电子', '轻音乐', '治愈', '摇滚', '说唱', '古典', '爵士'],
+        familiar: ['全部', '华语', '流行', '民谣', '古风'],
+        explore: ['电子', '古典', '爵士', '说唱', '轻音乐', '治愈'],
+        mix: ['全部', '华语', '流行', '电子', '古风', '摇滚', '说唱'],
+      };
+      const cats = modeCats[getHomeCfg().mode] || modeCats.default;
       const idx = seed % cats.length;
       const settled = await Promise.allSettled([
         UzzApi.getPlaylists(cats[idx], 80, 0),
@@ -3355,6 +3427,7 @@
     bindLyricTools();
     bindFullTabs();
     bindSettingsExtra();
+    bindHomeModuleSettings();
     bindShortcuts();
 
     // ── 播放栏「更多操作」三点菜单 ──

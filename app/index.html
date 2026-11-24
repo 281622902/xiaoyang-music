@@ -129,8 +129,8 @@
         </header>
 
         <!-- 视图：发现音乐（推荐页） -->
-        <main id="viewDiscover" class="view"><section class="listen-hero"><div class="hero-copy"><div class="hero-eyebrow">YOUR SOUND. YOUR SPACE.</div><h1>给今天一点好声音</h1><p>从一首喜欢的歌开始。在线发现，或把你的音乐直接拖进来。</p><div class="hero-actions"><button id="heroContinue" class="xy-primary">继续聆听 ↗</button><button id="heroImport" class="xy-secondary">＋ 导入本地音乐</button></div></div><div class="hero-record" aria-hidden="true"><img src="icon.svg" alt=""/></div></section>
-          <section class="banner-row" id="bannerRow">
+        <main id="viewDiscover" class="view"><section class="listen-hero" data-module="hero"><div class="hero-copy"><div class="hero-eyebrow">YOUR SOUND. YOUR SPACE.</div><h1>给今天一点好声音</h1><p>从一首喜欢的歌开始。在线发现，或把你的音乐直接拖进来。</p><div class="hero-actions"><button id="heroContinue" class="xy-primary">继续聆听 ↗</button><button id="heroImport" class="xy-secondary">＋ 导入本地音乐</button><button id="homeModuleBtn" class="xy-secondary">模块管理</button></div></div><div class="hero-record" aria-hidden="true"><img src="icon.svg" alt=""/></div></section>
+          <section class="banner-row" id="bannerRow" data-module="banners">
             <div class="banner b-daily" data-top="daily">
               <div class="bn-ic bn-day"><span id="bnDailyDay">·</span><small id="bnDailyMon">/·</small></div>
               <div class="bn-name">每日推荐</div>
@@ -153,11 +153,11 @@
             </div>
           </section>
           <!-- 榜单精选：官方实时榜单卡片，点击直达 -->
-          <section class="rec-sec charts-sec">
+          <section class="rec-sec charts-sec" data-module="charts">
             <div class="rec-head">榜单精选</div>
             <div id="chartsRow" class="charts-row"></div>
           </section>
-          <section class="rec-sec">
+          <section class="rec-sec" data-module="playlists">
             <div class="rec-head">推荐歌单</div>
             <div id="plGrid" class="pl-grid"></div>
           </section>
@@ -1176,6 +1176,7 @@
     </div>
 
     <div id="dropOverlay" class="drop-overlay hidden"><div class="drop-symbol">↓</div><strong>把好音乐放进来</strong><span>松开即可添加并播放 · 支持多文件与文件夹</span><span class="drop-formats">MP3 · FLAC · WAV · AAC · M4A · OGG · OPUS</span></div>
+<div id="homeModuleModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="homeModuleTitle"><button id="homeModuleClose" class="xy-close" aria-label="关闭">×</button><h2 id="homeModuleTitle">发现页模块</h2><p class="account-subtitle">调整首页模块的显示与顺序。“推荐偏好”会改变歌单池。</p><div id="homeModuleList" class="hm-list"></div><label class="hm-mode">推荐偏好<select id="stRecMode" class="st-sel"><option value="default">默认</option><option value="familiar">熟悉</option><option value="explore">探索</option><option value="mix">混合</option></select></label><button id="homeModuleDone" class="xy-primary">完成</button></section></div>
 <div id="accountModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button id="accountClose" class="xy-close" aria-label="关闭">×</button><img class="account-logo" src="icon.svg" alt="小杨音乐"/><h2 id="accountTitle">你的音乐，有处安放</h2><p id="accountSubtitle">登录云端账户，让在线收藏随账号保存。本地音频保留在当前设备。</p>
 <section aria-label="云端账户">
   <div id="cloudGuest"><div class="account-tabs"><button id="cloudLoginTab" class="active" type="button">手机号登录</button><button id="cloudRegisterTab" type="button">注册</button></div>

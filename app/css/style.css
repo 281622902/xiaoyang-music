@@ -1965,3 +1965,20 @@ body.mm-anim.mm-hiding .mm-lyric-box {
 #abDiagOut .ok { color: var(--accent); }
 #abDiagOut .bad { color: #ff5a5a; }
 #abDiagOut .dim { color: var(--text-2); }
+
+/* ── 发现页模块管理 ── */
+.hm-list { display: flex; flex-direction: column; gap: 7px; margin: 14px 0; }
+.hm-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg-2);
+}
+.hm-row .hm-name { flex: 1; font-size: 13px; }
+.hm-row.off .hm-name { opacity: .45; text-decoration: line-through; }
+.hm-row button {
+  width: 28px; height: 26px; border: 1px solid var(--line); border-radius: 7px;
+  background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px;
+}
+.hm-row button:hover { color: var(--accent); border-color: var(--accent); }
+.hm-mode { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; margin: 12px 0 16px; }
+.account-subtitle { color: var(--text-2); font-size: 12px; line-height: 1.6; }
