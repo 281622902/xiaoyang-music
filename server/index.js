@@ -62,6 +62,31 @@ function getProvider(v) {
   return PROVIDERS[v] || PROVIDERS[DEFAULT_VENDOR] || netease;
 }
 
+// 大歌单完整曲目：v6 playlist/detail 的 tracks 字段通常只带前 10 首，
+// 但 trackIds 是完整的。按 200 个一批调用 songsDetail 补全，并缓存 10 分钟。
+const playlistTracksCache = new Map();
+const PLAYLIST_TRACKS_TTL = 10 * 60 * 1000;
+async function fullNeteasePlaylistTracks(info) {
+  const ids = (info.trackIds || []).map((x) => String(x && x.id ? x.id : x)).filter(Boolean);
+  if (!ids.length) return (info.tracks || []).slice();
+  const key = 'netease:' + String(info.id);
+  const hit = playlistTracksCache.get(key);
+  if (hit && Date.now() - hit.t < PLAYLIST_TRACKS_TTL) return hit.tracks;
+
+  const byId = new Map((info.tracks || []).map((t) => [String(t.id), t]));
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const missing = chunk.filter((id) => !byId.has(id));
+    if (!missing.length) continue;
+    const got = await netease.songsDetail(missing).catch(() => []);
+    got.forEach((t) => byId.set(String(t.id), t));
+  }
+  const tracks = ids.map((id) => byId.get(id)).filter(Boolean);
+  playlistTracksCache.set(key, { t: Date.now(), tracks });
+  if (playlistTracksCache.size > 24) playlistTracksCache.delete(playlistTracksCache.keys().next().value);
+  return tracks;
+}
+
 // ── 完整版校验：探测音频字节数，估算时长，拦掉 30s/45s 试听片段──
 // 用 Range: bytes=0-0 请求只拿响应头，几乎零开销。
 // 必须带超时：网络慢/ CDN 不响应时，串行兜底链里每层探测都可能长挂，
@@ -1234,7 +1259,7 @@ async function handleApi(req, res, reqUrl) {
       const pid = q(reqUrl, 'id');
       if (!pid) return sendJson(res, 400, { code: 400, msg: '缺少 id' });
       const platform = q(reqUrl, 'platform') || 'netease';
-      const limit = Math.min(200, Math.max(1, parseInt(q(reqUrl, 'limit') || '50', 10)));
+      const limit = Math.min(1000, Math.max(1, parseInt(q(reqUrl, 'limit') || '50', 10)));
       // 海外兜底：「artistlist:歌手名」ID 来自 meting 聚合的相关歌曲集（与专辑分类共用）
       if (String(pid).startsWith('artistlist:')) {
         const name = String(pid).slice('artistlist:'.length).trim();
@@ -1253,18 +1278,18 @@ async function handleApi(req, res, reqUrl) {
       if (info.missing) {
         return sendJson(res, 404, { code: 404, msg: `歌单不存在或已删除${info.notFoundMsg ? '（' + info.notFoundMsg + '）' : ''}，也可能是私密歌单（匿名不可见），请换一个公开歌单 ID` });
       }
-      // 榜单接口可能直接返回 tracks；否则用 trackIds 批量补全
-      const tracks = info.tracks && info.tracks.length
-        ? info.tracks.slice(0, limit)
-        : await netease.songsDetail((info.trackIds || []).slice(0, limit)).catch(() => []);
-      return sendJson(res, 200, { code: 200, info, tracks });
+      // 用完整 trackIds 补全，不再被详情里前 10 首截断
+      const all = await fullNeteasePlaylistTracks(info);
+      const tracks = all.slice(0, limit);
+      return sendJson(res, 200, { code: 200, info, tracks, trackCount: info.trackCount || all.length });
     }
 
     // ══════ 推荐歌单列表（高质量歌单） ══════
     if (pathname === '/api/playlists') {
       const cat = q(reqUrl, 'cat') || '全部';
-      const limit = Math.min(50, Math.max(1, parseInt(q(reqUrl, 'limit') || '15', 10)));
-      const list = await netease.topPlaylists(cat, limit).catch(() => []);
+      const limit = Math.min(100, Math.max(1, parseInt(q(reqUrl, 'limit') || '15', 10)));
+      const offset = Math.min(500, Math.max(0, parseInt(q(reqUrl, 'offset') || '0', 10)));
+      const list = await netease.topPlaylists(cat, limit, offset).catch(() => []);
       return sendJson(res, 200, { code: 200, list });
     }
 

@@ -432,8 +432,8 @@ async function albumDetail(id) {
 }
 
 // 高质量推荐歌单列表
-async function topPlaylists(cat, limit) {
-  const qs = `cat=${encodeURIComponent(cat || '全部')}&limit=${limit || 20}`;
+async function topPlaylists(cat, limit, offset = 0) {
+  const qs = `cat=${encodeURIComponent(cat || '全部')}&limit=${limit || 20}&offset=${Math.max(0, parseInt(offset, 10) || 0)}`;
   const json = (await (await getJson(`${BASE}/api/playlist/highquality/list?${qs}`, HEAD)).json()) || {};
   return (json.playlists || []).map((p) => ({
     id: String(p.id),

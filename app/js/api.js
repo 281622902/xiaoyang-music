@@ -322,8 +322,8 @@
   }
 
   // 推荐歌单列表
-  async function getPlaylists(cat, limit) {
-    const r = await request('/api/playlists', { cat: cat || '全部', limit: limit || 15 }, 15000);
+  async function getPlaylists(cat, limit, offset) {
+    const r = await request('/api/playlists', { cat: cat || '全部', limit: limit || 15, offset: offset || 0 }, 15000);
     if (!r || r.code !== 200) throw new Error((r && r.msg) || '获取推荐歌单失败');
     return r.list || [];
   }

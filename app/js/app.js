@@ -676,7 +676,10 @@
     if (!row) return;
     row.innerHTML = '<div class="loading-pad"><span class="spin"></span> 榜单加载中…</div>';
     try {
-      const charts = (await UzzApi.getCharts()).slice(0, 8);
+      // 榜单数据本身实时，展示位按日期轮换，首页每天有变化
+      const { y, m, day } = dailyDate();
+      const seed = y * 10000 + m * 100 + day;
+      const charts = shuffleSeeded(await UzzApi.getCharts(), seed).slice(0, 8);
       row.innerHTML = charts.map((c) => `
         <div class="chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
           <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${c.icon || '📊'}</div>
@@ -753,7 +756,19 @@
     const grid = $('plGrid');
     grid.innerHTML = '<div class="loading-pad" style="grid-column:1/-1"><span class="spin"></span> 推荐歌单加载中…</div>';
     try {
-      const list = await UzzApi.getPlaylists('全部', 15);
+      // 上游 highquality/list 忽略 offset，改为每日轮换真实分类并合并两个分类池
+      const { y, m, day } = dailyDate();
+      const seed = y * 10000 + m * 100 + day;
+      const cats = ['全部', '华语', '流行', '民谣', '古风', '电子', '轻音乐', '治愈', '摇滚', '说唱', '古典', '爵士'];
+      const idx = seed % cats.length;
+      const settled = await Promise.allSettled([
+        UzzApi.getPlaylists(cats[idx], 80, 0),
+        UzzApi.getPlaylists(cats[(idx + 1) % cats.length], 80, 0),
+      ]);
+      const seen = new Set();
+      const pool = settled.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value)
+        .filter((p) => { const k = String(p.id); if (seen.has(k)) return false; seen.add(k); return true; });
+      const list = shuffleSeeded(pool, seed).slice(0, 15);
       grid.innerHTML = list.map((p) => `
         <div class="pl-card" data-id="${escapeHtml(p.id)}">
           <div style="position:relative">
@@ -782,7 +797,7 @@
     $('plpDelete').classList.add('hidden');
     $('plpTracks').innerHTML = '<li class="loading-pad"><span class="spin"></span> 歌单加载中…</li>';
     try {
-      const { info, tracks } = await UzzApi.getPlaylist(plId, 50);
+      const { info, tracks } = await UzzApi.getPlaylist(plId, 1000);
       if (!curPlaylist || curPlaylist.plId !== plId) return; // 已切走
       let list = tracks;
       if (opts.shuffle || opts.daily) {
