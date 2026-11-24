@@ -2958,7 +2958,20 @@
         const p = window.Eq.PRESETS[eqPreset.value] || [];
         bandsEl.querySelectorAll('.eq-slider').forEach((sl, i) => { sl.value = p[i] || 0; });
       }
+      localStorage.setItem('uzz.eq.preset', eqPreset.value);
+      document.querySelectorAll('#fxScenes button').forEach((b) => b.classList.toggle('active', b.dataset.eq === eqPreset.value));
       if (eqEnable && !eqEnable.checked) { eqEnable.checked = true; localStorage.setItem('uzz.eq', '1'); window.Eq.setEnabled(true); }
+    });
+    const savedPreset = localStorage.getItem('uzz.eq.preset') || 'flat';
+    if (eqPreset) eqPreset.value = savedPreset;
+    document.querySelectorAll('#fxScenes button').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.eq === savedPreset);
+      btn.addEventListener('click', () => {
+        if (!eqPreset) return;
+        eqPreset.value = btn.dataset.eq;
+        eqPreset.dispatchEvent(new Event('change'));
+        toast('音效场景：' + btn.textContent.trim());
+      });
     });
 
     // 播放速度

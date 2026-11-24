@@ -151,6 +151,17 @@ html[data-theme="light"] {
 .fp-song { letter-spacing: -.4px; }
 .fp-tabs button.active { border-radius: 6px 6px 0 0; background: var(--v310-glass); }
 
+/* ── 音效场景快捷入口 ── */
+.fx-scenes { display: flex; gap: 7px; flex-wrap: wrap; margin: 6px 0 12px; }
+.fx-scenes button {
+  border: 1px solid var(--v310-line); border-radius: 999px;
+  background: var(--v310-glass); color: var(--text-2);
+  padding: 6px 13px; font-size: 11px; cursor: pointer;
+  transition: border-color .15s, color .15s, transform .15s;
+}
+.fx-scenes button:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--accent); }
+.fx-scenes button.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+
 /* ── 搜索工具栏与推荐来源说明 ── */
 .search-toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
