@@ -14,10 +14,70 @@
     function renderAuth() {
       $('cloudGuest').classList.toggle('hidden', !!cloud.user);
       $('cloudMember').classList.toggle('hidden', !cloud.user);
-      $('cloudUserName').textContent = cloud.user ? cloud.displayUser(cloud.user) : '';
-      if (cloud.user) $('accountLabel').textContent = cloud.displayUser(cloud.user);
-      else $('accountLabel').textContent = '账户与云端';
+      const name = cloud.user ? (cloud.displayName ? cloud.displayName(cloud.user) : cloud.displayUser(cloud.user)) : '';
+      $('cloudUserName').textContent = name;
+      $('accountLabel').textContent = name || '账户与云端';
+      if (cloud.user) { fillProfile(cloud.user); refreshSyncStatus(); }
     }
+    /* ── 桌面端资料中心：头像 / 昵称 / 用户名 / 密码 ── */
+    let pendingAvatar = '';
+    function paintAvatar(src) {
+      const img = $('desktopAvatar'); if (!img) return;
+      if (src) { img.src = src; img.textContent = ''; }
+      else { img.src = 'icon.svg'; img.textContent = ''; }
+    }
+    function fillProfile(user) {
+      const p = cloud.profile ? cloud.profile(user) : { nickname: '', username: '', avatar: '' };
+      const nick = $('desktopNickname'), username = $('desktopUsername');
+      if (nick) nick.value = p.nickname || '';
+      if (username) username.value = p.username || '';
+      pendingAvatar = p.avatar || '';
+      paintAvatar(pendingAvatar);
+    }
+    async function saveProfile() {
+      const btn = $('desktopProfileSave'); if (!btn) return;
+      btn.disabled = true; say('正在保存资料…');
+      try {
+        const patch = { nickname: $('desktopNickname').value, username: $('desktopUsername').value, avatar: pendingAvatar };
+        await global.updateProfile(patch);
+        renderAuth(); say('资料已保存'); notify('资料已保存');
+      } catch (error) { say(error.message || '保存失败'); }
+      finally { btn.disabled = false; }
+    }
+    async function savePassword() {
+      const btn = $('desktopPwdSave'); if (!btn) return;
+      const oldPw = $('desktopOldPwd').value, newPw = $('desktopNewPwd').value, confirm = $('desktopNewPwd2').value;
+      if (!oldPw || !newPw) { say('请填写原密码和新密码'); return; }
+      if (newPw !== confirm) { say('两次输入的新密码不一致'); return; }
+      btn.disabled = true; say('正在修改密码…');
+      try {
+        await global.changePassword(oldPw, newPw);
+        $('desktopOldPwd').value = ''; $('desktopNewPwd').value = ''; $('desktopNewPwd2').value = '';
+        say('密码修改成功'); notify('密码已修改');
+      } catch (error) { say(error.message || '修改失败'); }
+      finally { btn.disabled = false; }
+    }
+    async function refreshSyncStatus() {
+      const el = $('cloudSyncStatus'); if (!el) return;
+      if (!cloud.user) { el.textContent = '未登录云端账户'; return; }
+      if (!global.XYSync) { el.textContent = '云同步组件未加载'; return; }
+      try {
+        const p = await global.XYSync.preview();
+        el.textContent = `本机 ${p.localPlaylists} 张歌单 / 云端 ${p.cloudPlaylists} 张 · 云端收藏 ${p.cloudFavorites} 首 · 版本 ${p.revision}`;
+      } catch (error) { el.textContent = '同步状态读取失败：' + (error.message || error); }
+    }
+    $('desktopProfileSave')?.addEventListener('click', saveProfile);
+    $('desktopPwdSave')?.addEventListener('click', savePassword);
+    $('desktopAvatarClear')?.addEventListener('click', () => { pendingAvatar = ''; paintAvatar(''); say('已恢复默认头像，点「保存资料」生效'); });
+    $('desktopAvatarInput')?.addEventListener('change', async (event) => {
+      const file = event.target.files && event.target.files[0]; event.target.value = '';
+      if (!file) return;
+      try {
+        pendingAvatar = await global.compressAvatar(file, 128);
+        paintAvatar(pendingAvatar); say('头像已选择，点「保存资料」生效');
+      } catch (error) { say(error.message || '头像处理失败'); }
+    });
+
     function syncCurrent() {
       const track = global.Player.getState().current;
       // 使用解析后的原始播放地址，不把本机代理端口或本地文件路径保存到云端。
@@ -88,7 +148,7 @@
       let confirmedUser=null;sync.onclick=async()=>{sync.disabled=true;try{
         if(!cloud.user)throw Error('请先登录云端账户');
         if(confirmedUser!==cloud.user.id){const uid=cloud.user.id,p=await global.XYSync.preview();if(uid!==cloud.user?.id)throw Error('账户已切换，请重试');confirmedUser=uid;sync.textContent='确认合并';say('本机 '+p.localPlaylists+' 张歌单，云端 '+p.cloudPlaylists+' 张。合并保留双方歌曲，不同步删除；本地音频不会上传。');return;}
-        const result=await global.XYSync[direction]();say('已合并 '+result.playlists+' 张歌单');confirmedUser=null;sync.textContent=label;
+        const result=await global.XYSync[direction]();say('已合并 '+result.playlists+' 张歌单');await refreshSyncStatus();confirmedUser=null;sync.textContent=label;
       }catch(e){say(e.message);confirmedUser=null;sync.textContent=label;}finally{sync.disabled=false;}};
       $('cloudMember').querySelector('.account-buttons').appendChild(sync);
     }

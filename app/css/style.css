@@ -1982,3 +1982,29 @@ body.mm-anim.mm-hiding .mm-lyric-box {
 .hm-row button:hover { color: var(--accent); border-color: var(--accent); }
 .hm-mode { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; margin: 12px 0 16px; }
 .account-subtitle { color: var(--text-2); font-size: 12px; line-height: 1.6; }
+
+/* ── 电脑端账户资料中心 ── */
+.desktop-profile {
+  max-height: 250px; overflow-y: auto; margin: 12px 0;
+  padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2);
+}
+.dp-avatar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.dp-avatar {
+  width: 52px; height: 52px; border-radius: 50%; object-fit: cover;
+  background: var(--bg-3); border: 1px solid var(--line);
+  display: grid; place-items: center; font-size: 20px; color: var(--text);
+}
+.desktop-profile label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
+.desktop-profile input[type="text"], .desktop-profile input[type="password"] {
+  display: block; width: 100%; margin-top: 4px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg-1); color: var(--text);
+}
+.dp-file, .dp-avatar-row .xy-secondary {
+  display: inline-block; padding: 6px 10px; margin-right: 6px;
+  border: 1px solid var(--line); border-radius: 8px; background: transparent;
+  color: var(--text); font-size: 11px; cursor: pointer;
+}
+.dp-file:hover, .dp-avatar-row .xy-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.dp-pwd { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.dp-pwd summary { cursor: pointer; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.dp-pwd .xy-secondary { width: 100%; margin-top: 4px; }

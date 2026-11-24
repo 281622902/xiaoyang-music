@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.9.2', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.9.3', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -88,7 +88,7 @@
   /* ---------- 资料中心：昵称 / 用户名 / 头像 / 密码 ---------- */
   // 资料统一存在 Supabase Auth 的 user_metadata 里：
   //   nickname  昵称（界面上显示的友好名称）
-  //   username  用户名（唯一登录别名，登录时可用手机号或用户名）
+  //   username  用户名（资料展示用；当前登录仅支持手机号）
   //   avatar_url 头像（前端压缩后的 data:image/jpeg;base64,...）
   function profileMeta(user) {
     const meta = (user && user.user_metadata) || {};
