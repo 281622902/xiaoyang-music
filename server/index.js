@@ -1371,7 +1371,7 @@ async function handleApi(req, res, reqUrl) {
 
     // ══════ 播客 RSS：只读解析公开 RSS，返回节目与单集（音频由播放器直链播放） ══════
     if (pathname === '/api/podcast/feed') {
-      const raw = String(searchParams.get('url') || '').trim();
+      const raw = String(q(reqUrl, 'url') || '').trim();
       let feedUrl;
       try { feedUrl = new URL(raw); } catch (e) { return sendJson(res, 400, { code: 400, msg: '播客地址无效' }); }
       if (!['http:', 'https:'].includes(feedUrl.protocol) || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[|0\.)/.test(feedUrl.hostname))

@@ -1,9 +1,9 @@
 /* ============================================================
- * main.js — Electron 主进程（小杨音乐）
+ * main.js — Electron 主进程（xymusic）
  * 职责：
  *   1) 本地启动音乐解析后端（同进程 require），前端同源免配置
  *   2) 无边框窗口 + 自绘标题栏（IPC：最小化/最大化/关闭）
- *   3) 下载管理（保存到 下载/小杨音乐，可在设置中更改目录）
+ *   3) 下载管理（保存到 下载/xymusic，可在设置中更改目录）
  *   4) 桌面歌词置顶窗口（透明、可拖动、可开关）
  * ============================================================ */
 const { app, BrowserWindow, ipcMain, session, shell, screen, dialog, globalShortcut, Tray, Menu, nativeImage, net } = require('electron');
@@ -64,7 +64,7 @@ function fatal(label, err) {
   logCrash(label, err);
   try {
     const detail = (err && (err.stack || err.message)) || String(err);
-    dialog.showErrorBox('小杨音乐启动失败', `${label}\n\n${detail}\n\n崩溃日志已写入：\n${getCrashLog()}`);
+    dialog.showErrorBox('xymusic 启动失败', `${label}\n\n${detail}\n\n崩溃日志已写入：\n${getCrashLog()}`);
   } catch (e2) { /* 对话框也失败时忽略 */ }
 }
 // 非致命错误：只落盘，不打扰用户。
@@ -121,6 +121,11 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.12.0': [
+    '品牌全新升级：应用更名为 xymusic，更换全新渐变耳机 Logo（窗口、托盘、安装器全面同步）',
+    '修复播客 RSS 解析接口 500 错误（searchParams 未定义），播客订阅功能恢复可用',
+    '全功能回归通过：搜索/榜单/播客/歌词/取链/图片代理等核心链路逐项验证',
+  ],
   '3.11.0': [
     '新增音乐桌面独立小窗、播客 RSS 订阅与关注音乐人功能',
     '新增本地图片皮肤、音乐网盘设置、新 Logo 与扩展托盘菜单',
@@ -355,7 +360,7 @@ function saveCfg(cfg) {
 function getDownloadDir() {
   if (dlDir) return dlDir;
   const cfg = loadCfg();
-  dlDir = cfg.downloadDir || path.join(app.getPath('downloads'), '小杨音乐');
+  dlDir = cfg.downloadDir || path.join(app.getPath('downloads'), 'xymusic');
   try { fs.mkdirSync(dlDir, { recursive: true }); } catch (e) { /* 忽略 */ }
   return dlDir;
 }
@@ -408,7 +413,7 @@ function createWindow() {
     frame: false, // 无系统标题栏（自绘）
     resizable: true,
     backgroundColor: '#12141a',
-    title: '小杨音乐',
+    title: 'xymusic',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -434,7 +439,7 @@ function createWindow() {
     + 'font-family:-apple-system,"Microsoft YaHei",sans-serif;display:flex;'
     + 'align-items:center;justify-content:center;font-size:15px}'
     + '.b{text-align:center}.s{margin-top:10px;font-size:13px;color:#6b7280}'
-    + '</style></head><body><div class="b">小杨音乐 正在启动…<div class="s">首次启动会稍慢，请稍候</div></div></body></html>'
+    + '</style></head><body><div class="b">xymusic 正在启动…<div class="s">首次启动会稍慢，请稍候</div></div></body></html>'
   ));
 }
 
@@ -477,7 +482,7 @@ function showFatalInWindow(w, msg) {
     + 'font-family:-apple-system,"Microsoft YaHei",sans-serif;padding:40px;line-height:1.7}'
     + 'h1{color:#ec4141;font-size:20px}pre{white-space:pre-wrap;background:#1b1e27;'
     + 'padding:16px;border-radius:8px;color:#9aa0ac;font-size:13px}</style></head><body>'
-    + '<h1>小杨音乐启动失败</h1><pre>' + (msg || '').replace(/</g, '&lt;') + '</pre>'
+    + '<h1>xymusic 启动失败</h1><pre>' + (msg || '').replace(/</g, '&lt;') + '</pre>'
     + '<p style="color:#6b7280">崩溃日志：' + getCrashLog().replace(/</g, '&lt;') + '</p>'
     + '</body></html>';
   w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
@@ -617,24 +622,24 @@ function lyricMouseAt(x, y) {
 }
 
 /* ══════ 局域网升级服务器（把本机当作在线升级源） ══════
- * 托管目录：D:\杨海涛\局域网服务器\小杨音乐（可在设置里改）
+ * 托管目录：D:\杨海涛\局域网服务器\xymusic（可在设置里改）
  * 提供 latest.json（version/url/notes）与安装包下载。
- * latest.json 不存在时自动扫描目录内最新「小杨音乐 Setup x.y.z.exe」生成。
+ * latest.json 不存在时自动扫描目录内最新「xymusic Setup x.y.z.exe」生成。
  * 下载 url 按请求方 Host 动态拼接 → 局域网内任意设备都能拿到可直连的下载地址。
  * 后续换正式服务器只需把更新源 URL 换成远程地址，客户端零改动。 */
 const UPD_SRV_PORT = 35212;
 const UPD_SRV_DEFAULT_DIR = 'D:\\杨海涛\\局域网服务器\\小杨音乐';
-// 安装包文件名统一格式：小杨音乐 Setup <版本>_<日期>.exe
-//   例：小杨音乐 Setup 2.9.0_20261018.exe
-// 扫描正则必须**兼容无后缀的旧名**（如「小杨音乐 Setup 2.8.0.exe」），
+// 安装包文件名统一格式：xymusic Setup <版本>_<日期>.exe
+//   例：xymusic Setup 2.9.0_20261018.exe
+// 扫描正则必须**兼容无后缀的旧名**（如「xymusic Setup 2.8.0.exe」），
 // 否则旧包扫不到 → 检查更新直接失效。所有用到的地方统一引用此常量，别再各写一份。
-const PKG_RE = /^(?:小杨音乐\s*Setup\s*|xiaoyang-music-)(\d+(?:\.\d+){1,3})(?:[\s._(（-][^\x00]*)?\.exe$/i;
+const PKG_RE = /^(?:xymusic\s*Setup\s*|小杨音乐\s*Setup\s*|xiaoyang-music-)(\d+(?:\.\d+){1,3})(?:[\s._(（-][^\x00]*)?\.exe$/i;
 // 生成带日期的规范文件名（本地 → 局域网目录统一用这个名字）
 function pkgFileName(version, date) {
   const d = date || new Date();
   const p = (n) => String(n).padStart(2, '0');
   const ymd = '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
-  return '小杨音乐 Setup ' + version + '_' + ymd + '.exe';
+  return 'xymusic Setup ' + version + '_' + ymd + '.exe';
 }
 // 从文件名解析版本号（新旧格式都认）
 function pkgVersionOf(fileName) {
@@ -762,9 +767,9 @@ async function startUpdateServer() {
         if (urlPath === '/' || urlPath === '/index.html') {
           // 目录页：列出可下载的升级包，方便局域网内其它设备手动下载安装
           const best = scanLatestInstaller(dir);
-          const html = '<!doctype html><meta charset="utf-8"><title>小杨音乐 升级服务器</title>'
+          const html = '<!doctype html><meta charset="utf-8"><title>xymusic 升级服务器</title>'
             + '<body style="font-family:system-ui,sans-serif;padding:32px;line-height:1.9">'
-            + '<h2>小杨音乐 · 局域网升级服务器</h2>'
+            + '<h2>xymusic · 局域网升级服务器</h2>'
             + '<p>托管目录：' + dir + '</p>'
             + '<p>当前最新版本：' + (best ? 'v' + best.version : '暂无升级包') + '</p>'
             + (best ? '<p><a style="font-size:18px" href="/' + encodeURIComponent(best.file) + '">下载 ' + best.file + '</a></p>' : '')
@@ -883,7 +888,7 @@ async function createTray() {
     tray = null;
     return null;
   }
-  tray.setToolTip('小杨音乐');
+  tray.setToolTip('xymusic');
   const traySend = (action) => { if (win && !win.isDestroyed()) win.webContents.send('global:' + action); };
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '显示主界面', click: () => showWindow() },
@@ -897,7 +902,7 @@ async function createTray() {
     { label: 'Mini 模式', click: () => traySend('mini') },
     { type: 'separator' },
     { label: '检查更新', click: () => { try { autoUpdater && autoUpdater.checkForUpdates(); } catch (e) { /* 忽略 */ } } },
-    { label: '退出小杨音乐', click: () => quitApp() },
+    { label: '退出 xymusic', click: () => quitApp() },
   ]));
   tray.on('click', () => showWindow());
   tray.on('double-click', () => showWindow());
@@ -929,7 +934,7 @@ const SysCaps = {
       const cmds = [
         `reg add "HKCU\\Software\\XiaoyangMusic" /v InstallPath /t REG_SZ /d "${exe}" /f`,
         `reg add "HKCU\\Software\\Classes\\XiaoyangMusic.Audio\\shell\\open\\command" /ve /t REG_SZ /d "\\"${exe}\\" \\"%1\\"" /f`,
-        `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\小杨音乐.exe" /ve /t REG_SZ /d "${exe}" /f`,
+        `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\xymusic.exe" /ve /t REG_SZ /d "${exe}" /f`,
       ];
       for (const c of cmds) execSync(c, { windowsHide: true, timeout: 8000 });
       return { ok: true, registered: true };
@@ -1461,14 +1466,14 @@ function bindIpc() {
       fs.closeSync(fd); fd = null;
       if (size !== st.total) throw new Error('升级包大小校验失败（' + size + ' / ' + st.total + '）');
       fs.rmSync(paths.state, { force: true });
-      const dest = path.join(os.tmpdir(), '小杨音乐-升级包-' + Date.now() + '.exe');
+      const dest = path.join(os.tmpdir(), 'xymusic-升级包-' + Date.now() + '.exe');
       try { fs.renameSync(paths.part, dest); } catch (_) { fs.copyFileSync(paths.part, dest); fs.rmSync(paths.part, { force: true }); }
       if (win && !win.isDestroyed()) win.webContents.send('upd:progress', { pct: 100, phase: 'installing' });
       const conf = await dialog.showMessageBox(win, {
           type: 'question',
           buttons: ['取消', '关闭并安装'],
           defaultId: 1,
-          message: '检测到小杨音乐正在运行',
+          message: '检测到 xymusic 正在运行',
           detail: '升级包已下载完成。确认后退出托盘后台并打开安装向导，完成时可选择桌面快捷方式和立即运行。',
         });
         if (conf.response !== 1) return { ok: false, canceled: true };
@@ -1495,7 +1500,7 @@ function bindIpc() {
   ipcMain.handle('upd:pickInstall', async () => {
     const r = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
-      title: '选择小杨音乐新版本安装包（Setup .exe）',
+      title: '选择 xymusic 新版本安装包（Setup .exe）',
       filters: [{ name: '安装包', extensions: ['exe'] }],
     });
     if (r.canceled || !r.filePaths || !r.filePaths[0]) return { ok: false, canceled: true };
@@ -1506,7 +1511,7 @@ function bindIpc() {
     if (!fs.existsSync(installer)) return { ok: false, msg: '安装包不存在：' + installer };
     const conf = await dialog.showMessageBox(win, {
       type: 'question', buttons: ['取消', '关闭并安装'], defaultId: 1, cancelId: 0,
-      message: '关闭小杨音乐并继续安装？', detail: '将退出全部窗口和托盘后台，然后打开安装向导。收藏、歌单和设置会保留。',
+      message: '关闭 xymusic 并继续安装？', detail: '将退出全部窗口和托盘后台，然后打开安装向导。收藏、歌单和设置会保留。',
     });
     if (conf.response !== 1) return { ok: false, canceled: true };
     await runInstallerDelayed(installer);
@@ -1519,7 +1524,7 @@ function bindIpc() {
     await launchInstaller(installer);
     setTimeout(quitApp, 100);
   }
-  // 自动扫描本地升级包：下载目录 / 桌面 / 系统下载目录里的「小杨音乐 Setup 版本.exe」
+  // 自动扫描本地升级包：下载目录 / 桌面 / 系统下载目录里的「xymusic Setup 版本.exe」
   ipcMain.handle('upd:scanLocal', async () => {
     const cur = app.getVersion();
     const home = os.homedir();
@@ -1552,8 +1557,8 @@ function bindIpc() {
     }
     return { cur, list: [...found.values()].sort((a, b) => cmpVersion(b.version, a.version)) };
   });
-  // ══════ 发布安装包到局域网升级目录（D:\杨海涛\局域网服务器\小杨音乐） ══════
-  // 目标文件名统一为「小杨音乐 Setup <版本>_<日期>.exe」，例如 2.9.0_20261018.exe，
+  // ══════ 发布安装包到局域网升级目录（D:\杨海涛\局域网服务器\xymusic） ══════
+  // 目标文件名统一为「xymusic Setup <版本>_<日期>.exe」，例如 2.9.0_20261018.exe，
   // 这样目录里一眼能看出每个包是什么版本、哪天发布的；同版本重发则清理旧的同版本包。
   function publishToLanDir(srcPath) {
     const dir = UPD_SRV_DEFAULT_DIR;
@@ -1561,7 +1566,7 @@ function bindIpc() {
       fs.mkdirSync(dir, { recursive: true });
       const f = path.basename(srcPath);
       const version = pkgVersionOf(f);
-      if (!version) return { ok: false, msg: '文件名不符合「小杨音乐 Setup <版本>.exe」规范' };
+      if (!version) return { ok: false, msg: '文件名不符合「xymusic Setup <版本>.exe」规范' };
       const dest = path.join(dir, pkgFileName(version));
       if (path.resolve(dest) !== path.resolve(srcPath)) fs.copyFileSync(srcPath, dest);
       // 同一版本的历史包（不同日期）清掉，避免目录堆积重复版本
@@ -1908,7 +1913,7 @@ public class Audio {
     return { ok: true };
   });
   ipcMain.handle('updSrv:setDir', async () => {
-    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: '选择升级包目录（含 小杨音乐 Setup x.y.z.exe）' });
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: '选择升级包目录（含 xymusic Setup x.y.z.exe）' });
     if (r.canceled || !r.filePaths || !r.filePaths[0]) return '';
     const cfg = loadCfg();
     cfg.updateDir = r.filePaths[0];

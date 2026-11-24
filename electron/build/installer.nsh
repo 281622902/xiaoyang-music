@@ -10,7 +10,7 @@
       SetErrorLevel 2
       Quit
     ${EndIf}
-    MessageBox MB_OKCANCEL|MB_ICONQUESTION "小杨音乐正在运行。$\r$\n$\r$\n是否关闭全部窗口和托盘后台，继续安装/卸载？$\r$\n收藏、歌单和设置会保留。" IDOK +2
+    MessageBox MB_OKCANCEL|MB_ICONQUESTION "xymusic 正在运行。$\r$\n$\r$\n是否关闭全部窗口和托盘后台，继续安装/卸载？$\r$\n收藏、歌单和设置会保留。" IDOK +2
     Quit
     ; v2.14+ accepts a graceful exit command; older versions fall back below.
     ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
@@ -33,7 +33,7 @@
     ${EndIf}
     ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
     ${If} $R0 == 0
-      MessageBox MB_OK|MB_ICONSTOP "小杨音乐仍未退出。可能有其他用户或管理员运行的实例。$\r$\n本次操作已停止，请关闭该实例后重试。"
+      MessageBox MB_OK|MB_ICONSTOP "xymusic 仍未退出。可能有其他用户或管理员运行的实例。$\r$\n本次操作已停止，请关闭该实例后重试。"
       SetErrorLevel 2
       Quit
     ${EndIf}
@@ -51,10 +51,10 @@
   Function XYRunInstalledApp
     ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "open" ""
   FunctionEnd
-  !define MUI_FINISHPAGE_TITLE "小杨音乐安装完成"
+  !define MUI_FINISHPAGE_TITLE "xymusic 安装完成"
   !define MUI_FINISHPAGE_TEXT "请选择完成安装后的操作，然后点击完成。"
   !define MUI_FINISHPAGE_RUN
-  !define MUI_FINISHPAGE_RUN_TEXT "立即运行小杨音乐"
+  !define MUI_FINISHPAGE_RUN_TEXT "立即运行 xymusic"
   !define MUI_FINISHPAGE_RUN_FUNCTION XYRunInstalledApp
   !define MUI_FINISHPAGE_SHOWREADME
   !define MUI_FINISHPAGE_SHOWREADME_TEXT "建立桌面快捷方式"

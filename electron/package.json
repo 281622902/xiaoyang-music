@@ -1,7 +1,7 @@
 {
   "name": "xiaoyang-music-player",
-  "version": "3.11.0",
-  "description": "小杨音乐（多音源聚合播放器）桌面安装包",
+  "version": "3.12.0",
+  "description": "xymusic（多音源聚合播放器）桌面安装包",
   "author": {
     "name": "小杨"
   },
@@ -24,8 +24,8 @@
       }
     ],
     "appId": "com.xiaoyang.musicplayer",
-    "productName": "小杨音乐",
-    "copyright": "Copyright © 2026 小杨音乐",
+    "productName": "xymusic",
+    "copyright": "Copyright © 2026 xymusic",
     "asar": true,
     "files": [
       "main.js",
@@ -69,7 +69,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "小杨音乐",
+      "shortcutName": "xymusic",
       "include": "build/installer.nsh",
       "runAfterFinish": true
     },
@@ -97,7 +97,7 @@
         "tak",
         "mpc"
       ],
-      "name": "小杨音乐音频文件",
+      "name": "xymusic 音频文件",
       "role": "Viewer"
     }
   },

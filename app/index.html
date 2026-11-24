@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#12141a" />
-  <title>小杨音乐</title>
+  <title>xymusic</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="css/style.css" /><link rel="stylesheet" href="css/studio.css" />
   <link rel="stylesheet" href="css/cloud.css" />
@@ -17,7 +17,7 @@
     <header class="titlebar">
       <div class="tb-brand" id="brandHome" title="回到发现音乐">
         <img class="brand-logo" src="icon.svg" alt="" draggable="false" />
-        <span class="brand-name">小杨音乐</span>
+        <span class="brand-name">xymusic</span>
       </div>
       <div class="tb-drag"></div>
       <div class="tb-actions no-drag"><button id="accountOpen" class="account-trigger" title="我的账户"><span class="account-dot">人</span><span id="accountLabel">登录账户</span></button>
@@ -306,7 +306,7 @@
               <button data-tab="keys">快捷键</button>
               <button data-tab="download">音质与下载</button>
               <button data-tab="desktop">桌面与歌词</button>
-              <button data-tab="about">关于小杨音乐</button>
+              <button data-tab="about">关于 xymusic</button>
             </nav>
           </div>
 
@@ -341,7 +341,7 @@
               </div>
 
               <div class="st-row">
-                <div class="st-lab">将小杨音乐设为默认播放器</div>
+                <div class="st-lab">将 xymusic 设为默认播放器</div>
                 <div class="st-ctl st-inline"><button id="stSetDefault" class="st-btn">注册为默认播放器</button><button id="stOpenDefApps" class="st-btn">打开系统设置</button></div>
                 <small class="st-hint" id="stDefaultTip">Windows 会保护默认应用设置，注册后若未自动切换，请在系统设置中点一下确认。</small>
               </div>
@@ -396,7 +396,7 @@
                 <div class="st-lab">关闭主面板</div>
                 <div class="st-ctl st-inline">
                   <label class="st-radio"><input type="radio" name="closeMain" value="tray" checked><span>最小化到系统托盘</span></label>
-                  <label class="st-radio"><input type="radio" name="closeMain" value="exit"><span>退出小杨音乐</span></label>
+                  <label class="st-radio"><input type="radio" name="closeMain" value="exit"><span>退出 xymusic</span></label>
                 </div>
               </div>
 
@@ -618,7 +618,7 @@
               </div>
               <div class="st-row">
                 <div class="st-lab">预览</div>
-                <div class="st-ctl"><div class="st-preview" id="stLyricPrev">小杨音乐</div></div>
+                <div class="st-ctl"><div class="st-preview" id="stLyricPrev">xymusic</div></div>
               </div>
 
               <h3 class="set-sub">工具</h3>
@@ -678,9 +678,9 @@
               </div>
             </section>
 
-            <!-- ══════════ 关于小杨音乐 ══════════ -->
+            <!-- ══════════ 关于 xymusic ══════════ -->
             <section class="set-page hidden" data-page="about">
-              <h2 class="set-sec">关于小杨音乐</h2>
+              <h2 class="set-sec">关于 xymusic</h2>
               <div class="about-head">
                 当前版本<b id="abVer">-</b>
                 <button id="abCheck" class="st-btn">检查更新</button>
@@ -1202,9 +1202,9 @@
     </div>
 
     <div id="dropOverlay" class="drop-overlay hidden"><div class="drop-symbol">↓</div><strong>把好音乐放进来</strong><span>松开即可添加并播放 · 支持多文件与文件夹</span><span class="drop-formats">MP3 · FLAC · WAV · AAC · M4A · OGG · OPUS</span></div>
-<div id="updateAvailableModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="updAvailTitle"><h2 id="updAvailTitle">发现新版本</h2><p class="account-subtitle">小杨音乐有新版本可用：<b id="updAvailVer">—</b></p><div class="account-buttons"><button id="updAvailLater" class="xy-secondary" type="button">稍后再说</button><button id="updAvailNow" class="xy-primary" type="button">立即升级</button></div></section></div>
+<div id="updateAvailableModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="updAvailTitle"><h2 id="updAvailTitle">发现新版本</h2><p class="account-subtitle">xymusic 有新版本可用：<b id="updAvailVer">—</b></p><div class="account-buttons"><button id="updAvailLater" class="xy-secondary" type="button">稍后再说</button><button id="updAvailNow" class="xy-primary" type="button">立即升级</button></div></section></div>
 <div id="homeModuleModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="homeModuleTitle"><button id="homeModuleClose" class="xy-close" aria-label="关闭">×</button><h2 id="homeModuleTitle">发现页模块</h2><p class="account-subtitle">调整首页模块的显示与顺序。“推荐偏好”会改变歌单池。</p><div id="homeModuleList" class="hm-list"></div><label class="hm-mode">推荐偏好<select id="stRecMode" class="st-sel"><option value="default">默认</option><option value="familiar">熟悉</option><option value="explore">探索</option><option value="mix">混合</option></select></label><button id="homeModuleDone" class="xy-primary">完成</button></section></div>
-<div id="accountModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button id="accountClose" class="xy-close" aria-label="关闭">×</button><img class="account-logo" src="icon.svg" alt="小杨音乐"/><h2 id="accountTitle">你的音乐，有处安放</h2><p id="accountSubtitle">登录云端账户，让在线收藏随账号保存。本地音频保留在当前设备。</p>
+<div id="accountModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button id="accountClose" class="xy-close" aria-label="关闭">×</button><img class="account-logo" src="icon.svg" alt="xymusic"/><h2 id="accountTitle">你的音乐，有处安放</h2><p id="accountSubtitle">登录云端账户，让在线收藏随账号保存。本地音频保留在当前设备。</p>
 <section aria-label="云端账户">
   <div id="cloudGuest"><div class="account-tabs"><button id="cloudLoginTab" class="active" type="button">手机号登录</button><button id="cloudRegisterTab" type="button">注册</button></div>
     <form id="cloudForm" class="account-form"><label>手机号<input id="cloudPhone" type="tel" inputmode="tel" autocomplete="tel-national" required placeholder="请输入手机号"/></label><label>密码<input id="cloudPassword" type="password" autocomplete="current-password" required placeholder="请输入密码"/></label><button id="cloudSubmit" class="xy-primary" type="submit">登录云端账户</button></form>
