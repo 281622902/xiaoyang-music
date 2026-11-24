@@ -551,6 +551,8 @@
     if (mmPlay) mmPlay.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
     // 全局播放状态：播放栏封面 / mini 封面旋转（#9 播放时转动、暂停停止）
     document.body.classList.toggle('is-playing', !!playing);
+    // 任务栏缩略图按钮（悬停显示 上一曲/播放暂停/下一曲）：同步播放状态到主进程
+    try { window.uzzBridge && window.uzzBridge.reportPlayState && window.uzzBridge.reportPlayState(!!playing); } catch (e) { /* 忽略 */ }
     // 黑胶唱片 / 唱针联动
     const vinyl = $('vinylDisc');
     if (vinyl) vinyl.classList.toggle('playing', playing);

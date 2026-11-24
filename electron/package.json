@@ -1,6 +1,6 @@
 {
   "name": "xiaoyang-music-player",
-  "version": "3.12.0",
+  "version": "3.12.1",
   "description": "xymusic（多音源聚合播放器）桌面安装包",
   "author": {
     "name": "小杨"
@@ -35,6 +35,10 @@
       "lyric-themes.js",
       "desktop-music.html",
       "build/icon.ico",
+      "build/thumbar/prev.png",
+      "build/thumbar/play.png",
+      "build/thumbar/pause.png",
+      "build/thumbar/next.png",
       "build/installer.nsh",
       "installer-launcher.js",
       "backend-start.js"

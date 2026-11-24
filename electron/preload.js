@@ -97,6 +97,8 @@ contextBridge.exposeInMainWorld('uzzBridge', {
     ['global:toggle', 'global:next', 'global:prev', 'global:full', 'global:mini', 'global:lyric', 'global:miniMode'].forEach((ev) =>
       ipcRenderer.on(ev, () => cb(ev)));
   },
+  // 任务栏缩略图工具栏（悬停显示 上一曲/播放暂停/下一曲）：上报播放状态
+  reportPlayState: (playing) => ipcRenderer.send('player:state', !!playing),
   // 双击关联音频文件 / 命令行传来的本地文件
   onOpenLocalFile: (cb) => ipcRenderer.on('local:openFile', (e, p) => cb(p)),
   // ══════ 软件升级 ══════

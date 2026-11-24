@@ -121,6 +121,9 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.12.1': [
+    '任务栏图标悬停显示 上一曲/播放暂停/下一曲 控制按钮（网易云同款），播放状态实时切换图标',
+  ],
   '3.12.0': [
     '品牌全新升级：应用更名为 xymusic，更换全新渐变耳机 Logo（窗口、托盘、安装器全面同步）',
     '修复播客 RSS 解析接口 500 错误（searchParams 未定义），播客订阅功能恢复可用',
@@ -404,6 +407,35 @@ async function startBackend() {
   });
 }
 
+/* ══════ 任务栏缩略图工具栏：鼠标悬停任务栏图标时，预览卡片下方显示
+ * 上一曲 / 播放暂停 / 下一曲 三个按钮（网易云同款交互）。
+ * 图标在 electron/build/thumbar/*.png，随包白名单分发；播放状态由渲染进程上报。 ══════ */
+let thumbarPlaying = false;
+const THUMBAR_ICONS = {};
+function thumbarIcon(name) {
+  if (!(name in THUMBAR_ICONS)) {
+    try {
+      const img = nativeImage.createFromPath(path.join(__dirname, 'build', 'thumbar', name + '.png'));
+      THUMBAR_ICONS[name] = img.isEmpty() ? null : img;
+    } catch (e) { THUMBAR_ICONS[name] = null; }
+  }
+  return THUMBAR_ICONS[name];
+}
+function thumbarSend(action) { if (win && !win.isDestroyed()) win.webContents.send('global:' + action); }
+function updateThumbar() {
+  if (!win || win.isDestroyed() || process.platform !== 'win32' || typeof win.setThumbarButtons !== 'function') return;
+  try {
+    const prev = thumbarIcon('prev'), next = thumbarIcon('next');
+    const playPause = thumbarIcon(thumbarPlaying ? 'pause' : 'play');
+    if (!prev || !next || !playPause) return;
+    win.setThumbarButtons([
+      { icon: prev, click: () => thumbarSend('prev'), tooltip: '上一首' },
+      { icon: playPause, click: () => thumbarSend('toggle'), tooltip: thumbarPlaying ? '暂停' : '播放' },
+      { icon: next, click: () => thumbarSend('next'), tooltip: '下一首' },
+    ]);
+  } catch (e) { /* 悬停按钮设置失败不影响主功能 */ }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1180,
@@ -423,6 +455,10 @@ function createWindow() {
   });
   win.on('maximize', () => win.webContents.send('win:maximized', true));
   win.on('unmaximize', () => win.webContents.send('win:maximized', false));
+  // 任务栏缩略图按钮在窗口显示/恢复后（重）挂一次
+  win.on('ready-to-show', () => updateThumbar());
+  win.on('show', () => updateThumbar());
+  win.on('restore', () => updateThumbar());
   // 关闭窗口：若开启“最小化到托盘”，则拦截默认关闭、隐藏到托盘（后台继续播放），而非退出软件
   win.on('close', (e) => {
     if (!isQuiting && minToTray) {
@@ -1849,6 +1885,12 @@ public class Audio {
   // SMTC：把当前播放信息推给 Windows 媒体控制中心
   let smtcOn = false;
   ipcMain.handle('smtc:set', (e, on) => { smtcOn = !!on; return { ok: true, on: smtcOn }; });
+  // 任务栏缩略图按钮：渲染进程上报播放状态 → 动态切换 播放/暂停 图标
+  ipcMain.on('player:state', (e, playing) => {
+    if (e.sender !== (win && win.webContents)) return;
+    thumbarPlaying = !!playing;
+    updateThumbar();
+  });
   ipcMain.handle('smtc:info', (e, info) => {
     if (!smtcOn || !win) return false;
     try {
