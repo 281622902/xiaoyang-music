@@ -1,0 +1,156 @@
+/* v3.10 视觉重构层：保留既有布局骨架，用现代设计令牌重做可见界面。 */
+
+:root {
+  --v310-radius: 16px;
+  --v310-shadow: 0 18px 46px rgba(0, 0, 0, .18);
+  --v310-glass: rgba(255, 255, 255, .045);
+  --v310-line: rgba(255, 255, 255, .09);
+}
+html[data-theme="light"] {
+  --v310-shadow: 0 18px 46px rgba(40, 55, 80, .10);
+  --v310-glass: rgba(255, 255, 255, .72);
+  --v310-line: rgba(30, 45, 70, .10);
+}
+
+/* ── 左侧导航：更明确的层级与当前态 ── */
+.sidebar {
+  background:
+    radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  border-right: 1px solid var(--v310-line);
+}
+.sidebar nav button,
+.sidebar .nav-item,
+.sidebar .drawer-list button {
+  border-radius: 11px;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.sidebar nav button:hover,
+.sidebar .nav-item:hover,
+.sidebar .drawer-list button:hover {
+  background: var(--v310-glass);
+  transform: translateX(2px);
+}
+.sidebar nav button.active,
+.sidebar .nav-item.active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent);
+  color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ── 顶栏搜索：胶囊化 ── */
+.titlebar {
+  border-bottom: 1px solid var(--v310-line);
+  background: color-mix(in srgb, var(--bg-1) 82%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+.titlebar input,
+.top-search input,
+#searchInput {
+  border-radius: 999px !important;
+  border: 1px solid var(--v310-line) !important;
+  background: var(--v310-glass) !important;
+  padding-left: 16px !important;
+  transition: border-color .16s, box-shadow .16s, background .16s;
+}
+.titlebar input:focus,
+.top-search input:focus,
+#searchInput:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* ── 发现页 Hero：更强的第一眼变化 ── */
+.listen-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid var(--v310-line);
+  background:
+    radial-gradient(90% 160% at 88% 20%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 62%),
+    linear-gradient(120deg, color-mix(in srgb, var(--bg-2) 92%, transparent), var(--bg-1));
+  box-shadow: var(--v310-shadow);
+}
+.listen-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 0 45%, rgba(255,255,255,.07) 50%, transparent 58%);
+  transform: translateX(-30%);
+  animation: v310Sheen 9s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes v310Sheen { 0%,70%,100% { transform: translateX(-40%); } 35% { transform: translateX(40%); } }
+.hero-eyebrow { letter-spacing: 2.4px; color: var(--accent); font-weight: 700; }
+.listen-hero h1 { font-size: clamp(26px, 3vw, 38px); letter-spacing: -.5px; }
+.hero-record {
+  filter: drop-shadow(0 22px 46px rgba(0,0,0,.35));
+  animation: v310Float 6s ease-in-out infinite;
+}
+@keyframes v310Float { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
+.hero-actions .xy-secondary:hover,
+.hero-actions .xy-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.16); }
+
+/* ── 快捷入口与榜单卡片 ── */
+.banner,
+.chart-card,
+.pl-card {
+  border: 1px solid var(--v310-line) !important;
+  border-radius: var(--v310-radius) !important;
+  background: var(--v310-glass) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.banner:hover,
+.chart-card:hover,
+.pl-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent) !important;
+  box-shadow: 0 18px 40px rgba(0,0,0,.18);
+}
+.banner::after { border-radius: var(--v310-radius); }
+.plc-img { border-radius: 12px 12px 0 0; }
+.rec-head {
+  font-size: 16px;
+  letter-spacing: .3px;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+}
+
+/* ── 底部播放条：悬浮玻璃 ── */
+.playbar,
+.player-bar,
+.pb-wrap {
+  border-top: 1px solid var(--v310-line) !important;
+  background: color-mix(in srgb, var(--bg-1) 78%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: 0 -12px 34px rgba(0,0,0,.10);
+}
+.pb-ic:hover,
+.pb-btn:hover { color: var(--accent); transform: translateY(-1px); }
+
+/* ── 设置页/账户入口 ── */
+.account-trigger {
+  border-radius: 999px;
+  border: 1px solid var(--v310-line);
+  background: var(--v310-glass);
+  padding: 5px 10px;
+}
+.st-row {
+  border-radius: 12px;
+  transition: background .15s ease;
+}
+.st-row:hover { background: var(--v310-glass); }
+
+/* ── 全屏播放器：更柔和的舞台 ── */
+.full {
+  background:
+    radial-gradient(80% 60% at 20% 10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    var(--bg-0);
+}
+.fp-song { letter-spacing: -.4px; }
+.fp-tabs button.active { border-radius: 6px 6px 0 0; background: var(--v310-glass); }
+
+@media (prefers-reduced-motion: reduce) {
+  .listen-hero::before, .hero-record { animation: none; }
+}
