@@ -619,7 +619,7 @@
               </div>
               <div class="st-row">
                 <div class="st-lab">播放页布局</div>
-                <div class="st-ctl"><select id="stPlayerLayout" class="st-sel"><option value="classic" selected>经典黑胶</option><option value="cover">封面方卡</option><option value="focus">歌词沉浸</option><option value="minimal">极简留白</option></select></div>
+                <div class="st-ctl"><select id="stPlayerLayout" class="st-sel"><option value="classic" selected>经典黑胶</option><option value="cover">封面方卡</option><option value="focus">歌词沉浸</option><option value="minimal">极简留白</option><option value="film">胶片影院</option><option value="neon">霓虹舞台</option></select></div>
               </div>
               <div class="st-row">
                 <div class="st-lab">预览</div>
@@ -910,6 +910,9 @@
               <button id="lyFont" data-tip="调整字号" aria-label="调整字号">
                 <svg viewBox="0 0 24 24"><path d="M4 18 9.5 5h1.6L16.6 18h-2l-1.4-3.4H7.3L5.9 18H4zm3.9-5h4l-2-5.2L7.9 13zM17 8V5.5h1.8V8H21v1.8h-2.2V12H17V9.8h-2.2V8H17z" fill="currentColor"/></svg>
               </button>
+              <button id="lyCopy" data-tip="复制歌词" aria-label="复制歌词">
+                <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              </button>
               <button id="lyReport" data-tip="歌词报错" aria-label="歌词报错">
                 <svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3zm0 5 .9 6h-1.8L12 8zm-.9 7.4h1.8V17h-1.8v-1.6z" fill="currentColor"/></svg>
               </button>
@@ -958,6 +961,7 @@
         <div class="qp-head">
           <span class="qp-title">播放列表 <b id="queueCount">0</b></span>
           <span class="qp-head-acts">
+            <button id="queueSave" class="qp-hbtn" title="保存队列为新歌单">＋ 存为歌单</button>
             <button id="queueFavAll" class="qp-hbtn" title="收藏全部">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 10h17" stroke-linecap="round"/></svg>
               <span>收藏全部</span>

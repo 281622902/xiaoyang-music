@@ -1650,6 +1650,14 @@
     }
 
     // 歌词报错：弹简易反馈框
+    const copyBtn = $('lyCopy');
+    if (copyBtn) copyBtn.addEventListener('click', async () => {
+      const text = [...document.querySelectorAll('#fpLyric p')]
+        .map((p) => p.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+      if (!text) { toast('当前没有可复制的歌词'); return; }
+      try { await navigator.clipboard.writeText(text); toast('歌词已复制到剪贴板'); }
+      catch (e) { toast('复制失败，请检查浏览器剪贴板权限'); }
+    });
     const rep = $('lyReport');
     if (rep) rep.addEventListener('click', () => {
       const st = window.Player.getState();
@@ -3458,6 +3466,17 @@
     bindSettingsExtra();
     bindHomeModuleSettings();
     applyHomeModules();
+    const qSave = $('queueSave');
+    if (qSave) qSave.addEventListener('click', () => {
+      const tracks = window.Player.getQueue ? window.Player.getQueue() : [];
+      if (!tracks.length) { toast('播放列表为空，没有可保存的歌曲'); return; }
+      openPlModal((pl) => {
+        pl.tracks = tracks.slice();
+        pl.cover = (tracks.find((t) => t.pic || t.cover) || {}).pic || '';
+        savePlaylists(); renderPlaylistNav(); renderLibrary();
+        toast(`已保存 ${tracks.length} 首到「${pl.name}」`);
+      });
+    });
     bindShortcuts();
 
     // ── 播放栏「更多操作」三点菜单 ──

@@ -818,6 +818,28 @@ html[data-player-layout="minimal"] .vinyl { box-shadow: none; background: var(--
 html[data-player-layout="minimal"] .vinyl-viz { display: none; }
 html[data-player-layout="minimal"] .fp-bottom { background: transparent; border-top-color: transparent; }
 html[data-player-layout="minimal"] .fp-tabs { border-bottom-color: transparent; }
+html[data-player-layout="film"] .full::before,
+html[data-player-layout="film"] .full::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 7vh; z-index: 1;
+  background: #050608; pointer-events: none;
+}
+html[data-player-layout="film"] .full::before { top: 0; }
+html[data-player-layout="film"] .full::after { bottom: 0; }
+html[data-player-layout="film"] .vinyl { border-radius: 8%; animation: none; }
+html[data-player-layout="film"] .vinyl-groove,
+html[data-player-layout="film"] .vinyl-hole { display: none; }
+html[data-player-layout="film"] .vinyl-label { width: 84%; height: 84%; border-radius: 6px; }
+html[data-player-layout="neon"] .fp-bg { opacity: .45; filter: blur(72px) saturate(180%); }
+html[data-player-layout="neon"] .vinyl {
+  background: radial-gradient(circle, #171a2b 0%, #0c1020 55%, #050710 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 60px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+html[data-player-layout="neon"] .vinyl-label { box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 45%, transparent); }
+html[data-player-layout="neon"] .fp-lyric p.active {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+  transform: translateX(4px);
+}
+.fp-lyric p.active { transition: color .2s, transform .24s ease, font-size .2s, text-shadow .24s; }
 
 /* 全屏播放页底部控制栏：歌名+歌手 / 居中播放器 / 右侧功能
    三栏 grid：中栏恒为屏幕正中（左右内容宽度不对称也居中） */
