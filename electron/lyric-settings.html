@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #ffb1e1; --accent2: #a8c8ff; --glow: rgba(168,117,255,.42);
+    --bg: #171a22; --panel: #20242e; --line: rgba(255,255,255,.10);
+    --text: #eef1f8; --muted: rgba(238,241,248,.62);
+  }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column;
+  }
+  body[data-theme="nebula"] { --accent:#ffb1e1; --accent2:#a8c8ff; --glow:rgba(168,117,255,.42); }
+  body[data-theme="cyan"]   { --accent:#8ff7e6; --accent2:#63a8ff; --glow:rgba(64,220,220,.36); --bg:#101c22; }
+  body[data-theme="lava"]   { --accent:#ffd08a; --accent2:#ff7a59; --glow:rgba(255,122,89,.38); --bg:#22120e; }
+  body[data-theme="aurora"] { --accent:#c9a7ff; --accent2:#7ef0c8; --glow:rgba(120,180,255,.40); --bg:#14152a; }
+  body[data-theme="gold"]   { --accent:#ffe0a3; --accent2:#d4a24c; --glow:rgba(212,162,76,.38); --bg:#1c1810; }
+  body[data-theme="ink"]    { --accent:#f2efe6; --accent2:#b9c0c9; --glow:rgba(255,255,255,.18); --bg:#101216; }
+  body[data-theme="mint"]   { --accent:#b7ffd8; --accent2:#79d6a8; --glow:rgba(90,220,150,.34); --bg:#0c1e18; }
+  body[data-theme="pearl"]  { --accent:#5b7cc9; --accent2:#a06fc9; --glow:rgba(90,110,180,.24); --bg:#eef2f8; --panel:#ffffff; --line:rgba(20,30,50,.10); --text:#202634; --muted:rgba(32,38,52,.60); }
+
+  header {
+    -webkit-app-region: drag;
+    height: 46px; flex: 0 0 46px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(90deg, rgba(255,255,255,.03), transparent);
+  }
+  header h1 { font-size: 14px; font-weight: 700; letter-spacing: .3px; }
+  header .sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  header button {
+    -webkit-app-region: no-drag;
+    width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 8px;
+    background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
+  }
+  header button:hover { color: var(--accent); border-color: var(--accent); }
+
+  main { flex: 1; overflow-y: auto; padding: 14px; }
+  main::-webkit-scrollbar { width: 6px; }
+  main::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  section { margin-bottom: 16px; }
+  h2 { font-size: 11px; color: var(--muted); letter-spacing: 1.2px; margin-bottom: 9px; text-transform: uppercase; }
+
+  .preview {
+    border: 1px solid var(--line); border-radius: 14px; padding: 18px 12px;
+    text-align: center; background: rgba(255,255,255,.02); margin-bottom: 16px;
+  }
+  .pv-main {
+    font-size: calc(24px * var(--scale, 1)); font-weight: 750;
+    background: linear-gradient(100deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 10px var(--glow));
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pv-sub { font-size: calc(13px * var(--scale, 1)); color: var(--muted); margin-top: 5px; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .theme-btn {
+    border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03);
+    color: var(--text); font-size: 11px; padding: 9px 2px; cursor: pointer;
+    transition: border-color .14s, transform .14s, background .14s;
+  }
+  .theme-btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+  .theme-btn.active { border-color: var(--accent); background: rgba(255,255,255,.08); color: var(--accent); }
+  .dot { display: block; width: 12px; height: 12px; border-radius: 50%; margin: 0 auto 5px; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 0 8px var(--glow); }
+
+  .row { display: flex; gap: 7px; flex-wrap: wrap; }
+  .chip {
+    flex: 1; min-width: 68px; border: 1px solid var(--line); border-radius: 9px;
+    background: rgba(255,255,255,.03); color: var(--text); font-size: 12px;
+    padding: 8px 4px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,.08); }
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px;
+    background: rgba(255,255,255,.02); margin-bottom: 7px; font-size: 12px; cursor: pointer;
+  }
+  .switch {
+    width: 34px; height: 18px; border-radius: 10px; background: rgba(255,255,255,.14);
+    position: relative; transition: background .16s;
+  }
+  .switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+    border-radius: 50%; background: #fff; transition: transform .16s;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { transform: translateX(16px); }
+  .actions { display: flex; gap: 7px; }
+  .actions button {
+    flex: 1; border: 1px solid var(--line); border-radius: 9px; padding: 9px;
+    background: rgba(255,255,255,.03); color: var(--text); font-size: 11px; cursor: pointer;
+  }
+  .actions button:hover { border-color: var(--accent); color: var(--accent); }
+  .hint { font-size: 10px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <header>
+    <div><h1>桌面歌词设置</h1><div class="sub">独立面板 · 不遮挡歌词</div></div>
+    <button id="close" title="关闭">✕</button>
+  </header>
+  <main>
+    <div class="preview"><div class="pv-main" id="pvMain">怎么还不清醒</div><div class="pv-sub" id="pvSub">（怎么还不清醒）</div></div>
+
+    <section>
+      <h2>歌词主题</h2>
+      <div class="grid" id="themes"></div>
+    </section>
+
+    <section>
+      <h2>歌词背景</h2>
+      <div class="row" id="bgs"></div>
+    </section>
+
+    <section>
+      <h2>字体大小</h2>
+      <div class="row" id="scales"></div>
+    </section>
+
+    <section>
+      <h2>排版与显示</h2>
+      <div class="row" id="aligns"></div>
+      <div class="switch-row" data-k="alwaysTop"><span>总在最前</span><span class="switch"></span></div>
+      <div class="switch-row" data-k="single"><span>单行模式</span><span class="switch"></span></div>
+      <div class="switch-row" data-k="vertical"><span>竖排歌词</span><span class="switch"></span></div>
+      <div class="switch-row" data-k="transOn"><span>显示翻译 / 下一句</span><span class="switch"></span></div>
+    </section>
+
+    <section>
+      <h2>快捷操作</h2>
+      <div class="actions">
+        <button id="resetPos">重置位置</button>
+        <button id="restoreDefault">恢复默认</button>
+      </div>
+      <div class="hint">设置即时生效并自动保存。歌词可拖到屏幕顶部；设置窗口不会随歌词移动，也不会挤压歌词。</div>
+    </section>
+  </main>
+  <script>
+    const { ipcRenderer } = require('electron');
+    const THEMES = [
+      ['星云幻彩','nebula'], ['霓虹青','cyan'], ['熔岩橙','lava'], ['极光紫','aurora'],
+      ['黑金','gold'], ['水墨','ink'], ['薄荷','mint'], ['纯净白','pearl'],
+    ];
+    const BGS = ['无', '微光', '磨砂'];
+    const SCALES = ['小', '标准', '大', '超大'];
+    const ALIGNS = ['左对齐', '居中', '右对齐'];
+    const SCALE_VALUE = { '小': .84, '标准': 1, '大': 1.18, '超大': 1.4 };
+    let cfg = {};
+
+    function renderChips(el, values, key, current) {
+      el.innerHTML = values.map(v => `<button class="chip ${current === v ? 'active' : ''}" data-k="${key}" data-v="${v}">${v}</button>`).join('');
+    }
+    function apply() {
+      const slug = (THEMES.find(t => t[0] === cfg.dark) || THEMES[0])[1];
+      document.body.dataset.theme = slug;
+      document.documentElement.style.setProperty('--scale', String(SCALE_VALUE[cfg.fontScale || '标准'] || 1));
+      document.querySelectorAll('#themes .theme-btn').forEach(b => b.classList.toggle('active', b.dataset.v === cfg.dark));
+      renderChips(document.getElementById('bgs'), BGS, 'bg', cfg.bg || '无');
+      renderChips(document.getElementById('scales'), SCALES, 'fontScale', cfg.fontScale || '标准');
+      renderChips(document.getElementById('aligns'), ALIGNS, 'align', cfg.align || '居中');
+      document.querySelectorAll('.switch-row').forEach(row => {
+        const k = row.dataset.k;
+        const on = k === 'transOn' ? (cfg.showTrans || '跟随主界面') !== '不显示' : !!cfg[k];
+        row.querySelector('.switch').classList.toggle('on', on);
+      });
+    }
+    function renderThemes() {
+      document.getElementById('themes').innerHTML = THEMES.map(([name]) =>
+        `<button class="theme-btn" data-k="dark" data-v="${name}"><span class="dot"></span>${name}</button>`).join('');
+    }
+    async function set(patch) {
+      cfg = { ...cfg, ...patch };
+      apply();
+      await ipcRenderer.invoke('lyricSettings:set', cfg);
+    }
+
+    document.getElementById('themes').addEventListener('click', e => {
+      const b = e.target.closest('.theme-btn'); if (b) set({ dark: b.dataset.v });
+    });
+    ['bgs','scales','aligns'].forEach(id => {
+      document.getElementById(id).addEventListener('click', e => {
+        const b = e.target.closest('.chip'); if (b) set({ [b.dataset.k]: b.dataset.v });
+      });
+    });
+    document.querySelectorAll('.switch-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const k = row.dataset.k;
+        if (k === 'transOn') set({ showTrans: (cfg.showTrans || '跟随主界面') === '不显示' ? '跟随主界面' : '不显示' });
+        else set({ [k]: !cfg[k] });
+      });
+    });
+    document.getElementById('resetPos').addEventListener('click', () => ipcRenderer.send('lyric:resetBounds'));
+    document.getElementById('restoreDefault').addEventListener('click', () => set({
+      dark: '星云幻彩', bg: '无', fontScale: '标准', align: '居中',
+      alwaysTop: true, single: false, vertical: false, showTrans: '跟随主界面',
+    }));
+    document.getElementById('close').addEventListener('click', () => ipcRenderer.send('lyricSettings:close'));
+
+    ipcRenderer.on('lyricSettings:config', (e, c) => { cfg = c || {}; apply(); });
+    renderThemes(); apply();
+    ipcRenderer.invoke('lyricSettings:get').then(r => { if (r && r.ok) { cfg = r.cfg || {}; apply(); } });
+  </script>
+</body>
+</html>

@@ -108,6 +108,7 @@ if (!process.env.UZZ_NO_AUTOPLAY_FLAG) {
 let backend;
 let win;
 let lyricWin = null;
+let lyricSettingsWin = null;
 let lastLyricStyle = null; // 缓存最近一次歌词样式，歌词窗重建后自动应用
 let lastLyricPayload = {};
 let lyricLocked = loadCfg().lyricLocked === true;
@@ -119,6 +120,10 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.9.0': [
+    '桌面歌词设置改为独立窗口，菜单不再超出屏幕或挤压歌词',
+    '歌词主题、背景、字号与排版统一为一套配置，切换即时生效',
+  ],
   '3.8.7': [
     '修复桌面歌词无法拖到屏幕顶部的问题',
     '重做桌面歌词视觉，新增 8 套主题、3 种歌词背景与字号档位',
@@ -474,7 +479,10 @@ function createLyricWin() {
     lyricWin.webContents.send('lyric:locked', lyricLocked);
     lyricWin.webContents.send('lyric:payload', lastLyricPayload);
   });
-  lyricWin.on('closed', () => { lyricWin = null; lyricHitTest = null; });
+  lyricWin.on('closed', () => {
+    lyricWin = null; lyricHitTest = null;
+    if (lyricSettingsWin && !lyricSettingsWin.isDestroyed()) lyricSettingsWin.close();
+  });
   let moveTimer;
   const saveBounds = () => {
     clearTimeout(moveTimer);
@@ -490,6 +498,46 @@ function createLyricWin() {
   lyricIgnoring = lyricLocked;
   try { lyricWin.setIgnoreMouseEvents(lyricLocked, { forward: true }); } catch (e) { /* 忽略 */ }
   return lyricWin;
+}
+
+// 独立歌词设置窗口：不占用歌词窗高度，自动贴合歌词窗并避让屏幕边缘。
+function openLyricSettings() {
+  if (lyricSettingsWin && !lyricSettingsWin.isDestroyed()) {
+    lyricSettingsWin.focus();
+    return lyricSettingsWin;
+  }
+  const W = 372, H = 560;
+  const base = lyricWin && !lyricWin.isDestroyed() ? lyricWin.getBounds() : null;
+  let area;
+  try { area = base ? screen.getDisplayMatching(base).workArea : screen.getPrimaryDisplay().workArea; }
+  catch (e) { area = screen.getPrimaryDisplay().workArea; }
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+  let x, y;
+  if (base) {
+    const gap = 12;
+    if (base.x + base.width + gap + W <= area.x + area.width) x = base.x + base.width + gap;
+    else if (base.x - gap - W >= area.x) x = base.x - gap - W;
+    else x = area.x + Math.round((area.width - W) / 2);
+    y = clamp(base.y, area.y + 8, area.y + area.height - H - 8);
+  } else {
+    x = area.x + Math.round((area.width - W) / 2);
+    y = area.y + Math.round((area.height - H) / 2);
+  }
+  lyricSettingsWin = new BrowserWindow({
+    width: W, height: H, x, y,
+    frame: false, transparent: false, resizable: false,
+    minimizable: false, maximizable: false, skipTaskbar: true, alwaysOnTop: true,
+    backgroundColor: '#171a22',
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  });
+  lyricSettingsWin.setAlwaysOnTop(true, 'floating');
+  lyricSettingsWin.loadFile(path.join(__dirname, 'lyric-settings.html'));
+  lyricSettingsWin.webContents.on('did-finish-load', () => {
+    if (!lyricSettingsWin || lyricSettingsWin.isDestroyed()) return;
+    lyricSettingsWin.webContents.send('lyricSettings:config', loadCfg().dlCfg || {});
+  });
+  lyricSettingsWin.on('closed', () => { lyricSettingsWin = null; });
+  return lyricSettingsWin;
 }
 
 // 渲染进程上报的命中测试：鼠标是否在可交互元素上
@@ -1923,6 +1971,8 @@ public class Audio {
       const c = loadCfg();
       c.dlCfg = cfg;
       saveCfg(c);
+      // 同步到歌词窗：设置页与独立设置窗改配置后，歌词实时生效
+      if (lyricWin && !lyricWin.isDestroyed()) lyricWin.webContents.send('lyric:config', cfg);
       const colors = { '纯色·绿': '#1ecd8a', '纯色·粉': '#ff8fc7', '纯色·金': '#ffc861', '纯色·蓝': '#7ab6ff' };
       lastLyricStyle = { ...lastLyricStyle, layout: cfg.single ? 'single' : 'double',
         align: ({ '左对齐': 'left', '右对齐': 'right' })[cfg.align] || 'center',
@@ -1933,10 +1983,29 @@ public class Audio {
     } catch (e2) { /* 忽略 */ }
   });
   ipcMain.on('lyric:openSettings', () => {
+    openLyricSettings();
     if (win) win.webContents.send('lyric:openSettings');
   });
-  // 说明：设置菜单改为在歌词窗内就地展开（不改变窗口高度），
-  // 因此不再需要 lyric:menu 加高窗口的 IPC —— 这是"点设置就跳动"的根因。
+  // 独立设置窗口 IPC：不占用歌词窗空间，菜单永不超出屏幕
+  ipcMain.handle('lyricSettings:get', () => ({ ok: true, cfg: loadCfg().dlCfg || {} }));
+  ipcMain.handle('lyricSettings:set', (e, cfg) => {
+    if (!cfg) return { ok: false, msg: '配置为空' };
+    try {
+      const c = loadCfg(); c.dlCfg = cfg; saveCfg(c);
+      if (lyricWin && !lyricWin.isDestroyed()) lyricWin.webContents.send('lyric:config', cfg);
+      lastLyricStyle = { ...lastLyricStyle,
+        theme: cfg.dark || '星云幻彩', fontScale: cfg.fontScale || '标准', bg: cfg.bg || '无',
+        layout: cfg.single ? 'single' : 'double',
+        align: ({ '左对齐': 'left', '右对齐': 'right' })[cfg.align] || 'center',
+        topmost: cfg.alwaysTop !== false };
+      if (win && !win.isDestroyed()) win.webContents.send('lyric:configChanged', { ...lastLyricStyle, trans: cfg.showTrans !== '不显示' });
+      return { ok: true };
+    } catch (err) { return { ok: false, msg: (err && err.message) || String(err) }; }
+  });
+  ipcMain.on('lyricSettings:close', () => {
+    if (lyricSettingsWin && !lyricSettingsWin.isDestroyed()) lyricSettingsWin.close();
+  });
+  // 说明：歌词内嵌菜单已改为独立设置窗口，避免窗口越界时菜单被屏幕裁切。
   ipcMain.on('lyric:showMain', () => showWindow());
 }
 

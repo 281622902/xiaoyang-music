@@ -328,9 +328,9 @@
     });
     const bSet = document.getElementById('bSet');
     bSet.addEventListener('click', (e) => {
-      e.stopPropagation(); subBack = null; renderMenu();
-      menu.classList.toggle('open');
-      document.body.classList.toggle('menu-open', menu.classList.contains('open'));
+      e.stopPropagation();
+      // 独立设置窗：不再在歌词窗内展开菜单，避免歌词靠近屏幕顶部时被裁切
+      send('lyric:openSettings');
     });
     document.addEventListener('click', (e) => {
       if (!menu.classList.contains('open')) return;
