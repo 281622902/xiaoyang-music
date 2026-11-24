@@ -14,11 +14,12 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix server
       - run: npm ci --prefix electron
-      - run: npm run test:release
+      # test:ui 需要 chromium；必须先装浏览器再跑 test:release，否则 UI 冒烟必挂
       - name: Install UI test browser (non-blocking)
         continue-on-error: true
         timeout-minutes: 5
         run: npm exec --prefix electron -- playwright install chromium
+      - run: npm run test:release
       - name: Player UI regression (non-blocking)
         continue-on-error: true
         timeout-minutes: 5
