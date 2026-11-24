@@ -33,3 +33,6 @@ server/data/
 
 # WorkBuddy 工作区数据（不入库）
 .workbuddy/
+
+# UI 冒烟测试截图（本地产物，不入库）
+test-artifacts/
