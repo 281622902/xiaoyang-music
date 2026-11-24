@@ -15,6 +15,10 @@
     vocal: [-2, -1, 0, 3, 5, 5, 4, 2, 0, -1],
     bass: [6, 6, 5, 3, 1, 0, 0, 0, 0, 0],
     classical: [0, 0, 0, 0, 0, 0, -1, -1, -2, -3],
+    headphone: [2, 2, 0, -1, -1, 0, 2, 3, 3, 2],
+    speaker: [4, 3, 1, 0, 0, 1, 2, 3, 4, 4],
+    car: [7, 5, 3, 1, 0, 0, 1, 2, 3, 3],
+    night: [2, 1, 0, -2, -3, -3, -2, 0, 1, 1],
   };
 
   let ctx = null, srcNode = null, filters = [], postGain = null, crossGain = null, analyser = null;

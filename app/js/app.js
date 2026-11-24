@@ -2912,7 +2912,7 @@
   /* ============================================================
    * 音效 / 播放增强面板绑定
    * ============================================================ */
-  let sleepTimerId = null;
+  let sleepTimerId = null, sleepEndMode = '', sleepRemaining = 0;
   function bindFxPanel() {
     const audio = document.getElementById('audio');
     const panel = $('fxPanel');
@@ -3000,11 +3000,26 @@
     const sleepSel = $('sleepTimer');
     if (sleepSel) sleepSel.addEventListener('change', () => {
       if (sleepTimerId) { clearTimeout(sleepTimerId); sleepTimerId = null; }
-      const m = parseInt(sleepSel.value, 10);
+      sleepEndMode = ''; sleepRemaining = 0;
+      const raw = sleepSel.value;
+      const m = parseInt(raw, 10);
       if (m > 0) {
         sleepTimerId = setTimeout(() => { if (audio) audio.pause(); toast('睡眠定时：已停止播放'); }, m * 60 * 1000);
         toast(`将在 ${m} 分钟后停止播放`);
+      } else if (raw === 'song') {
+        sleepEndMode = 'song'; toast('将在当前歌曲结束后停止播放');
+      } else if (raw.startsWith('tracks:')) {
+        sleepEndMode = 'tracks'; sleepRemaining = parseInt(raw.split(':')[1], 10) || 0;
+        toast(`将在 ${sleepRemaining} 首歌后停止播放`);
       }
+    });
+    // 按曲目数 / 本首结束：在播放器的切歌逻辑后执行，暂停的是下一首
+    audio?.addEventListener('ended', () => {
+      if (!sleepEndMode) return;
+      if (sleepEndMode === 'song') { sleepEndMode = ''; if ($('sleepTimer')) $('sleepTimer').value = '0'; }
+      else if (--sleepRemaining <= 0) { sleepEndMode = ''; sleepRemaining = 0; if ($('sleepTimer')) $('sleepTimer').value = '0'; }
+      else return;
+      setTimeout(() => { audio.pause(); toast('睡眠定时：已停止播放'); }, 0);
     });
 
     // 交叉淡入淡出
