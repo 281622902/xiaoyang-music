@@ -136,7 +136,6 @@
       document.querySelector('meta[name=theme-color]').setAttribute('content', skin.pal['--bg-0'] || (mode === 'light' ? '#f4f5f7' : '#12141a'));
     }
     applyPlayerLayout();
-    applyHomeModules();
   }
   // 播放页布局：与整包皮肤叠加，只改结构不改配色
   function applyPlayerLayout() {
@@ -2997,28 +2996,43 @@
     }, 300);
 
     // 睡眠定时
-    const sleepSel = $('sleepTimer');
-    if (sleepSel) sleepSel.addEventListener('change', () => {
+    const sleepSel = $('sleepTimer'), sleepStatus = $('sleepTimerStatus');
+    const sleepLabel = (raw) => {
+      if (raw === 'song') return '本首结束停止';
+      if (raw.startsWith('tracks:')) return `再播 ${raw.split(':')[1]} 首`;
+      const m = parseInt(raw, 10);
+      return m > 0 ? `${m} 分钟后停止` : '';
+    };
+    const applySleep = (raw, announce = true) => {
       if (sleepTimerId) { clearTimeout(sleepTimerId); sleepTimerId = null; }
       sleepEndMode = ''; sleepRemaining = 0;
-      const raw = sleepSel.value;
+      localStorage.setItem('uzz.sleep.value', raw);
       const m = parseInt(raw, 10);
       if (m > 0) {
         sleepTimerId = setTimeout(() => { if (audio) audio.pause(); toast('睡眠定时：已停止播放'); }, m * 60 * 1000);
-        toast(`将在 ${m} 分钟后停止播放`);
+        if (announce) toast(`将在 ${m} 分钟后停止播放`);
       } else if (raw === 'song') {
-        sleepEndMode = 'song'; toast('将在当前歌曲结束后停止播放');
+        sleepEndMode = 'song'; if (announce) toast('将在当前歌曲结束后停止播放');
       } else if (raw.startsWith('tracks:')) {
         sleepEndMode = 'tracks'; sleepRemaining = parseInt(raw.split(':')[1], 10) || 0;
-        toast(`将在 ${sleepRemaining} 首歌后停止播放`);
+        if (announce) toast(`将在 ${sleepRemaining} 首歌后停止播放`);
       }
-    });
+      if (sleepStatus) sleepStatus.textContent = sleepLabel(raw);
+    };
+    if (sleepSel) {
+      sleepSel.value = localStorage.getItem('uzz.sleep.value') || '0';
+      applySleep(sleepSel.value, false);
+      sleepSel.addEventListener('change', () => applySleep(sleepSel.value, true));
+    }
     // 按曲目数 / 本首结束：在播放器的切歌逻辑后执行，暂停的是下一首
     audio?.addEventListener('ended', () => {
       if (!sleepEndMode) return;
-      if (sleepEndMode === 'song') { sleepEndMode = ''; if ($('sleepTimer')) $('sleepTimer').value = '0'; }
-      else if (--sleepRemaining <= 0) { sleepEndMode = ''; sleepRemaining = 0; if ($('sleepTimer')) $('sleepTimer').value = '0'; }
-      else return;
+      if (sleepEndMode === 'song') { sleepEndMode = ''; }
+      else if (--sleepRemaining <= 0) { sleepEndMode = ''; sleepRemaining = 0; }
+      else { if (sleepStatus) sleepStatus.textContent = `再播 ${sleepRemaining} 首`; return; }
+      if (sleepSel) sleepSel.value = '0';
+      localStorage.setItem('uzz.sleep.value', '0');
+      if (sleepStatus) sleepStatus.textContent = '';
       setTimeout(() => { audio.pause(); toast('睡眠定时：已停止播放'); }, 0);
     });
 
@@ -3443,6 +3457,7 @@
     bindFullTabs();
     bindSettingsExtra();
     bindHomeModuleSettings();
+    applyHomeModules();
     bindShortcuts();
 
     // ── 播放栏「更多操作」三点菜单 ──
@@ -3645,7 +3660,7 @@
     if(localStorage.getItem('xy.design.v3')!=='1') {
       localStorage.setItem('uzz.theme.skin',''); localStorage.removeItem('uzz.theme.accent'); localStorage.setItem('xy.design.v3','1');
     }
-    document.addEventListener('xy:libraryRestore',()=>{playlists=loadJSON('uzz.playlists',[]);Player.reloadLibrary();renderPlaylistNav();renderLibrary();applyTheme();});
+    document.addEventListener('xy:libraryRestore',()=>{playlists=loadJSON('uzz.playlists',[]);Player.reloadLibrary();renderPlaylistNav();renderLibrary();applyTheme();applyHomeModules();});
     applyTheme();
     Player.init();
     bind();

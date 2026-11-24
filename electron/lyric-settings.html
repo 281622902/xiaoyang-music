@@ -142,16 +142,15 @@
       <div class="hint">设置即时生效并自动保存。歌词可拖到屏幕顶部；设置窗口不会随歌词移动，也不会挤压歌词。</div>
     </section>
   </main>
+  <script src="lyric-themes.js"></script>
   <script>
     const { ipcRenderer } = require('electron');
-    const THEMES = [
-      ['星云幻彩','nebula'], ['霓虹青','cyan'], ['熔岩橙','lava'], ['极光紫','aurora'],
-      ['黑金','gold'], ['水墨','ink'], ['薄荷','mint'], ['纯净白','pearl'],
-    ];
+    const T = window.LyricThemes;
+    const THEMES = T.THEME_NAMES.map((name) => [name, T.THEME_MAP[name]]);
     const BGS = ['无', '微光', '磨砂'];
-    const SCALES = ['小', '标准', '大', '超大'];
+    const SCALES = Object.keys(T.FONT_SCALES);
     const ALIGNS = ['左对齐', '居中', '右对齐'];
-    const SCALE_VALUE = { '小': .84, '标准': 1, '大': 1.18, '超大': 1.4 };
+    const SCALE_VALUE = T.FONT_SCALES;
     let cfg = {};
 
     function renderChips(el, values, key, current) {

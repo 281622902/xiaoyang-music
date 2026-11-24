@@ -804,7 +804,8 @@ html[data-player-layout="cover"] .vinyl {
 html[data-player-layout="cover"] .vinyl-groove,
 html[data-player-layout="cover"] .vinyl-hole { display: none; }
 html[data-player-layout="cover"] .vinyl-label {
-  width: 78%; height: 78%; border-radius: 18px; inset: 11%;
+  position: absolute; top: 11%; left: 11%;
+  width: 78%; height: 78%; border-radius: 18px;
 }
 html[data-player-layout="cover"] .vinyl-viz { display: none; }
 html[data-player-layout="focus"] .fp-vinyl-wrap { display: none; }

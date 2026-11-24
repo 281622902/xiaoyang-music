@@ -193,6 +193,7 @@
     <div id="cur"></div>
     <div id="sub"></div>
   </div>
+  <script src="lyric-themes.js"></script>
   <script>
     const { ipcRenderer, clipboard } = require('electron');
     const box = document.getElementById('lyricBox');
@@ -205,13 +206,7 @@
     const menu = document.getElementById('menu');
     const send = (ch, v) => ipcRenderer.send(ch, v);
 
-    const THEME_MAP = {
-      '星云幻彩': 'nebula', '霓虹青': 'cyan', '熔岩橙': 'lava', '极光紫': 'aurora',
-      '黑金': 'gold', '水墨': 'ink', '薄荷': 'mint', '纯净白': 'pearl',
-      '默认渐变': 'nebula', '纯色·绿': 'mint', '纯色·粉': 'nebula', '纯色·金': 'gold', '纯色·蓝': 'cyan',
-    };
-    const COLOR_THEME = { green: '薄荷', pink: '星云幻彩', gold: '黑金', blue: '霓虹青', gradient: '星云幻彩' };
-    const FONT_SCALES = { '小': .84, '标准': 1, '大': 1.18, '超大': 1.4 };
+    const { THEME_MAP, COLOR_THEME, FONT_SCALES } = window.LyricThemes;
     let locked = localStorage.getItem('uzz.lyricLock') === '1';
     let baseSize = 28;
 

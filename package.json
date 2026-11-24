@@ -1,6 +1,6 @@
 {
   "name": "uzz-music-player",
-  "version": "3.9.4",
+  "version": "3.10.0",
   "description": "xymusic：多音源音乐播放器与本地音乐库",
   "author": {
     "name": "小杨"
@@ -11,7 +11,8 @@
   },
   "scripts": {
     "dev": "node server/index.js",
-    "build:desktop": "npm ci --prefix server && npm ci --prefix electron && npm run dist --prefix electron",
+    "check:assets": "node scripts/check-electron-assets.cjs",
+    "build:desktop": "npm run check:assets && npm ci --prefix server && npm ci --prefix electron && npm run dist --prefix electron",
     "release:desktop": "npm run build:desktop && node tools/publish-lan.js",
     "publish:lan": "node tools/publish-lan.js",
     "cap:init": "npx cap init",
@@ -24,7 +25,7 @@
     "test:upgrade": "node --test test/upgrade.test.cjs",
     "test:studio": "node --test test/studio.test.cjs",
     "test:cloud": "node test/cloud-functions.cjs && node test/cloud-integration.cjs",
-    "test:release": "node --test test/release.test.cjs",
+    "test:release": "node --test test/release.test.cjs && npm run check:assets",
     "release:sync": "node scripts/update-supabase.js",
     "prepare:android": "node scripts/prepare-android.cjs",
     "test:android": "node test/android-regression.cjs",
