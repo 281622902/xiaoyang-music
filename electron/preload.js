@@ -109,6 +109,11 @@ contextBridge.exposeInMainWorld('uzzBridge', {
   scanLocalPackages: () => ipcRenderer.invoke('upd:scanLocal'),
   installLocalPath: (p) => ipcRenderer.invoke('upd:installPath', p),
   onUpdateProgress: (cb) => ipcRenderer.on('upd:progress', (e, p) => cb(p)),
+  // 启动时 GitHub 自动检测到新版本（主进程 → 渲染进程）
+  onGithubUpdate: (cb) => ipcRenderer.on('upd:githubStatus', (e, p) => cb(p)),
+  // 音乐桌面独立窗口
+  openMusicDesktop: () => ipcRenderer.send('desktopMusic:open'),
+  pushMusicDesktop: (p) => ipcRenderer.send('desktopMusic:payload', p || {}),
   // 升级后首次启动：更新要点弹窗
   onWhatsNew: (cb) => ipcRenderer.on('upd:whatsnew', (e, d) => cb(d)),
   // 本机升级服务器

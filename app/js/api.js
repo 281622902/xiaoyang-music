@@ -441,7 +441,13 @@
     return (r.tracks || []).map(normalizeTrack);
   }
 
+  async function getPodcastFeed(url) {
+    const r = await request('/api/podcast/feed', { url }, 15000);
+    if (!r || r.code !== 200) throw new Error((r && r.msg) || '解析播客失败');
+    return { info: r.info || {}, episodes: r.episodes || [] };
+  }
+
   global.UzzApi = { search, getSong, getUrl, getLyric, getLyricEx, getWiki, getSimi, getApiBase, getVendor, ping, downloadUrl, normalizeTrack, picProxy, suggest, getPlaylist, getPlaylists, getArtistTop, getAlbum,
-    localScan, localLibrary, localLyric, localAddFile, localSetProgress, localUpdateMeta, localRemove, localDuplicates, localCues, localSmartPlaylists, getCharts, resolveImport,
+    localScan, localLibrary, localLyric, localAddFile, localSetProgress, localUpdateMeta, localRemove, localDuplicates, localCues, localSmartPlaylists, getCharts, getPodcastFeed, resolveImport,
     getCaptcha, verifyCaptcha };
 })(window);

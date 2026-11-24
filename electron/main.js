@@ -109,6 +109,7 @@ let backend;
 let win;
 let lyricWin = null;
 let lyricSettingsWin = null;
+let musicDesktopWin = null;
 let lastLyricStyle = null; // 缓存最近一次歌词样式，歌词窗重建后自动应用
 let lastLyricPayload = {};
 let lyricLocked = loadCfg().lyricLocked === true;
@@ -120,6 +121,11 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.11.0': [
+    '新增音乐桌面独立小窗、播客 RSS 订阅与关注音乐人功能',
+    '新增本地图片皮肤、音乐网盘设置、新 Logo 与扩展托盘菜单',
+    '修复输出设备为空、音质切换像切歌、Mini 面板无响应、启动更新不弹窗、榜单无图片等问题',
+  ],
   '3.10.6': [
     '新增 UI 冒烟门禁与截图留档，防止关键界面漏测',
     'v3.10 大升级收尾与稳定性复核',
@@ -585,6 +591,24 @@ function openLyricSettings() {
   return lyricSettingsWin;
 }
 
+// 音乐桌面：独立桌面小窗（大封面 + 播放控制），与换肤完全分离
+function openMusicDesktop() {
+  if (musicDesktopWin && !musicDesktopWin.isDestroyed()) { musicDesktopWin.focus(); return musicDesktopWin; }
+  const area = screen.getPrimaryDisplay().workArea;
+  musicDesktopWin = new BrowserWindow({
+    width: 460, height: 300,
+    x: area.x + area.width - 480, y: area.y + 80,
+    frame: false, transparent: true, resizable: false,
+    alwaysOnTop: true, skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  });
+  musicDesktopWin.setAlwaysOnTop(true, 'floating');
+  musicDesktopWin.loadFile(path.join(__dirname, 'desktop-music.html'));
+  musicDesktopWin.on('closed', () => { musicDesktopWin = null; });
+  return musicDesktopWin;
+}
+
 // 渲染进程上报的命中测试：鼠标是否在可交互元素上
 function setLyricHitTest(fn) { lyricHitTest = fn; }
 function lyricMouseAt(x, y) {
@@ -860,9 +884,19 @@ async function createTray() {
     return null;
   }
   tray.setToolTip('小杨音乐');
+  const traySend = (action) => { if (win && !win.isDestroyed()) win.webContents.send('global:' + action); };
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '显示主界面', click: () => showWindow() },
     { type: 'separator' },
+    { label: '播放 / 暂停', click: () => traySend('toggle') },
+    { label: '上一首', click: () => traySend('prev') },
+    { label: '下一首', click: () => traySend('next') },
+    { type: 'separator' },
+    { label: '打开音乐桌面', click: () => openMusicDesktop() },
+    { label: '显示 / 隐藏桌面歌词', click: () => traySend('lyric') },
+    { label: 'Mini 模式', click: () => traySend('mini') },
+    { type: 'separator' },
+    { label: '检查更新', click: () => { try { autoUpdater && autoUpdater.checkForUpdates(); } catch (e) { /* 忽略 */ } } },
     { label: '退出小杨音乐', click: () => quitApp() },
   ]));
   tray.on('click', () => showWindow());
@@ -2004,6 +2038,19 @@ public class Audio {
       width: b.width, height: b.height,
     }, false);
     try { const c = loadCfg(); c.lyricBounds = lyricWin.getBounds(); saveCfg(c); } catch (e) { /* 忽略 */ }
+  });
+
+  // 音乐桌面独立窗口 IPC
+  ipcMain.on('desktopMusic:open', () => openMusicDesktop());
+  ipcMain.on('desktopMusic:close', () => {
+    if (musicDesktopWin && !musicDesktopWin.isDestroyed()) musicDesktopWin.close();
+  });
+  ipcMain.on('desktopMusic:payload', (e, payload) => {
+    if (musicDesktopWin && !musicDesktopWin.isDestroyed()) musicDesktopWin.webContents.send('desktopMusic:payload', payload);
+  });
+  ipcMain.on('desktopMusic:ctrl', (e, action) => {
+    if (!win || win.isDestroyed()) return;
+    if (['toggle', 'next', 'prev', 'lyric', 'mini'].includes(action)) win.webContents.send('global:' + action);
   });
 
   ipcMain.on('lyric:offset', (e, delta) => {

@@ -1107,21 +1107,21 @@
   async function reloadQuality(level) {
     const t = STATE.current;
     if (!t) { toast('还没有播放内容，无法切换音质'); return; }
-    const seq = STATE.playSeq;   // 记录当前播放令牌：期间用户切了歌就不再重设 src
-    t.quality = level;
+    const seq = STATE.playSeq;   // 期间用户切歌则丢弃结果
+    const wasPlaying = audio && !audio.paused;
+    const t0 = audio ? audio.currentTime : 0;
+    const cueEnd = STATE.cueEnd;
     toast('切换音质：' + (QUALITY_LABEL[level] || level));
     try {
-      const full = await UzzApi.getSong(t, undefined, playbackRequest.signal);
-      if (!seqAlive(seq) || STATE.current !== t) return;   // 已切歌 → 丢弃
+      // 只临时解析新地址，不改写曲目持久字段、不派发曲目变化事件，避免看起来像切歌
+      const full = await UzzApi.getSong({ ...t, quality: level }, undefined, playbackRequest.signal);
+      if (!seqAlive(seq) || STATE.current !== t) return;
       if (full && full.url) {
-        t.url = full.url;
-        notifyTrackChanged();
-        if (audio && !audio.paused && audio.src) {
-          const t0 = audio.currentTime;
-          audio.src = sameOriginStream(full.url);
-          STATE.lastSrcSet = Date.now();
-          try { await audio.play(); if (seqAlive(seq)) audio.currentTime = t0; } catch (e) {}
-        }
+        audio.src = sameOriginStream(full.url);
+        STATE.lastSrcSet = Date.now();
+        STATE.pendingSeek = Math.max(Number(t.cueStart) || 0, t0);
+        STATE.cueEnd = Number(t.cueEnd) || cueEnd || 0;
+        if (wasPlaying) { try { await audio.play(); } catch (e) {} }
       }
     } catch (e) { /* 沿用原音源 */ }
   }

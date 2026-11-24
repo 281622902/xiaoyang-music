@@ -1369,20 +1369,48 @@ async function handleApi(req, res, reqUrl) {
       });
     }
 
+    // ══════ 播客 RSS：只读解析公开 RSS，返回节目与单集（音频由播放器直链播放） ══════
+    if (pathname === '/api/podcast/feed') {
+      const raw = String(searchParams.get('url') || '').trim();
+      let feedUrl;
+      try { feedUrl = new URL(raw); } catch (e) { return sendJson(res, 400, { code: 400, msg: '播客地址无效' }); }
+      if (!['http:', 'https:'].includes(feedUrl.protocol) || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[|0\.)/.test(feedUrl.hostname))
+        return sendJson(res, 400, { code: 400, msg: '仅支持公网 http(s) RSS 地址' });
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        const r = await fetch(feedUrl.href, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0 XiaoyangMusic Podcast Reader' } });
+        clearTimeout(timer);
+        if (!r.ok) return sendJson(res, 502, { code: 502, msg: '播客源返回 ' + r.status });
+        const xml = await r.text();
+        const clean = (s) => String(s || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').trim();
+        const pick = (block, tag) => { const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i')); return m ? clean(m[1]) : ''; };
+        const attr = (block, tag, name) => { const m = block.match(new RegExp(`<${tag}\\b[^>]*\\b${name}=["']([^"']+)["']`, 'i')); return m ? clean(m[1]) : ''; };
+        const channel = (xml.match(/<channel\b[\s\S]*?<\/channel>/i) || [''])[0];
+        const info = { title: pick(channel, 'title'), author: pick(channel, 'author') || pick(channel, 'managingEditor'), desc: pick(channel, 'description'), cover: attr(channel, 'image', 'href') || pick(channel, 'url') };
+        const episodes = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].map((m) => {
+          const b = m[0];
+          return { guid: pick(b, 'guid') || pick(b, 'link') || '', title: pick(b, 'title'), desc: pick(b, 'description'), pubDate: pick(b, 'pubDate'), audioUrl: attr(b, 'enclosure', 'url'), cover: attr(b, 'image', 'href') || pick(b, 'url') };
+        }).filter((e) => e.title && e.audioUrl).slice(0, 100);
+        return sendJson(res, 200, { code: 200, info, episodes });
+      } catch (e) { return sendJson(res, 502, { code: 502, msg: '播客解析失败：' + (e.message || e) }); }
+    }
+
     // ══════ 音乐榜单：精选网易云榜单入口（点击后走 /api/playlist 取曲目） ══════
     if (pathname === '/api/charts') {
       const charts = [
-        { id: '3778678', name: '云音乐热歌榜', icon: '🔥', desc: '当下最热门' },
-        { id: '3779629', name: '云音乐新歌榜', icon: '✨', desc: '最新发行' },
-        { id: '19723756', name: '云音乐飙升榜', icon: '🚀', desc: '涨势最猛' },
-        { id: '2884035', name: '网易原创榜', icon: '🎼', desc: '原创音乐' },
-        { id: '1978921795', name: '云音乐电音榜', icon: '🎧', desc: 'EDM / 电子' },
-        { id: '991319590', name: '云音乐说唱榜', icon: '🎤', desc: 'Hip-Hop / Rap' },
-        { id: '5059661515', name: '云音乐国风榜', icon: '🏮', desc: '国风 / 古风' },
-        { id: '71385702', name: '云音乐古典榜', icon: '🎻', desc: '古典音乐' },
-        { id: '2809513713', name: '云音乐欧美榜', icon: '🌍', desc: '欧美热歌' },
-        { id: '5059633707', name: '云音乐日语榜', icon: '🇯🇵', desc: '日语热歌' },
-        { id: '5059642708', name: '云音乐韩语榜', icon: '🇰🇷', desc: '韩语热歌' },
+        { id: '3778678', name: '云音乐热歌榜', icon: '🔥', desc: '当下最热门', cover: '/assets/charts/3778678.svg' },
+        { id: '3779629', name: '云音乐新歌榜', icon: '✨', desc: '最新发行', cover: '/assets/charts/3779629.svg' },
+        { id: '19723756', name: '云音乐飙升榜', icon: '🚀', desc: '涨势最猛', cover: '/assets/charts/19723756.svg' },
+        { id: '2884035', name: '网易原创榜', icon: '🎼', desc: '原创音乐', cover: '/assets/charts/2884035.svg' },
+        { id: '1978921795', name: '云音乐电音榜', icon: '🎧', desc: 'EDM / 电子', cover: '/assets/charts/1978921795.svg' },
+        { id: '991319590', name: '云音乐说唱榜', icon: '🎤', desc: 'Hip-Hop / Rap', cover: '/assets/charts/991319590.svg' },
+        { id: '5059661515', name: '云音乐国风榜', icon: '🏮', desc: '国风 / 古风', cover: '/assets/charts/5059661515.svg' },
+        { id: '71385702', name: '云音乐古典榜', icon: '🎻', desc: '古典音乐', cover: '/assets/charts/71385702.svg' },
+        { id: '2809513713', name: '云音乐欧美榜', icon: '🌍', desc: '欧美热歌', cover: '/assets/charts/2809513713.svg' },
+        { id: '5059633707', name: '云音乐日语榜', icon: '🇯🇵', desc: '日语热歌', cover: '/assets/charts/5059633707.svg' },
+        { id: '5059642708', name: '云音乐韩语榜', icon: '🇰🇷', desc: '韩语热歌', cover: '/assets/charts/5059642708.svg' },
       ];
       return sendJson(res, 200, { code: 200, charts });
     }

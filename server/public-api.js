@@ -1,6 +1,6 @@
 const {isIP}=require('node:net');
 const defaults=['163.com','126.net','qq.com','gtimg.cn','gtimg.com','kugou.com','kuwo.cn','kuwo.com','api.injahow.cn','api.qijieya.cn','music-api.gdstudio.xyz'];
-const paths=new Set(['health','search','song','url','lyric','wiki','simi','suggest','playlist','playlists','charts','artist','album','pic','stream','version','release-file','captcha'].map(x=>'/api/'+x));
+const paths=new Set(['health','search','song','url','lyric','wiki','simi','suggest','playlist','playlists','charts','podcast/feed','artist','album','pic','stream','version','release-file','captcha'].map(x=>'/api/'+x));
 // 设备授权（v3.5.0）：只放行客户端用得上的两条——查状态与校验码。
 // 管理端（issue/list/revoke）需要 XY_ADMIN_TOKEN，刻意不放进公网白名单，
 // 只能在服务器本地/内网调用，避免攻击面暴露到公网。

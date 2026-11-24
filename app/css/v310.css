@@ -151,6 +151,37 @@ html[data-theme="light"] {
 .fp-song { letter-spacing: -.4px; }
 .fp-tabs button.active { border-radius: 6px 6px 0 0; background: var(--v310-glass); }
 
+/* ── 播客 / 关注 / 网盘设置 ── */
+.st-input { min-width: 160px; }
+.podcast-card .plc-ph, .pl-card .plc-ph {
+  height: 150px; display: grid; place-items: center; font-size: 46px;
+  background: linear-gradient(145deg, var(--bg-2), var(--bg-3));
+}
+.act-follow {
+  border: 1px solid var(--v310-line); border-radius: 999px; background: transparent;
+  color: var(--accent); width: 28px; height: 28px; cursor: pointer; font-size: 13px;
+}
+.act-follow:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* ── 自定义图片皮肤 ── */
+body {
+  background-image: linear-gradient(rgba(0,0,0,var(--skin-bg-mask,.45)), rgba(0,0,0,var(--skin-bg-mask,.45))), var(--skin-bg, none);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+html[data-theme="light"] body {
+  background-image: linear-gradient(rgba(255,255,255,var(--skin-bg-mask,.45)), rgba(255,255,255,var(--skin-bg-mask,.45))), var(--skin-bg, none);
+}
+.skin-custom { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sk-upload, .skin-custom .xy-secondary {
+  padding: 8px 12px; border: 1px solid var(--v310-line); border-radius: 10px;
+  background: var(--v310-glass); color: var(--text); font-size: 12px; cursor: pointer;
+}
+.sk-upload:hover, .skin-custom .xy-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.sk-opacity { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-2); }
+.sk-opacity input { width: 100px; }
+
 /* ── 音效场景快捷入口 ── */
 .fx-scenes { display: flex; gap: 7px; flex-wrap: wrap; margin: 6px 0 12px; }
 .fx-scenes button {

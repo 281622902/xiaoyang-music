@@ -1,6 +1,6 @@
 {
   "name": "xiaoyang-music-player",
-  "version": "3.10.6",
+  "version": "3.11.0",
   "description": "小杨音乐（多音源聚合播放器）桌面安装包",
   "author": {
     "name": "小杨"
@@ -33,6 +33,7 @@
       "lyric.html",
       "lyric-settings.html",
       "lyric-themes.js",
+      "desktop-music.html",
       "build/icon.ico",
       "build/installer.nsh",
       "installer-launcher.js",

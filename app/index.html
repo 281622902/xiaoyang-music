@@ -262,14 +262,12 @@
           <div id="chartsGrid" class="pl-grid"></div>
         </main>
 
-        <!-- 视图：播客（筹备中占位） -->
+        <!-- 视图：播客 -->
         <main id="viewPodcast" class="view hidden">
           <div class="view-head"><h2>播客</h2><span class="view-count">声音节目与电台</span></div>
-          <div class="empty-state">
-            <div class="empty-ic">🎙</div>
-            <div class="empty-title">播客内容筹备中</div>
-            <div class="empty-sub">电台节目、有声书、脱口正在路上，敬请期待</div>
-          </div>
+          <div class="search-toolbar"><span>订阅 RSS</span><input id="podcastUrl" class="st-input" placeholder="粘贴播客 RSS 地址"><button id="podcastAdd" class="xy-primary" type="button">订阅</button></div>
+          <div id="podcastGrid" class="pl-grid"></div>
+          <div id="podcastEpisodes" class="result-list"></div>
         </main>
 
         <!-- 视图：漫游（私人电台，随机热歌） -->
@@ -285,14 +283,10 @@
           </div>
         </main>
 
-        <!-- 视图：关注（占位） -->
+        <!-- 视图：关注 -->
         <main id="viewFollow" class="view hidden">
-          <div class="view-head"><h2>关注</h2><span class="view-count">关注的音乐人与好友动态</span></div>
-          <div class="empty-state">
-            <div class="empty-ic">◎</div>
-            <div class="empty-title">账号体系筹备中</div>
-            <div class="empty-sub">后续支持登录后查看关注歌手的新歌与动态</div>
-          </div>
+          <div class="view-head"><h2>关注</h2><span class="view-count">关注的音乐人</span></div>
+          <div id="followGrid" class="pl-grid"></div>
         </main>
 
         <!-- 视图：我的收藏（收藏的歌单墙） -->
@@ -492,7 +486,7 @@
 
               <h3 class="set-sub">最近播放记录</h3>
               <div class="st-row">
-                <div class="st-lab">跨设备最近播放同步<small>（暂未开放，记录仅保存在本机）</small></div>
+                <div class="st-lab">跨设备最近播放同步<small>（登录后随云端歌单一起同步，可在账户中心关闭）</small></div>
                 <div class="st-ctl"><label class="st-chk"><input type="checkbox" id="stCloudHis" checked><span></span></label></div>
               </div>
             </section>
@@ -640,8 +634,14 @@
                 </div>
               </div>
               <div class="st-row">
-                <div class="st-lab">音乐网盘设置</div>
-                <div class="st-ctl"><label class="st-chk"><input type="checkbox" id="stCloud" disabled><span></span> 云盘同步暂未开放，歌单保存在本机</label></div>
+                <div class="st-lab">音乐网盘设置<small>可配置 WebDAV / 自定义网盘；歌单仍通过 Supabase 同步，音频文件不上传</small></div>
+                <div class="st-ctl st-inline">
+                  <select id="stNetdiskProvider" class="st-sel"><option value="supabase">Supabase 云端</option><option value="webdav">WebDAV</option><option value="custom">自定义</option></select>
+                  <input id="stNetdiskEndpoint" class="st-input" placeholder="网盘地址（可选）">
+                  <input id="stNetdiskDir" class="st-input" placeholder="远程目录，如 /xymusic">
+                  <label class="st-chk"><input type="checkbox" id="stCloud"><span></span> 启用</label>
+                  <button id="stNetdiskTest" class="st-btn" type="button">测试连接</button>
+                </div>
               </div>
             </section>
 
@@ -1095,7 +1095,13 @@
       <div class="sk-body">
         <div class="sk-sec">官方</div>
         <div class="skin-grid" id="skinGrid"></div>
-        <p class="muted skin-tip">点击即可一键应用；也可在「设置 → 常规」里单独调整主题色。</p>
+        <div class="sk-sec">自定义图片背景</div>
+        <div class="skin-custom">
+          <label class="sk-upload">选择本地图片<input id="skinBgInput" type="file" accept="image/*" hidden></label>
+          <button id="skinBgClear" class="xy-secondary" type="button">清除背景</button>
+          <label class="sk-opacity">遮罩 <input id="skinBgOpacity" type="range" min="10" max="85" value="45"><span id="skinBgVal">45%</span></label>
+        </div>
+        <p class="muted skin-tip">点击官方皮肤一键应用；自定义图片会压缩后保存在本机，不上传。</p>
       </div>
     </div>
 
@@ -1196,6 +1202,7 @@
     </div>
 
     <div id="dropOverlay" class="drop-overlay hidden"><div class="drop-symbol">↓</div><strong>把好音乐放进来</strong><span>松开即可添加并播放 · 支持多文件与文件夹</span><span class="drop-formats">MP3 · FLAC · WAV · AAC · M4A · OGG · OPUS</span></div>
+<div id="updateAvailableModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="updAvailTitle"><h2 id="updAvailTitle">发现新版本</h2><p class="account-subtitle">小杨音乐有新版本可用：<b id="updAvailVer">—</b></p><div class="account-buttons"><button id="updAvailLater" class="xy-secondary" type="button">稍后再说</button><button id="updAvailNow" class="xy-primary" type="button">立即升级</button></div></section></div>
 <div id="homeModuleModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="homeModuleTitle"><button id="homeModuleClose" class="xy-close" aria-label="关闭">×</button><h2 id="homeModuleTitle">发现页模块</h2><p class="account-subtitle">调整首页模块的显示与顺序。“推荐偏好”会改变歌单池。</p><div id="homeModuleList" class="hm-list"></div><label class="hm-mode">推荐偏好<select id="stRecMode" class="st-sel"><option value="default">默认</option><option value="familiar">熟悉</option><option value="explore">探索</option><option value="mix">混合</option></select></label><button id="homeModuleDone" class="xy-primary">完成</button></section></div>
 <div id="accountModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button id="accountClose" class="xy-close" aria-label="关闭">×</button><img class="account-logo" src="icon.svg" alt="小杨音乐"/><h2 id="accountTitle">你的音乐，有处安放</h2><p id="accountSubtitle">登录云端账户，让在线收藏随账号保存。本地音频保留在当前设备。</p>
 <section aria-label="云端账户">

@@ -1167,6 +1167,7 @@ body.is-playing .pb-cover { animation: pb-cover-spin 12s linear infinite; }
   border-color: var(--accent);
   box-shadow: 0 12px 28px rgba(180, 92, 56, .16), 0 4px 10px rgba(180, 92, 56, .10);
 }
+.chart-ic img, .ch-ic img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
 .charts-row .ch-ic {
   flex: 0 0 64px; width: 64px; height: 64px; border-radius: 20px;
   display: flex; align-items: center; justify-content: center;
@@ -1277,12 +1278,13 @@ body.is-playing .pb-cover { animation: pb-cover-spin 12s linear infinite; }
 /* ── #5 Mini 模式：顶栏控制 + 当前播放 + 播放列表 ── */
 body.mini-mode #miniPlayer, body.mini-mode .titlebar { display: none !important; }
 body.mini-mode #miniMode:not(.hidden) { display: flex; }
-.mini-mode {
+/* 仅作用于面板本体；body.mini-mode 是状态类，不能变成全屏 drag 覆盖层 */
+#miniMode {
   position: fixed; inset: 0; z-index: 400;
   flex-direction: column; background: var(--bg-0);
   -webkit-app-region: drag;
 }
-.mini-mode.hidden { display: none; }
+#miniMode.hidden { display: none; }
 .mm-top {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 14px 6px; flex: 0 0 auto;

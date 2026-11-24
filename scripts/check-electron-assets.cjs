@@ -12,6 +12,7 @@ const required = [
   'lyric.html',
   'lyric-settings.html',
   'lyric-themes.js',
+  'desktop-music.html',
   'installer-launcher.js',
   'backend-start.js',
 ];

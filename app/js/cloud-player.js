@@ -63,7 +63,7 @@
       if (!global.XYSync) { el.textContent = '云同步组件未加载'; return; }
       try {
         const p = await global.XYSync.preview();
-        el.textContent = `本机 ${p.localPlaylists} 张歌单 / 云端 ${p.cloudPlaylists} 张 · 收藏 ${p.cloudFavorites} 首 · 最近播放 ${p.cloudRecent || 0} 首 · 版本 ${p.revision}`;
+        el.textContent = `本机 ${p.localPlaylists} 张歌单 / 云端 ${p.cloudPlaylists} 张 · 收藏 ${p.cloudFavorites} 首 · 最近播放 ${p.cloudRecent || 0} 首 · 关注 ${p.cloudFollows || 0} 位 · 版本 ${p.revision}`;
       } catch (error) { el.textContent = '同步状态读取失败：' + (error.message || error); }
     }
     const recentSync = $('desktopRecentSync');

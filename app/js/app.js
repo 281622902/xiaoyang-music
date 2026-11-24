@@ -107,6 +107,71 @@
   }
 
   /* ============================================================
+   * 关注音乐人：本地列表，后续随 XYSync payload 云端合并
+   * ============================================================ */
+  function loadFollows() { return loadJSON('uzz.follows', []); }
+  function isFollowed(id) { return loadFollows().some((f) => String(f.id) === String(id)); }
+  function toggleFollow(id, name, pic, vendor) {
+    const list = loadFollows();
+    const i = list.findIndex((f) => String(f.id) === String(id));
+    if (i >= 0) { list.splice(i, 1); toast('已取消关注 ' + name); }
+    else { list.unshift({ id, vendor: vendor || 'netease', name, pic: pic || '', followedAt: Date.now() }); toast('已关注 ' + name); }
+    saveJSON('uzz.follows', list);
+    document.querySelectorAll('.act-follow').forEach((b) => {
+      const li = b.closest('li'); if (!li) return;
+      const on = isFollowed(li.dataset.id);
+      b.textContent = on ? '✓' : '＋'; b.title = on ? '取消关注' : '关注歌手';
+    });
+    if (curView === 'follow') renderFollowView();
+  }
+  function renderFollowView() {
+    const box = $('followGrid'); if (!box) return;
+    const list = loadFollows();
+    if (!list.length) { box.innerHTML = '<div class="studio-empty">还没有关注。到搜索结果里关注喜欢的音乐人，新歌动态会出现在这里。</div>'; return; }
+    box.innerHTML = list.map((f) => `<div class="pl-card" data-id="${escapeHtml(f.id)}" data-vendor="${escapeHtml(f.vendor || '')}" data-name="${escapeHtml(f.name)}">
+      ${f.pic ? `<img class="plc-img" src="${escapeHtml(UzzApi.picProxy(f.pic))}" alt="" loading="lazy">` : '<div class="plc-ph">🎤</div>'}
+      <div class="plc-name">${escapeHtml(f.name)}</div><div class="plc-desc">已关注 · 点击查看热门歌曲</div></div>`).join('');
+  }
+
+  /* ============================================================
+   * 播客：RSS 订阅与单集播放
+   * ============================================================ */
+  function loadPodcastSubs() { return loadJSON('uzz.podcast.subs', []); }
+  let currentPodcastUrl = '', currentPodcastInfo = {};
+  async function loadPodcastFeed(url, remember) {
+    const episodes = $('podcastEpisodes');
+    if (episodes) episodes.innerHTML = '<li class="loading-pad"><span class="spin"></span> 正在读取播客…</li>';
+    try {
+      const r = await UzzApi.getPodcastFeed(url);
+      currentPodcastUrl = url; currentPodcastInfo = r.info || {};
+      if (remember) {
+        const subs = loadPodcastSubs();
+        if (!subs.some((s) => s.rssUrl === url)) {
+          subs.unshift({ id: 'pd:' + url, rssUrl: url, title: r.info.title || '未命名播客', author: r.info.author || '', cover: r.info.cover || '', desc: r.info.desc || '', subscribedAt: Date.now() });
+          saveJSON('uzz.podcast.subs', subs);
+        }
+        renderPodcastView();
+      }
+      if (episodes) episodes.innerHTML = r.episodes.length ? r.episodes.map((e, i) => `
+        <li class="song" data-i="${i}">
+          <div class="info"><div class="name">${escapeHtml(e.title)}</div><div class="sub">${escapeHtml(e.pubDate || r.info.title || '')}</div></div>
+          <div class="acts"><button class="act-play" data-act="podcast-play" title="播放">▶</button></div>
+        </li>`).join('') : '<li class="loading-pad">该播客暂无可播放单集</li>';
+      if (episodes) episodes._podcastEpisodes = r.episodes;
+    } catch (e) {
+      if (episodes) episodes.innerHTML = '<li class="loading-pad">播客读取失败：' + escapeHtml(e.message || e) + '</li>';
+    }
+  }
+  function renderPodcastView() {
+    const box = $('podcastGrid'); if (!box) return;
+    const subs = loadPodcastSubs();
+    if (!subs.length) { box.innerHTML = '<div class="studio-empty">订阅一个 RSS 播客后，节目会出现在这里。</div>'; return; }
+    box.innerHTML = subs.map((s) => `<div class="pl-card podcast-card" data-url="${escapeHtml(s.rssUrl)}">
+      ${s.cover ? `<img class="plc-img" src="${escapeHtml(UzzApi.picProxy(s.cover))}" alt="" loading="lazy">` : '<div class="plc-ph">🎙</div>'}
+      <div class="plc-name">${escapeHtml(s.title)}</div><div class="plc-desc">${escapeHtml(s.author || '点击加载最新单集')}</div></div>`).join('');
+  }
+
+  /* ============================================================
    * 主题（深色/浅色 + 主题色）
    * ============================================================ */
   function hexToRgba(hex, a) {
@@ -135,6 +200,11 @@
       Object.entries(pal).forEach(([k, v]) => rootStyle.setProperty(k, v));
       document.querySelector('meta[name=theme-color]').setAttribute('content', skin.pal['--bg-0'] || (mode === 'light' ? '#f4f5f7' : '#12141a'));
     }
+    // 自定义图片背景：压缩 dataURL 仅存本机，不进入任何云端 payload
+    const customBg = localStorage.getItem('uzz.theme.bg') || '';
+    const customMask = Number(localStorage.getItem('uzz.theme.bgMask') || 45) / 100;
+    rootStyle.setProperty('--skin-bg', customBg ? `url("${customBg}")` : 'none');
+    rootStyle.setProperty('--skin-bg-mask', String(customMask));
     applyPlayerLayout();
   }
   // 播放页布局：与整包皮肤叠加，只改结构不改配色
@@ -305,13 +375,13 @@
     const cover = t.pic
       ? `<img class="cov" src="${escapeHtml(UzzApi.picProxy(t.pic))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"/>`
       : `<div class="cov ent-${etype}">${etype === 'artist' ? '🎤' : etype === 'album' ? '💿' : '🎵'}</div>`;
-    return `<li class="song entity" data-etype="${etype}" data-id="${escapeHtml(t.id)}" data-name="${escapeHtml(t.name)}" data-pic="${escapeHtml(t.pic || '')}">
+    return `<li class="song entity" data-etype="${etype}" data-id="${escapeHtml(t.id)}" data-vendor="${escapeHtml(t.vendor || '')}" data-name="${escapeHtml(t.name)}" data-pic="${escapeHtml(t.pic || '')}">
       ${cover}
       <div class="info">
         <div class="name">${escapeHtml(t.name)}<span class="badge">${label}</span></div>
         <div class="sub">${escapeHtml(sub)}</div>
       </div>
-      <div class="acts"><button class="act-play" aria-label="查看" title="查看">▶</button></div>
+      <div class="acts">${etype === 'artist' ? `<button class="act-follow" data-act="follow" title="${isFollowed(t.id) ? '取消关注' : '关注歌手'}">${isFollowed(t.id) ? '✓' : '＋'}</button>` : ''}<button class="act-play" aria-label="查看" title="查看">▶</button></div>
     </li>`;
   }
   function liTrack(li) {
@@ -702,6 +772,8 @@
     if (name === 'collect') renderCollectView();
     if (name === 'local') loadLocalView(curLocalFilter, true);
     if (name === 'charts') loadCharts();
+    if (name === 'podcast') renderPodcastView();
+    if (name === 'follow') renderFollowView();
   }
 
   /* ============================================================
@@ -734,7 +806,7 @@
       if (!charts.length) { grid.innerHTML = '<div class="loading-pad" style="grid-column:1/-1">暂无可用的榜单</div>'; return; }
       grid.innerHTML = charts.map((c) => `
         <div class="pl-card chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
-          <div class="chart-ic">${c.icon || '📊'}</div>
+          <div class="chart-ic">${c.cover ? `<img src="${escapeHtml(c.cover)}" alt="">` : (c.icon || '📊')}</div>
           <div class="plc-name">${escapeHtml(c.name)}</div>
           <div class="plc-desc">${escapeHtml(c.desc || '')}</div>
           <div class="plc-plays">点击听榜</div>
@@ -752,10 +824,10 @@
       // 榜单数据本身实时，展示位按日期轮换，首页每天有变化
       const { y, m, day } = dailyDate();
       const seed = y * 10000 + m * 100 + day;
-      const charts = shuffleSeeded(await UzzApi.getCharts(), seed).slice(0, 8);
+      const charts = shuffleSeeded(await UzzApi.getCharts(), seed).slice(0, 12);
       row.innerHTML = charts.map((c) => `
         <div class="chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
-          <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${c.icon || '📊'}</div>
+          <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${c.cover ? `<img src="${escapeHtml(c.cover)}" alt="">` : (c.icon || '📊')}</div>
           <div class="ch-txt">
             <div class="ch-name">${escapeHtml(c.name)}</div>
             <div class="ch-desc">${escapeHtml(c.desc || '')}</div>
@@ -2200,25 +2272,44 @@
       });
       apply();
     })();
-    // 输出设备：真实调用 setSinkId
-    (function bindOutputReal() {
-      const el = $('stOutput');
-      if (!el) return;
-      el.addEventListener('change', async () => {
-        localStorage.setItem('uzz.play.output', el.value || '');
-        const audio = document.getElementById('audio');
-        if (!audio || !audio.setSinkId) { toast('当前环境不支持切换输出设备'); return; }
-        try {
-          await audio.setSinkId(el.value || '');
-          toast(el.value ? '已切换输出设备' : '已恢复默认输出设备');
-        } catch (e) { toast('切换失败：' + (e.message || e)); }
-      });
+    // 输出设备：设置页 #stOutput 与音效面板 #outDev 共用同一套枚举/切换逻辑
+    const outputSelects = () => [$('stOutput'), $('outDev')].filter(Boolean);
+    async function refreshOutputDevices() {
       const saved = localStorage.getItem('uzz.play.output') || '';
-      if (saved) setTimeout(() => {
-        const audio = document.getElementById('audio');
-        if (audio && audio.setSinkId) audio.setSinkId(saved).catch(() => {});
-      }, 800);
-    })();
+      let outs = [];
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+          outs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput');
+        }
+      } catch (e) { outs = []; }
+      outputSelects().forEach((sel) => {
+        sel.innerHTML = '<option value="">系统默认' + (outs.length ? '' : '（未检测到设备）') + '</option>';
+        outs.forEach((d, i) => {
+          const o = document.createElement('option');
+          o.value = d.deviceId || '';
+          o.textContent = d.label || ('输出设备 ' + (i + 1));
+          sel.appendChild(o);
+        });
+        sel.value = saved;
+      });
+    }
+    async function applyOutputDevice(value) {
+      const v = value || '';
+      localStorage.setItem('uzz.play.output', v);
+      outputSelects().forEach((sel) => { sel.value = v; });
+      const audio = document.getElementById('audio');
+      if (!audio || !audio.setSinkId) { toast('当前环境不支持切换输出设备'); return; }
+      try { await audio.setSinkId(v); toast(v ? '已切换输出设备' : '已恢复默认输出设备'); }
+      catch (e) { toast('切换失败：' + (e.message || e)); }
+    }
+    outputSelects().forEach((sel) => sel.addEventListener('change', () => applyOutputDevice(sel.value)));
+    refreshOutputDevices();
+    navigator.mediaDevices?.addEventListener?.('devicechange', refreshOutputDevices);
+    const savedOutput = localStorage.getItem('uzz.play.output') || '';
+    if (savedOutput) setTimeout(() => {
+      const audio = document.getElementById('audio');
+      if (audio && audio.setSinkId) audio.setSinkId(savedOutput).catch(() => {});
+    }, 800);
     // 系统音量：真实调Windows 主音量（滑杆拖动时防抖，拖完才下发）
     (function bindSysVolumeReal() {
       const el = $('stSysVol'), lab = $('stSysVolVal'), br = window.uzzBridge;
@@ -2261,8 +2352,8 @@
       toast(v === 'replace' ? '点歌将替换播放列表' : '点歌将加入播放列表末尾');
     });
     // 最近播放记录：真实控制是否写入
-    bindStCk('stCloudHis', 'uzz.play.cloudHis', true, (v) => {
-      toast(v ? '会记录最近播放' : '不再记录最近播放');
+    bindStCk('stCloudHis', 'uzz.sync.recent', true, (v) => {
+      toast(v ? '最近播放将随云端歌单同步' : '已关闭最近播放云同步');
     });
 
     // ── 快捷键 ──
@@ -2372,9 +2463,10 @@
     });
     // 音乐桌面
     $('stDesktop') && $('stDesktop').addEventListener('click', () => {
-      const sk = $('skinOverlay');
-      if (sk) { sk.classList.remove('hidden'); toast('请选择「音乐桌面」皮肤'); }
-      else toast('请点击右上角换肤 → 音乐桌面');
+      if (window.uzzBridge && window.uzzBridge.openMusicDesktop) {
+        window.uzzBridge.openMusicDesktop();
+        toast('音乐桌面已开启（独立桌面小窗）');
+      } else toast('当前环境不支持桌面小窗，请在桌面端使用');
     });
     // HTTP 代理：真实检测连通性
     bindStRadio('proxy', 'uzz.proxy', 'none', (v) => { window.__uzzProxyMode = v; toast('代理模式：' + (v === 'none' ? '不使用' : '自定义')); });
@@ -2396,8 +2488,26 @@
       toast('代理已保存并生效');
     });
     // 音乐网盘
-    bindStCk('stCloud', 'uzz.cloud', true, (v) => toast(v ? '已开启音乐网盘同步' : '已关闭音乐网盘'));
-    for (const id of ['stCloud', 'stCloudHis', 'stLyricTransAlway']) {
+    bindStCk('stCloud', 'uzz.netdisk.enabled', false, (v) => toast(v ? '已开启音乐网盘设置' : '已关闭音乐网盘设置'));
+    bindStSel('stNetdiskProvider', 'uzz.netdisk.provider', 'supabase', (v) => toast('网盘类型：' + v));
+    (function bindNetdiskInputs() {
+      const ep = $('stNetdiskEndpoint'), dir = $('stNetdiskDir');
+      if (ep) { ep.value = localStorage.getItem('uzz.netdisk.endpoint') || ''; ep.addEventListener('change', () => localStorage.setItem('uzz.netdisk.endpoint', ep.value.trim())); }
+      if (dir) { dir.value = localStorage.getItem('uzz.netdisk.dir') || ''; dir.addEventListener('change', () => localStorage.setItem('uzz.netdisk.dir', dir.value.trim())); }
+      $('stNetdiskTest')?.addEventListener('click', async () => {
+        const provider = localStorage.getItem('uzz.netdisk.provider') || 'supabase';
+        const endpoint = localStorage.getItem('uzz.netdisk.endpoint') || '';
+        if (provider === 'supabase') {
+          try { await (window.supabase?.auth?.getUser?.() || Promise.resolve({ error: new Error('未登录') })); toast('Supabase 云端连接正常'); }
+          catch (e) { toast('Supabase 连接失败：' + (e.message || e)); }
+          return;
+        }
+        if (!endpoint) { toast('请先填写网盘地址'); return; }
+        try { const r = await fetch(endpoint, { method: 'HEAD', signal: AbortSignal.timeout(6000) }); toast(r.ok ? '网盘地址可达' : '网盘返回 ' + r.status); }
+        catch (e) { toast('网盘连接失败：' + (e.message || e)); }
+      });
+    })();
+    for (const id of ['stLyricTransAlway']) {
       const el = $(id); if (el) { el.checked = false; el.disabled = true; }
     }
     // 桌面歌词参数
@@ -2603,6 +2713,27 @@
       curEl.textContent = 'v' + (info && info.version ? info.version : '?');
       if (info && info.updateUrl) if ($('updUrl')) $('updUrl').value = info.updateUrl;
     }).catch(() => {});
+    // 启动时自动检测到新版本 → 立即弹窗提示（不再静默丢弃 upd:githubStatus）
+    let githubUpdateInfo = null;
+    br?.onGithubUpdate?.((p) => {
+      if (!p || p.status !== 'available') return;
+      githubUpdateInfo = p;
+      if (window.__updPrompted) return;
+      window.__updPrompted = true;
+      const ver = $('updAvailVer'), box = $('updateAvailableModal');
+      if (ver) ver.textContent = p.version || '新版本';
+      box?.classList.remove('hidden');
+    });
+    $('updAvailLater')?.addEventListener('click', () => $('updateAvailableModal')?.classList.add('hidden'));
+    $('updAvailNow')?.addEventListener('click', async () => {
+      $('updateAvailableModal')?.classList.add('hidden');
+      try {
+        const r = await br?.checkUpdate?.();
+        if (r && r.url) await br?.downloadAndInstall?.(r.url);
+        else if (githubUpdateInfo && githubUpdateInfo.releaseUrl) window.open(githubUpdateInfo.releaseUrl, '_blank', 'noopener,noreferrer');
+        else toast('暂未获取到下载地址，请到设置页手动检查更新');
+      } catch (e) { toast('升级失败：' + (e.message || e)); }
+    });
     if ($('updUrl') && br?.setUpdateUrl) $('updUrl').addEventListener('change', () => br.setUpdateUrl($('updUrl').value.trim()));
     // 检查入口已在关于页绑定，避免一次点击发起两次请求。
     // 一键升级：下载 → 静默覆盖安装
@@ -2988,22 +3119,7 @@
       });
     }
 
-    // 输出设备
-    const outDev = $('outDev');
-    if (outDev && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then((devs) => {
-        const outs = devs.filter((d) => d.kind === 'audiooutput' && d.deviceId);
-        outs.forEach((d) => {
-          const o = document.createElement('option');
-          o.value = d.deviceId; o.textContent = d.label || ('扬声器 ' + d.deviceId.slice(0, 6));
-          outDev.appendChild(o);
-        });
-      }).catch(() => {});
-      outDev.addEventListener('change', async () => {
-        try { if (audio && audio.setSinkId) await audio.setSinkId(outDev.value); }
-        catch (e) { toast('切换输出设备失败'); }
-      });
-    }
+    // 输出设备已由统一逻辑 refreshOutputDevices / applyOutputDevice 处理（设置页与音效面板同步）
 
     // AB 重复
     let abA = null, abB = null;
@@ -3411,6 +3527,31 @@
       if (!e.target.closest('.search')) hideSuggest();
     });
 
+    // ── 播客订阅与单集播放 ──
+    $('podcastAdd')?.addEventListener('click', () => {
+      const url = $('podcastUrl').value.trim();
+      if (!url) { toast('请输入播客 RSS 地址'); return; }
+      loadPodcastFeed(url, true);
+    });
+    $('podcastGrid')?.addEventListener('click', (e) => {
+      const card = e.target.closest('.podcast-card');
+      if (card && card.dataset.url) loadPodcastFeed(card.dataset.url, false);
+    });
+    $('podcastEpisodes')?.addEventListener('click', (e) => {
+      const li = e.target.closest('li.song'); if (!li) return;
+      const eps = $('podcastEpisodes')._podcastEpisodes || [];
+      const ep = eps[Number(li.dataset.i)]; if (!ep || !ep.audioUrl) return;
+      Player.loadAndPlay({
+        id: 'podcast:' + (ep.guid || ep.audioUrl), vendor: 'podcast',
+        name: ep.title, artist: currentPodcastInfo.title || '播客',
+        pic: ep.cover || currentPodcastInfo.cover || '', url: ep.audioUrl,
+      });
+    });
+    $('followGrid')?.addEventListener('click', (e) => {
+      const card = e.target.closest('.pl-card'); if (!card) return;
+      openArtistView(card.dataset.id, card.dataset.name, '');
+    });
+
     // ── 语音搜索（Web Speech API，不支持时降级提示） ──
     const btnVoice = $('btnVoice');
     if (btnVoice) {
@@ -3486,6 +3627,39 @@
     bindSettingsExtra();
     bindHomeModuleSettings();
     applyHomeModules();
+    // 自定义图片皮肤：本地压缩后写入 localStorage，不上传
+    $('skinBgInput')?.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0]; e.target.value = '';
+      if (!file) return;
+      try {
+        const data = await (window.compressAvatar ? window.compressAvatar(file, 1600) : Promise.reject(new Error('图片处理器未加载')));
+        localStorage.setItem('uzz.theme.bg', data); applyTheme(); toast('图片背景已应用');
+      } catch (err) { toast(err.message || '图片处理失败'); }
+    });
+    $('skinBgClear')?.addEventListener('click', () => {
+      localStorage.removeItem('uzz.theme.bg'); applyTheme(); toast('已清除图片背景');
+    });
+    $('skinBgOpacity')?.addEventListener('input', (e) => {
+      const v = e.target.value;
+      localStorage.setItem('uzz.theme.bgMask', v);
+      const lab = $('skinBgVal'); if (lab) lab.textContent = v + '%';
+      applyTheme();
+    });
+
+    // 音乐桌面窗口数据推送：主进程无窗口时会丢弃，不影响主界面
+    setInterval(() => {
+      const br = window.uzzBridge;
+      if (!br || !br.pushMusicDesktop || !window.Player) return;
+      const st = window.Player.getState(), t = st && st.current, audio = document.getElementById('audio');
+      br.pushMusicDesktop({
+        name: t ? (t.name || '未知歌曲') : '未播放',
+        artist: t ? (t.artist || '') : '',
+        pic: t ? (t.pic || t.cover || '') : '',
+        playing: !!(audio && !audio.paused),
+        position: audio ? audio.currentTime : 0,
+        duration: audio ? audio.duration : 0,
+      });
+    }, 600);
     const qSave = $('queueSave');
     if (qSave) qSave.addEventListener('click', () => {
       const tracks = window.Player.getQueue ? window.Player.getQueue() : [];
@@ -3562,7 +3736,8 @@
       const li = e.target.closest('li.song');
       if (!li) return;
       if (li.dataset.etype) {
-        const { etype, id, name, pic } = li.dataset;
+        const { etype, id, name, pic, vendor } = li.dataset;
+        if (e.target.closest('[data-act="follow"]')) { toggleFollow(id, name, pic, vendor); return; }
         if (etype === 'artist') openArtistView(id, name, pic);
         else if (etype === 'album') openAlbumView(id, name);
         else if (etype === 'playlist') openOnlinePlaylist(id, { title: name });
@@ -3703,7 +3878,7 @@
     if(localStorage.getItem('xy.design.v3')!=='1') {
       localStorage.setItem('uzz.theme.skin',''); localStorage.removeItem('uzz.theme.accent'); localStorage.setItem('xy.design.v3','1');
     }
-    document.addEventListener('xy:libraryRestore',()=>{playlists=loadJSON('uzz.playlists',[]);Player.reloadLibrary();renderPlaylistNav();renderLibrary();applyTheme();applyHomeModules();});
+    document.addEventListener('xy:libraryRestore',()=>{playlists=loadJSON('uzz.playlists',[]);Player.reloadLibrary();renderPlaylistNav();renderLibrary();applyTheme();applyHomeModules();renderFollowView();renderPodcastView();});
     applyTheme();
     Player.init();
     bind();
