@@ -5,162 +5,175 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
-  /* 窗口高度恒定：上方留出「工具条 + 设置菜单」的空间，歌词永远在底部居中。
-     菜单就地展开在这个预留区里 → 开关菜单完全不改变窗口尺寸，不会跳动。 */
+  :root {
+    --lyric-scale: 1;
+    --accent: #ffb1e1;
+    --accent2: #a8c8ff;
+    --glow: rgba(168, 117, 255, .42);
+    --bar: rgba(18, 20, 30, .74);
+    --panel: rgba(24, 26, 36, .94);
+    --ink: #f5f7ff;
+    --ink-2: rgba(245, 247, 255, .72);
+  }
   body {
     font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: flex-end;
-    position: relative;
-    padding-bottom: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    position: relative; padding-bottom: 10px; color: var(--ink);
   }
-  /* ── 顶部预留层：装工具条与设置菜单（不占布局流，避免推开歌词） ── */
-  #topLayer {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center;
-    pointer-events: none;
-  }
-  /* ── 顶部悬浮工具条：默认隐藏，悬停出现 ──
-     注意：锁定后仍必须可点（pointer-events 保持 auto），
-     只是不随窗口整体高亮而已——否则锁定后按钮全废。 */
+  /* ── 主题：主色 / 辅色 / 光晕 / 工具条底色 ── */
+  body[data-theme="nebula"] { --accent:#ffb1e1; --accent2:#a8c8ff; --glow:rgba(168,117,255,.42); }
+  body[data-theme="cyan"]   { --accent:#8ff7e6; --accent2:#63a8ff; --glow:rgba(64,220,220,.36); --bar:rgba(10,28,34,.76); }
+  body[data-theme="lava"]   { --accent:#ffd08a; --accent2:#ff7a59; --glow:rgba(255,122,89,.38); --bar:rgba(34,18,14,.78); }
+  body[data-theme="aurora"] { --accent:#c9a7ff; --accent2:#7ef0c8; --glow:rgba(120,180,255,.40); --bar:rgba(18,20,42,.78); }
+  body[data-theme="gold"]   { --accent:#ffe0a3; --accent2:#d4a24c; --glow:rgba(212,162,76,.38); --bar:rgba(28,24,16,.80); }
+  body[data-theme="ink"]    { --accent:#f2efe6; --accent2:#b9c0c9; --glow:rgba(255,255,255,.18); --bar:rgba(16,18,22,.84); }
+  body[data-theme="mint"]   { --accent:#b7ffd8; --accent2:#79d6a8; --glow:rgba(90,220,150,.34); --bar:rgba(12,30,24,.76); }
+  body[data-theme="pearl"]  { --accent:#ffffff; --accent2:#d8e6ff; --glow:rgba(255,255,255,.30); --bar:rgba(238,242,250,.88); --panel:rgba(248,250,255,.96); --ink:#202634; --ink-2:rgba(32,38,52,.66); }
+
+  #topLayer { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
   #bar {
     -webkit-app-region: no-drag;
-    display: flex; align-items: center; gap: 2px;
-    background: rgba(20, 22, 30, 0.78);
-    border: 1px solid rgba(255,255,255,.10);
-    border-radius: 18px;
-    padding: 3px 8px;
-    /* 固定贴在顶部：菜单在其上方展开时工具条不会被推着走（视觉零位移） */
-    position: absolute; bottom: var(--controls-bottom, 76px); left: 50%;
+    display: flex; align-items: center; gap: 3px;
+    background: var(--bar);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px;
+    padding: 4px 9px;
+    position: absolute; bottom: var(--controls-bottom, 78px); left: 50%;
     transform: translateX(-50%);
     opacity: 0; pointer-events: none;
-    transition: opacity .18s ease;
-    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    transition: opacity .18s ease, transform .18s ease;
+    box-shadow: 0 10px 34px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.10);
+    backdrop-filter: blur(18px) saturate(160%);
     z-index: 2;
   }
   body:not(.locked).near-bar #bar { opacity: 1; pointer-events: auto; }
-  /* 穿透态下 CSS :hover 不可靠（鼠标事件被转发但样式悬停不触发），
-     改由 JS 按鼠标坐标加 .near-bar 来点亮，保证"鼠标移过去工具条就出现" */
   body.locked.near-lyric #lockFloat { opacity: 1; pointer-events: auto; }
-  /* 菜单展开时工具条常显：否则鼠标从按钮移向菜单，工具条淡出 → 菜单像"自己藏起来" */
   body.menu-open #bar { opacity: 1; pointer-events: auto; }
-  /* 菜单打开时用不透明底色，避免透出歌词文字 */
   body.menu-open { background: transparent; }
-  /* 锁定后：工具条依然可以点，只是不再整条高亮 */
   body.locked #bar { opacity: 0 !important; pointer-events: none !important; transition: none; }
   body.locked #menu { display: none !important; }
   #bar button {
     -webkit-app-region: no-drag;
     border: none; outline: none; cursor: pointer;
-    width: 26px; height: 26px; line-height: 26px;
-    background: transparent; color: #d7dbe4;
+    width: 28px; height: 28px; line-height: 28px;
+    background: transparent; color: var(--ink-2);
     border-radius: 50%; font-size: 13px; text-align: center;
-    transition: background .12s, color .12s;
+    transition: background .14s, color .14s, transform .14s;
   }
-  #bar button:hover { background: rgba(255,255,255,.14); color: #fff; }
-  #bar button.brand { font-size: 15px; color: #1ecd8a; }
-  #bar button.accent:hover { color: #1ecd8a; }
-  #bar button.on { color: #1ecd8a; }
-  #bar #bBack, #bar #bFwd { width: 40px; font-size: 12px; }
-  #bar .sep { width: 1px; height: 14px; background: rgba(255,255,255,.18); margin: 0 3px; }
+  #bar button:hover { background: rgba(255,255,255,.15); color: var(--accent); transform: translateY(-1px); }
+  #bar button:active { transform: translateY(0) scale(.94); }
+  #bar button.brand { font-size: 16px; color: var(--accent); }
+  #bar button.accent:hover { color: var(--accent2); }
+  #bar button.on { color: var(--accent); }
+  #bar #bBack, #bar #bFwd { width: 42px; font-size: 11px; letter-spacing: .2px; }
+  #bar .sep { width: 1px; height: 15px; background: rgba(255,255,255,.16); margin: 0 3px; }
+  body[data-theme="pearl"] #bar .sep { background: rgba(20,30,50,.16); }
+  body[data-theme="pearl"] #bar button:hover { background: rgba(20,30,50,.08); }
 
-  /* ── 设置下拉菜单：在顶部预留区就地展开，不超出窗口、不改窗口尺寸 ── */
   #menu {
     -webkit-app-region: no-drag;
     display: none; flex-direction: column;
-    position: absolute; bottom: calc(var(--controls-bottom, 76px) + 42px); left: 50%;
-    transform: translateX(-50%);
-    z-index: 3;
-    min-width: 168px; max-width: 240px;
-    background: rgba(28, 30, 38, 0.96);
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 10px;
-    padding: 5px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    position: absolute; bottom: calc(var(--controls-bottom, 78px) + 44px); left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    z-index: 3; min-width: 182px; max-width: 260px;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 14px; padding: 6px;
+    box-shadow: 0 18px 46px rgba(0,0,0,.46);
+    backdrop-filter: blur(20px) saturate(150%);
     pointer-events: auto;
-    max-height: calc(100vh - var(--controls-bottom, 76px) - 50px);
+    max-height: calc(100vh - var(--controls-bottom, 78px) - 54px);
     overflow-y: auto;
+    transition: transform .16s ease, opacity .16s ease;
   }
-  #menu.open { display: flex; }
+  #menu.open { display: flex; transform: translateX(-50%) translateY(0); }
   #menu .mi {
     -webkit-app-region: no-drag;
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 10px; border-radius: 6px;
-    font-size: 12px; color: #dfe3ec; cursor: pointer;
+    display: flex; align-items: center; gap: 9px;
+    padding: 6px 10px; border-radius: 8px;
+    font-size: 12px; color: var(--ink); cursor: pointer;
     white-space: nowrap; line-height: 1.5;
+    transition: background .12s;
   }
-  #menu .mi:hover { background: rgba(255,255,255,.10); }
-  #menu .mi .ic { width: 15px; text-align: center; font-size: 12px; opacity: .9; }
+  #menu .mi:hover { background: rgba(255,255,255,.12); }
+  body[data-theme="pearl"] #menu .mi:hover { background: rgba(20,30,50,.07); }
+  #menu .mi .ic { width: 16px; text-align: center; font-size: 12px; opacity: .9; color: var(--accent); }
   #menu .mi .arw { margin-left: auto; opacity: .55; font-size: 11px; }
-  #menu .mi.checked .tick { margin-left: auto; color: #ff4d4f; font-size: 12px; }
-  #menu .msep { height: 1px; background: rgba(255,255,255,.10); margin: 4px 8px; }
+  #menu .mi.checked .tick { margin-left: auto; color: var(--accent); font-size: 12px; }
+  #menu .msep { height: 1px; background: rgba(255,255,255,.12); margin: 5px 8px; }
+  body[data-theme="pearl"] #menu .msep { background: rgba(20,30,50,.10); }
 
-  /* ── 歌词文字：无背景框，渐变填充 + 柔和描边 ── */
-  /* 窗口整体是透明矩形，空白处会挡住桌面图标 → 由主进程做穿透，
-     这里只需保证「歌词本体 + 工具条 + 菜单」可交互（app-region 与命中矩形上报）。 */
   #lyricBox {
-    -webkit-app-region: drag;
-    position: relative;
-    display: inline-block;          /* 宽度跟随文字，不占满窗口 */
+    -webkit-app-region: no-drag; /* 自定义拖拽，允许窗口上边越过屏幕顶部 */
+    position: relative; display: inline-block;
     max-width: calc(100% - 92px);
-    padding: 0 10px 6px;
-    text-align: center;
+    padding: 10px 20px 12px; border-radius: 18px;
+    text-align: center; cursor: default;
   }
-  body.locked #lyricBox { -webkit-app-region: no-drag; }
+  body.bg-soft #lyricBox::before, body.bg-frost #lyricBox::before {
+    content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 18px;
+  }
+  body.bg-soft #lyricBox::before {
+    background: radial-gradient(120% 140% at 50% 50%, rgba(255,255,255,.16), rgba(255,255,255,.03) 60%, transparent 100%);
+    border: 1px solid rgba(255,255,255,.10);
+  }
+  body.bg-frost #lyricBox::before {
+    background: rgba(12, 16, 24, .44);
+    border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 8px 30px rgba(0,0,0,.28);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
   #cur {
-    font-size: 28px; font-weight: 700;
+    font-size: calc(28px * var(--lyric-scale)); font-weight: 750;
+    line-height: 1.28; letter-spacing: .4px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    background: linear-gradient(90deg, #ffb1e1 0%, #d5a5ff 45%, #a8c8ff 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
+    background: linear-gradient(100deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 1px rgba(90,40,120,.85)) drop-shadow(0 1px 3px rgba(0,0,0,.55));
+    -webkit-text-stroke: .35px rgba(255,255,255,.16);
+    filter: drop-shadow(0 0 12px var(--glow)) drop-shadow(0 2px 4px rgba(0,0,0,.62));
   }
   #cur.solid {
     background: none; -webkit-background-clip: initial; background-clip: initial;
-    -webkit-text-fill-color: currentColor; color: #1ecd8a;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,.55));
+    -webkit-text-fill-color: currentColor; color: var(--accent);
   }
   #sub {
-    font-size: 16px; margin-top: 3px;
-    color: rgba(255,255,255,.82);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,.6));
+    font-size: calc(16px * var(--lyric-scale)); margin-top: 4px;
+    color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: .3px;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.55));
   }
   #sub:empty { display: none; }
   body.single #sub { display: none; }
-  /* 外文歌词显示 = 不显示时隐藏副行 */
   body.hide-sub #sub { display: none !important; }
-  /* 竖排歌词 */
-  body.vertical #lyricBox {
-    max-width: 120px; max-height: 180px;
-    display: flex; align-items: center; justify-content: center;
-  }
-  body.vertical #cur { writing-mode: vertical-rl; text-orientation: upright; font-size: 24px; line-height: 1.35; }
+  body.vertical #lyricBox { max-width: 120px; max-height: 190px; display: flex; align-items: center; justify-content: center; }
+  body.vertical #cur { writing-mode: vertical-rl; text-orientation: upright; font-size: calc(24px * var(--lyric-scale)); line-height: 1.4; }
   body.vertical #sub { writing-mode: vertical-rl; text-orientation: upright; }
   body.vertical #lyricBox::after {
-    content: ''; position: absolute; top: 4px; right: 2px;
-    width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.5);
+    content: ''; position: absolute; top: 6px; right: 4px;
+    width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
   }
 
-  /* ── 锁定态：仍保留一个小锁用于快速解锁（工具条始终可点） ── */
   #lockFloat {
     -webkit-app-region: no-drag;
-    position: absolute; top: 2px; right: -28px;
+    position: absolute; top: 2px; right: -30px;
     width: 24px; height: 24px; line-height: 24px; text-align: center;
     border: none; outline: none; cursor: pointer;
-    background: rgba(20,22,30,.55); color: #d7dbe4; border-radius: 50%;
+    background: var(--bar); color: var(--ink); border-radius: 50%;
     font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s;
+    backdrop-filter: blur(10px);
   }
   body:not(.locked) #lockFloat { display: none; }
   #cur:empty + #sub:empty { visibility: hidden; }
 </style>
 </head>
-<body>
-  <!-- 顶部预留层：工具条 + 设置菜单（高度恒定，菜单开关不改窗口尺寸） -->
+<body data-theme="nebula">
   <div id="topLayer">
     <div id="bar">
       <button id="bHome" class="brand" title="小杨音乐">♪</button>
+      <button id="bCopy" title="复制当前歌词">⧉</button>
+      <button id="bReset" title="重置歌词位置">⌖</button>
       <span class="sep"></span>
       <button id="bBack" title="歌词提前 0.5s">-0.5s</button>
       <button id="bFwd" title="歌词延后 0.5s">+0.5s</button>
@@ -181,7 +194,7 @@
     <div id="sub"></div>
   </div>
   <script>
-    const { ipcRenderer } = require('electron');
+    const { ipcRenderer, clipboard } = require('electron');
     const box = document.getElementById('lyricBox');
     const cur = document.getElementById('cur');
     const sub = document.getElementById('sub');
@@ -190,11 +203,25 @@
     const bLock = document.getElementById('bLock');
     const lockFloat = document.getElementById('lockFloat');
     const menu = document.getElementById('menu');
-
-    /* ── 锁定：禁拖动窗口，但仍保留工具条可点（只去掉整条高亮） ── */
-    let locked = localStorage.getItem('uzz.lyricLock') === '1';
-    // send 必须在 applyLock 之前定义：applyLock() 会立刻被调用并用到 send
     const send = (ch, v) => ipcRenderer.send(ch, v);
+
+    const THEME_MAP = {
+      '星云幻彩': 'nebula', '霓虹青': 'cyan', '熔岩橙': 'lava', '极光紫': 'aurora',
+      '黑金': 'gold', '水墨': 'ink', '薄荷': 'mint', '纯净白': 'pearl',
+      '默认渐变': 'nebula', '纯色·绿': 'mint', '纯色·粉': 'nebula', '纯色·金': 'gold', '纯色·蓝': 'cyan',
+    };
+    const COLOR_THEME = { green: '薄荷', pink: '星云幻彩', gold: '黑金', blue: '霓虹青', gradient: '星云幻彩' };
+    const FONT_SCALES = { '小': .84, '标准': 1, '大': 1.18, '超大': 1.4 };
+    let locked = localStorage.getItem('uzz.lyricLock') === '1';
+    let baseSize = 28;
+
+    function getCfg() { try { return JSON.parse(localStorage.getItem('uzz.dl.cfg') || '{}'); } catch (e) { return {}; } }
+    function setCfg(k, v) {
+      const c = getCfg(); c[k] = v;
+      localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
+      send('lyric:cfg', c);
+    }
+
     function applyLock(v, notify = true) {
       locked = v;
       document.body.classList.toggle('locked', v);
@@ -202,67 +229,156 @@
       bLock.title = v ? '已锁定，靠近歌词右侧可解锁' : '锁定歌词并隐藏工具条';
       if (v) { menu.classList.remove('open'); document.body.classList.remove('menu-open', 'near-bar'); }
       localStorage.setItem('uzz.lyricLock', v ? '1' : '0');
-      // 关键：通知主进程真正改变窗口穿透行为
-      // （原先只写本页 localStorage，主进程完全不知情 → 设置形同虚设）
       if (notify) send('lyric:setLocked', v);
     }
     applyLock(locked, false);
     bLock.addEventListener('click', (e) => { e.stopPropagation(); applyLock(!locked); });
     lockFloat.addEventListener('click', (e) => { e.stopPropagation(); applyLock(false); });
 
-    /* ── 把歌词设置真正作用到界面上（原先只存配置、没改渲染，等于失效） ── */
+    /* ── 配置应用：主题 / 背景 / 字号档位 / 排版 ── */
     function applyCfg() {
       const c = getCfg();
-      // 总在最前 → 同步到主进程（setCfg 时已发，这里兜底首启）
-      // 双行模式：single 时只显示当前句，隐藏翻译/下一句
+      document.body.dataset.theme = THEME_MAP[c.dark || '星云幻彩'] || 'nebula';
+      document.body.classList.toggle('bg-soft', c.bg === '微光');
+      document.body.classList.toggle('bg-frost', c.bg === '磨砂');
+      document.documentElement.style.setProperty('--lyric-scale', String(FONT_SCALES[c.fontScale || '标准'] || 1));
+      cur.style.fontSize = Math.round(baseSize * (FONT_SCALES[c.fontScale || '标准'] || 1)) + 'px';
+      sub.style.fontSize = Math.round(cur.style.fontSize.replace('px','') * .56) + 'px';
       document.body.classList.toggle('single', !!c.single);
-      // 外文歌词显示：跟随主界面 / 总是显示 / 不显示
-      const st = c.showTrans || '跟随主界面';
-      document.body.classList.toggle('hide-sub', st === '不显示');
-      document.body.classList.toggle('force-sub', st === '总是显示');
-      // 竖排歌词：writing-mode 竖排
-      const vert = !!c.vertical;
-      box.style.writingMode = vert ? 'vertical-rl' : 'horizontal-tb';
-      box.style.textOrientation = vert ? 'upright' : '';
-      document.body.classList.toggle('vertical', vert);
-      // 对齐方式
+      document.body.classList.toggle('hide-sub', (c.showTrans || '跟随主界面') === '不显示');
+      document.body.classList.toggle('vertical', !!c.vertical);
       box.style.textAlign = c.align === '左对齐' ? 'left' : c.align === '右对齐' ? 'right' : 'center';
-      // 配色
-      const mode = c.dark || '默认渐变';
-      cur.classList.toggle('solid', mode !== '默认渐变');
-      if (mode === '纯色·绿') cur.style.color = '#1ecd8a';
-      else if (mode === '纯色·粉') cur.style.color = '#ff8fc7';
-      else if (mode === '纯色·金') cur.style.color = '#ffc861';
-      else if (mode === '纯色·蓝') cur.style.color = '#7ab6ff';
-      else cur.style.color = '';
+      scheduleHit();
     }
-    // 启动与外部改动时都应用一次
-    setTimeout(applyCfg, 60);
-    window.addEventListener('storage', applyCfg);
+
+    /* ── 主设置页推来的样式（保持向下兼容） ── */
+    function applyStyle(s) {
+      s = s || {};
+      if (s.font) { cur.style.fontFamily = s.font; sub.style.fontFamily = s.font; }
+      if (s.size) baseSize = Number(s.size) || 28;
+      if (s.weight) { cur.style.fontWeight = s.weight; sub.style.fontWeight = s.weight; }
+      if (s.unplayed) sub.style.color = s.unplayed;
+      const c = getCfg();
+      if (s.theme) c.dark = s.theme;
+      else if (s.played) c.dark = ({ '#1ecd8a': '薄荷', '#ff8fc7': '星云幻彩', '#ffc861': '黑金', '#7ab6ff': '霓虹青' })[s.played] || c.dark;
+      if (s.fontScale) c.fontScale = s.fontScale;
+      if (s.bg) c.bg = s.bg;
+      if (s.layout) c.single = s.layout === 'single';
+      if (s.align) c.align = ({ left: '左对齐', right: '右对齐', center: '居中' })[s.align] || '居中';
+      if (typeof s.topmost === 'boolean') c.alwaysTop = s.topmost;
+      if (typeof s.trans === 'boolean') c.showTrans = s.trans ? '跟随主界面' : '不显示';
+      localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
+      const solid = s.gradient === false || s.gradient === '0';
+      cur.classList.toggle('solid', solid);
+      if (solid && s.played) { document.body.style.setProperty('--accent', s.played); }
+      else document.body.style.removeProperty('--accent');
+      applyCfg();
+    }
+
+    /* ── 菜单 ── */
+    const items = [
+      { key: 'alwaysTop', ic: '⇧', label: '总在最前', type: 'check' },
+      { key: 'theme', ic: '◈', label: '歌词主题', type: 'sub', sub: ['星云幻彩', '霓虹青', '熔岩橙', '极光紫', '黑金', '水墨', '薄荷', '纯净白'] },
+      { key: 'bg', ic: '▤', label: '歌词背景', type: 'sub', sub: ['无', '微光', '磨砂'] },
+      { key: 'fontScale', ic: 'A', label: '字体大小', type: 'sub', sub: ['小', '标准', '大', '超大'] },
+      { key: 'showTrans', ic: '译', label: '外文歌词显示', type: 'sub', sub: ['跟随主界面', '总是显示', '不显示'] },
+      { key: 'vertical', ic: 'T', label: '切换竖排歌词', type: 'toggle' },
+      { key: 'align', ic: '≡', label: '对齐方式', type: 'sub', sub: ['左对齐', '居中', '右对齐'] },
+      { key: 'doubleMode', ic: '▢', label: '切换双行模式', type: 'act' },
+      { key: 'reset', ic: '⌖', label: '重置歌词位置', type: 'act' },
+      { key: 'more', ic: '⋯', label: '更多设置', type: 'main' },
+    ];
+    function renderMenu() {
+      const c = getCfg();
+      menu.innerHTML = items.map((it) => {
+        if (it.type === 'check') return `<div class="mi" data-k="${it.key}" data-t="check"><span class="ic">${it.ic}</span><span>${it.label}</span>${c[it.key] === false ? '' : '<span class="tick">✓</span>'}</div>`;
+        if (it.type === 'toggle') return `<div class="mi" data-k="${it.key}" data-t="toggle"><span class="ic">${it.ic}</span><span>${it.label}</span>${c[it.key] ? '<span class="tick">✓</span>' : ''}</div>`;
+        if (it.type === 'sub') return `<div class="mi" data-k="${it.key}" data-t="sub"><span class="ic">${it.ic}</span><span>${it.label}</span><span class="arw">›</span></div>`;
+        if (it.type === 'main') return `<div class="msep"></div><div class="mi" data-k="${it.key}" data-t="main"><span class="ic">${it.ic}</span><span>${it.label}</span></div>`;
+        return `<div class="mi" data-k="${it.key}" data-t="act"><span class="ic">${it.ic}</span><span>${it.label}</span></div>`;
+      }).join('');
+    }
+    let subBack = null;
+    function renderSub(it) {
+      subBack = renderMenu;
+      const c = getCfg();
+      const current = it.key === 'theme' ? (c.dark || '星云幻彩')
+        : it.key === 'bg' ? (c.bg || '无')
+        : it.key === 'fontScale' ? (c.fontScale || '标准')
+        : it.key === 'align' ? (c.align || '居中')
+        : it.key === 'showTrans' ? (c.showTrans || '跟随主界面') : c[it.key];
+      menu.innerHTML = `<div class="mi" data-t="back"><span class="arw">‹</span><span>${it.label}</span></div>`
+        + it.sub.map((s) => `<div class="mi" data-k="${it.key}" data-v="${s}" data-t="pick"><span style="width:16px"></span><span>${s}</span>${current === s ? '<span class="tick">✓</span>' : ''}</div>`).join('');
+    }
+    menu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const el = e.target.closest('.mi'); if (!el) return;
+      const t = el.dataset.t, k = el.dataset.k;
+      if (t === 'back') { subBack && subBack(); return; }
+      if (t === 'sub') { renderSub(items.find((x) => x.key === k)); scheduleHit(); return; }
+      if (t === 'check') { setCfg(k, getCfg()[k] === false); renderMenu(); applyCfg(); return; }
+      if (t === 'toggle') { setCfg(k, !getCfg()[k]); renderMenu(); applyCfg(); return; }
+      if (t === 'pick') { setCfg(k, el.dataset.v); applyCfg(); subBack && subBack(); scheduleHit(); return; }
+      if (t === 'act') {
+        if (k === 'doubleMode') { const c = getCfg(); c.single = !c.single; localStorage.setItem('uzz.dl.cfg', JSON.stringify(c)); send('lyric:cfg', c); applyCfg(); renderMenu(); }
+        if (k === 'reset') { send('lyric:resetBounds'); menu.classList.remove('open'); document.body.classList.remove('menu-open'); }
+        return;
+      }
+      if (t === 'main') { menu.classList.remove('open'); document.body.classList.remove('menu-open'); scheduleHit(); send('lyric:openSettings'); return; }
+    });
+    const bSet = document.getElementById('bSet');
+    bSet.addEventListener('click', (e) => {
+      e.stopPropagation(); subBack = null; renderMenu();
+      menu.classList.toggle('open');
+      document.body.classList.toggle('menu-open', menu.classList.contains('open'));
+    });
+    document.addEventListener('click', (e) => {
+      if (!menu.classList.contains('open')) return;
+      if (e.target === bSet || (e.target.closest && e.target.closest('#menu'))) return;
+      menu.classList.remove('open'); document.body.classList.remove('menu-open');
+    });
 
     /* ── 工具条动作 ── */
+    document.getElementById('bHome').addEventListener('click', () => send('lyric:showMain'));
+    document.getElementById('bCopy').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = [cur.textContent, sub.textContent].filter(Boolean).join('\n');
+      if (!text) return;
+      try { clipboard.writeText(text); } catch (err) {}
+      const b = e.currentTarget, old = b.textContent;
+      b.textContent = '✓'; setTimeout(() => { b.textContent = old; }, 900);
+    });
+    document.getElementById('bReset').addEventListener('click', (e) => { e.stopPropagation(); send('lyric:resetBounds'); });
+    document.getElementById('bBack').addEventListener('click', () => send('lyric:offset', -0.5));
+    document.getElementById('bFwd').addEventListener('click', () => send('lyric:offset', 0.5));
+    document.getElementById('bPrev').addEventListener('click', () => send('lyric:ctrl', 'prev'));
+    bPlay.addEventListener('click', () => send('lyric:ctrl', 'toggle'));
+    document.getElementById('bNext').addEventListener('click', () => send('lyric:ctrl', 'next'));
+    document.getElementById('bClose').addEventListener('click', () => send('lyric:close'));
 
-    /* ── 空白穿透：把可交互元素（歌词/工具条/菜单）的矩形上报主进程 ──
-       主进程据此决定 setIgnoreMouseEvents：
-       鼠标在空白处 → 整窗穿透，桌面图标可正常拖动；
-       鼠标移到歌词或工具条上 → 临时接管，可点可拖。 */
-    function measureLayout() {
-      const r = box.getBoundingClientRect();
-      document.body.style.setProperty('--controls-bottom', (innerHeight - r.top + 8) + 'px');
-    }
+    /* ── 自定义拖拽：可拖到屏幕顶部（窗口上部越界，歌词保持可见） ── */
+    let dragging = false, lastX = 0, lastY = 0;
+    box.addEventListener('mousedown', (e) => {
+      if (locked || e.button !== 0 || e.target.closest('button')) return;
+      dragging = true; lastX = e.screenX; lastY = e.screenY;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.screenX - lastX, dy = e.screenY - lastY;
+      if (dx || dy) { send('lyric:dragMove', { dx, dy }); lastX = e.screenX; lastY = e.screenY; }
+    }, { passive: true });
+    window.addEventListener('mouseup', () => { if (dragging) { dragging = false; send('lyric:dragEnd'); } });
+    window.addEventListener('blur', () => { if (dragging) { dragging = false; send('lyric:dragEnd'); } });
+
+    /* ── 空白穿透：只让歌词 / 工具条 / 菜单接管鼠标 ── */
+    function measureLayout() { document.body.style.setProperty('--controls-bottom', (innerHeight - box.getBoundingClientRect().top + 8) + 'px'); }
     function reportHitRects() {
       measureLayout();
       const rects = [];
-      const push = el => {
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        if (r.width && r.height) rects.push([Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]);
-      };
+      const push = (el) => { if (!el) return; const r = el.getBoundingClientRect(); if (r.width && r.height) rects.push([Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]); };
       if (locked) push(lockFloat);
-      else {
-        push(box); push(bar);
-        if (menu.classList.contains('open')) push(menu);
-      }
+      else { push(box); push(bar); if (menu.classList.contains('open')) push(menu); }
       send('lyric:hitTest', rects);
     }
     let hitTimer = null, hideTimer = null;
@@ -274,205 +390,42 @@
     let lastInside = null;
     function rectHit(el, x, y, pad = 8) {
       const r = el.getBoundingClientRect();
-      return !!(r.width && r.height && x >= r.left-pad && x <= r.right+pad && y >= r.top-pad && y <= r.bottom+pad);
+      return !!(r.width && r.height && x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad);
     }
     function showBar() { clearTimeout(hideTimer); hideTimer = null; if (!locked) document.body.classList.add('near-bar'); }
     function hideControls() { document.body.classList.remove('near-bar', 'near-lyric'); }
-    function reportPointer(inside) {
-      if (inside !== lastInside) { lastInside = inside; send('lyric:pointer', inside); }
-    }
-    window.addEventListener('mousemove', e => {
+    function reportPointer(inside) { if (inside !== lastInside) { lastInside = inside; send('lyric:pointer', inside); } }
+    window.addEventListener('mousemove', (e) => {
       if (locked) {
         const near = rectHit(box, e.clientX, e.clientY, 36) || rectHit(lockFloat, e.clientX, e.clientY, 12);
         document.body.classList.toggle('near-lyric', near);
         reportPointer(near && rectHit(lockFloat, e.clientX, e.clientY, 8));
         return;
       }
-      const inside = rectHit(box,e.clientX,e.clientY,12) || rectHit(bar,e.clientX,e.clientY,12)
-        || (menu.classList.contains('open') && rectHit(menu,e.clientX,e.clientY,10));
+      const inside = rectHit(box, e.clientX, e.clientY, 12) || rectHit(bar, e.clientX, e.clientY, 12)
+        || (menu.classList.contains('open') && rectHit(menu, e.clientX, e.clientY, 10));
       if (inside) showBar();
-      else if (!hideTimer) hideTimer = setTimeout(() => { hideTimer=null; if (!menu.classList.contains('open')) hideControls(); }, 450);
+      else if (!hideTimer) hideTimer = setTimeout(() => { hideTimer = null; if (!menu.classList.contains('open')) hideControls(); }, 450);
       reportPointer(inside);
     }, { passive: true });
-    window.addEventListener('mouseleave', () => {
-      clearTimeout(hideTimer); hideTimer=null; hideControls(); reportPointer(false);
-    });
+    window.addEventListener('mouseleave', () => { clearTimeout(hideTimer); hideTimer = null; hideControls(); reportPointer(false); });
 
-    // 锁定状态由主进程统一下发（设置页切换时同步）
-    // 带守卫：值未变化时不回发，避免与主进程互相触发形成循环
     ipcRenderer.on('lyric:locked', (e, on) => {
-      const v = !!on;
-      if (v === locked) return;
-      applyLock(v, false);
-      reportHitRects();
+      const v = !!on; if (v === locked) return;
+      applyLock(v, false); reportHitRects();
     });
-    // 首次加载时向主进程询问当前锁定态，避免与设置页不一致
     send('lyric:askLocked');
-    document.getElementById('bHome').addEventListener('click', () => send('lyric:showMain'));
-    document.getElementById('bBack').addEventListener('click', () => send('lyric:offset', -0.5));
-    document.getElementById('bFwd').addEventListener('click', () => send('lyric:offset', 0.5));
-    document.getElementById('bPrev').addEventListener('click', () => send('lyric:ctrl', 'prev'));
-    bPlay.addEventListener('click', () => send('lyric:ctrl', 'toggle'));
-    document.getElementById('bNext').addEventListener('click', () => send('lyric:ctrl', 'next'));
-    document.getElementById('bClose').addEventListener('click', () => send('lyric:close'));
-
-    /* ── 设置菜单（参考网易云桌面歌词设置） ── */
-    const getCfg = () => {
-      try { return JSON.parse(localStorage.getItem('uzz.dl.cfg') || '{}'); } catch (e) { return {}; }
-    };
-    const setCfg = (k, v) => {
-      const c = getCfg();
-      c[k] = v;
-      localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
-      // 通知主进程 → 转发给设置页应用样式
-      send('lyric:cfg', c);
-    };
-    const items = [
-      { key: 'alwaysTop', ic: '⇧', label: '总在最前', type: 'check' },
-      { key: 'doubleMode', ic: '▢', label: '切换双行模式', type: 'act' },
-      { key: 'showTrans', ic: '译', label: '外文歌词显示', type: 'sub', sub: ['跟随主界面', '总是显示', '不显示'] },
-      { key: 'vertical', ic: 'T', label: '切换竖排歌词', type: 'toggle' },
-      { key: 'align', ic: '≡', label: '对齐方式', type: 'sub', sub: ['左对齐', '居中', '右对齐'] },
-      { key: 'dark', ic: '◐', label: '更换配色', type: 'sub', sub: ['默认渐变', '纯色·绿', '纯色·粉', '纯色·金', '纯色·蓝'] },
-      { key: 'more', ic: '⋯', label: '更多设置', type: 'main' },
-    ];
-    function renderMenu() {
-      const c = getCfg();
-      menu.innerHTML = items.map((it) => {
-        if (it.type === 'check') {
-          return `<div class="mi" data-k="${it.key}" data-t="check">`
-            + `<span class="ic">${it.ic}</span><span>${it.label}</span>`
-            + (c[it.key] === false ? '' : '<span class="tick">✓</span>') + `</div>`;
-        }
-        if (it.type === 'toggle') {
-          return `<div class="mi" data-k="${it.key}" data-t="toggle">`
-            + `<span class="ic">${it.ic}</span><span>${it.label}</span>`
-            + (c[it.key] ? '<span class="tick">✓</span>' : '') + `</div>`;
-        }
-        if (it.type === 'sub') {
-          return `<div class="mi" data-k="${it.key}" data-t="sub">`
-            + `<span class="ic">${it.ic}</span><span>${it.label}</span><span class="arw">›</span></div>`;
-        }
-        if (it.type === 'main') {
-          return `<div class="msep"></div><div class="mi" data-k="${it.key}" data-t="main">`
-            + `<span class="ic">${it.ic}</span><span>${it.label}</span></div>`;
-        }
-        return `<div class="mi" data-k="${it.key}" data-t="act">`
-          + `<span class="ic">${it.ic}</span><span>${it.label}</span></div>`;
-      }).join('');
-    }
-    // 二级子菜单（对齐方式 / 配色）
-    let subBack = null;
-    function renderSub(it) {
-      subBack = renderMenu;
-      const c = getCfg();
-      menu.innerHTML = `<div class="mi" data-t="back"><span class="arw">‹</span><span>${it.label}</span></div>`
-        + it.sub.map((s) => {
-          const on = it.key === 'align'
-            ? (c.align === s || (!c.align && s === '居中'))
-            : (c[it.key] === s);
-          return `<div class="mi" data-k="${it.key}" data-v="${s}" data-t="pick">`
-            + `<span style="width:15px"></span><span>${s}</span>`
-            + (on ? '<span class="tick">✓</span>' : '') + `</div>`;
-        }).join('');
-    }
-    menu.addEventListener('click', (e) => {
-      // 必须阻止冒泡：否则会命中 document 上的"点别处关闭"，
-      // 表现为一点子菜单菜单就自己关掉（用户反馈"点击设置菜单会自动隐藏"）。
-      e.stopPropagation();
-      const el = e.target.closest('.mi');
-      if (!el) return;
-      const t = el.dataset.t, k = el.dataset.k;
-      if (t === 'back') { subBack(); return; }
-      if (t === 'sub') { renderSub(items.find((x) => x.key === k)); scheduleHit(); return; }
-      if (t === 'check') { setCfg(k, getCfg()[k] === false ? true : false); renderMenu(); applyCfg(); scheduleHit(); return; }
-      if (t === 'toggle') { setCfg(k, !getCfg()[k]); renderMenu(); applyCfg(); scheduleHit(); return; }
-      if (t === 'pick') {
-        setCfg(k, el.dataset.v);
-        applyCfg();                 // 立即生效（对齐/配色/翻译显示）
-        subBack ? subBack() : renderMenu();
-        scheduleHit();
-        return;
-      }
-      if (t === 'act') {
-        if (k === 'doubleMode') {
-          const c = getCfg();
-          c.single = !c.single;
-          localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
-          send('lyric:cfg', c);
-          applyCfg();
-          renderMenu();
-        }
-        return;
-      }
-      if (t === 'main') { menu.classList.remove('open'); document.body.classList.remove('menu-open'); scheduleHit(); send('lyric:openSettings'); return; }
-    });
-    const bSet = document.getElementById('bSet');
-    bSet.addEventListener('click', (e) => {
-      e.stopPropagation();
-      subBack = null;
-      renderMenu();
-      menu.classList.toggle('open');
-      // 菜单展开时强制工具条保持可见（否则鼠标移向菜单时工具条淡出，菜单跟着看不见）
-      document.body.classList.toggle('menu-open', menu.classList.contains('open'));
-    });
-    // 点别处关闭：用 closest 精确判断，菜单内部点击不关闭
-    document.addEventListener('click', (e) => {
-      if (!menu.classList.contains('open')) return;
-      if (e.target === bSet) return;
-      if (e.target.closest && e.target.closest('#menu')) return;
-      menu.classList.remove('open');
-      document.body.classList.remove('menu-open');
-    });
-    renderMenu();
-
-    /* ── 样式：兼容设置页推参（字体/字号/字粗/描边/配色/行数/对齐），默认渐变 ── */
-    function applyStyle(s) {
-      s = s || {};
-      if (s.font) { cur.style.fontFamily = s.font; sub.style.fontFamily = s.font; }
-      if (s.size) { cur.style.fontSize = s.size + 'px'; sub.style.fontSize = Math.round(s.size * 0.55) + 'px'; }
-      if (s.weight) { cur.style.fontWeight = s.weight; sub.style.fontWeight = s.weight; }
-      const shadow = s.stroke === false ? 'none' : 'drop-shadow(0 1px 3px rgba(0,0,0,.75))';
-      cur.style.filter = shadow; sub.style.filter = shadow;
-      if (s.unplayed) sub.style.color = s.unplayed;
-      const grad = s.gradient !== false && s.gradient !== '0';
-      cur.classList.toggle('solid', !grad);
-      if (!grad) {
-        if (s.played) cur.style.color = s.played;
-      } else {
-        cur.style.color = '';
-      }
-      document.body.classList.toggle('single', s.layout === 'single');
-      if (s.align) box.style.textAlign = s.align;
-      const c = getCfg();
-      if (s.layout) c.single = s.layout === 'single';
-      if (s.align) c.align = ({ left: '左对齐', right: '右对齐', center: '居中' })[s.align] || '居中';
-      if (typeof s.topmost === 'boolean') c.alwaysTop = s.topmost;
-      if (typeof s.trans === 'boolean') c.showTrans = s.trans ? '跟随主界面' : '不显示';
-      if (s.gradient !== undefined) c.dark = grad ? '默认渐变' : ({ '#1ecd8a': '纯色·绿', '#ff8fc7': '纯色·粉', '#ffc861': '纯色·金', '#7ab6ff': '纯色·蓝' })[s.played] || '自定义';
-      localStorage.setItem('uzz.dl.cfg', JSON.stringify(c));
-      document.body.classList.toggle('hide-sub', c.showTrans === '不显示');
-      scheduleHit();
-    }
-    ipcRenderer.on('lyric:config', (e, cfg) => {
-      localStorage.setItem('uzz.dl.cfg', JSON.stringify(cfg || {}));
-      applyCfg(); scheduleHit();
-    });
-
-    /* ── 歌词内容：cur=当前句，sub=翻译（有翻译显示翻译，否则显示下一句） ── */
+    ipcRenderer.on('lyric:config', (e, cfg) => { localStorage.setItem('uzz.dl.cfg', JSON.stringify(cfg || {})); applyCfg(); scheduleHit(); });
+    ipcRenderer.on('lyric:style', (e, s) => applyStyle(s));
     ipcRenderer.on('lyric:payload', (e, p) => {
       p = p || {};
-      if (!p.keep) {
-        cur.textContent = p.cur || '';
-        sub.textContent = p.trans || p.next || '';
-      }
-      if (typeof p.playing === 'boolean') {
-        bPlay.textContent = p.playing ? '⏸' : '▶';
-        bPlay.title = p.playing ? '暂停' : '播放';
-      }
-      scheduleHit();   // 歌词长度变化 → 歌词框宽度变化 → 命中矩形要更新
+      if (!p.keep) { cur.textContent = p.cur || ''; sub.textContent = p.trans || p.next || ''; }
+      if (typeof p.playing === 'boolean') { bPlay.textContent = p.playing ? '⏸' : '▶'; bPlay.title = p.playing ? '暂停' : '播放'; }
+      scheduleHit();
     });
-    ipcRenderer.on('lyric:style', (e, s) => applyStyle(s));
+    renderMenu(); applyCfg();
+    setTimeout(applyCfg, 60);
+    window.addEventListener('storage', applyCfg);
   </script>
 </body>
 </html>

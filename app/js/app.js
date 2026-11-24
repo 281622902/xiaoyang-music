@@ -1859,9 +1859,9 @@
     p.style.fontFamily = font === '默认' ? '' : font;
     p.style.fontSize = size + 'px';
     p.style.fontWeight = weight;
-    const map = { green: '#1ecd8a', pink: '#ff8fc7', gold: '#ffc861', blue: '#7ab6ff' };
-    if (color === 'gradient') { p.classList.remove('solid'); p.style.color = ''; }
-    else { p.classList.add('solid'); p.style.color = map[color] || '#1ecd8a'; }
+    const map = { gradient: '#ffb1e1', cyan: '#8ff7e6', lava: '#ffd08a', aurora: '#c9a7ff', gold: '#ffe0a3', ink: '#f2efe6', mint: '#b7ffd8', pearl: '#ffffff', green: '#1ecd8a', pink: '#ff8fc7', blue: '#7ab6ff' };
+    p.classList.remove('solid');
+    p.style.color = map[color] || '#ffb1e1';
   }
 
   function bindSettingsExtra() {
@@ -2324,6 +2324,8 @@
     bindStSel('stLyricLayout', 'uzz.dl.layout', 'double', pushLyricCfg);
     bindStSel('stLyricAlign', 'uzz.dl.align', 'center', pushLyricCfg);
     bindStSel('stLyricColor', 'uzz.dl.color', 'gradient', () => { pushLyricCfg(); applyLyricPreview(); });
+    bindStSel('stLyricScale', 'uzz.dl.fontScale', '标准', pushLyricCfg);
+    bindStSel('stLyricBg', 'uzz.dl.bg', '无', pushLyricCfg);
     applyLyricPreview();
 
     // ── 桌面与歌词 ──

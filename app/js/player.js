@@ -332,7 +332,8 @@
   function pushLyricStyle() {
     if (!window.uzzBridge) return;
     const color = localStorage.getItem('uzz.dl.color') || 'gradient';
-    const colors = { green: '#1ecd8a', pink: '#ff8fc7', gold: '#ffc861', blue: '#7ab6ff' };
+    const themeNames = { gradient: '星云幻彩', cyan: '霓虹青', lava: '熔岩橙', aurora: '极光紫', gold: '黑金', ink: '水墨', mint: '薄荷', pearl: '纯净白', green: '薄荷', pink: '星云幻彩', blue: '霓虹青' };
+    const themeColors = { gradient: '#ffb1e1', cyan: '#8ff7e6', lava: '#ffd08a', aurora: '#c9a7ff', gold: '#ffe0a3', ink: '#f2efe6', mint: '#b7ffd8', pearl: '#ffffff', green: '#1ecd8a', pink: '#ff8fc7', blue: '#7ab6ff' };
     window.uzzBridge.setLyricStyle({
       font: localStorage.getItem('uzz.dl.font') || 'Microsoft YaHei',
       size: parseInt(localStorage.getItem('uzz.dl.size') || '30', 10),
@@ -340,11 +341,14 @@
       stroke: localStorage.getItem('uzz.dl.stroke') !== '0',
       layout: localStorage.getItem('uzz.dl.layout') || 'double',
       align: localStorage.getItem('uzz.dl.align') || 'center',
-      gradient: color === 'gradient',
-      played: colors[color] || localStorage.getItem('uzz.dl.played') || '#1ecd8a',
+      gradient: true,
+      theme: themeNames[color] || '星云幻彩',
+      played: themeColors[color] || localStorage.getItem('uzz.dl.played') || '#ffb1e1',
       unplayed: localStorage.getItem('uzz.dl.unplayed') || '#8a93a6',
       topmost: localStorage.getItem('uzz.dl.topmost') !== '0',
       trans: localStorage.getItem('uzz.dl.trans') !== '0',
+      fontScale: localStorage.getItem('uzz.dl.fontScale') || '标准',
+      bg: localStorage.getItem('uzz.dl.bg') || '无',
     });
   }
   function syncLyricBtn() {
@@ -1648,8 +1652,11 @@
       if (window.uzzBridge.onLyricConfig) window.uzzBridge.onLyricConfig(cfg => {
         for (const k of ['layout', 'align', 'played']) if (cfg[k] != null) localStorage.setItem('uzz.dl.' + k, cfg[k]);
         for (const k of ['topmost', 'gradient', 'trans']) if (cfg[k] != null) localStorage.setItem('uzz.dl.' + k, cfg[k] ? '1' : '0');
-        const color = cfg.gradient ? 'gradient' : ({ '#1ecd8a': 'green', '#ff8fc7': 'pink', '#ffc861': 'gold', '#7ab6ff': 'blue' })[cfg.played] || 'green';
-        localStorage.setItem('uzz.dl.color', color);
+        const themeKey = ({ '星云幻彩': 'gradient', '霓虹青': 'cyan', '熔岩橙': 'lava', '极光紫': 'aurora', '黑金': 'gold', '水墨': 'ink', '薄荷': 'mint', '纯净白': 'pearl' })[cfg.theme]
+          || ({ '#1ecd8a': 'green', '#ff8fc7': 'pink', '#ffc861': 'gold', '#7ab6ff': 'blue' })[cfg.played] || 'gradient';
+        localStorage.setItem('uzz.dl.color', themeKey);
+        if (cfg.fontScale) localStorage.setItem('uzz.dl.fontScale', cfg.fontScale);
+        if (cfg.bg) localStorage.setItem('uzz.dl.bg', cfg.bg);
         const colorEl = $('stLyricColor'); if (colorEl) colorEl.value = color;
         const layout = $('stLyricLayout'); if (layout) layout.value = cfg.layout;
         const align = $('stLyricAlign'); if (align) align.value = cfg.align;

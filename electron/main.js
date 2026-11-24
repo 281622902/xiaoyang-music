@@ -119,6 +119,11 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.8.7': [
+    '修复桌面歌词无法拖到屏幕顶部的问题',
+    '重做桌面歌词视觉，新增 8 套主题、3 种歌词背景与字号档位',
+    '桌面歌词工具条新增复制歌词、重置位置快捷按钮',
+  ],
   '3.8.6': [
     '修复大歌单详情只显示前 10 首的问题，完整加载全部真实曲目',
     '首页推荐歌单与榜单精选改为按日期轮换真实数据，每天自动更新',
@@ -1874,6 +1879,40 @@ public class Audio {
       if (hit) setLyricIgnore(false);
     } catch (e) { /* 忽略 */ }
   }, 200);
+  // 自定义拖拽：原生 -webkit-app-region:drag 会把窗口限制在 workArea 内，
+  // 而歌词位于 340px 高窗口底部，导致歌词最多只能到屏幕上方约 340px。
+  // 这里允许窗口上边越界，仅保留底部 64px 可见，歌词即可移动到屏幕顶部。
+  ipcMain.on('lyric:dragMove', (e, d) => {
+    if (!lyricWin || lyricWin.isDestroyed()) return;
+    const dx = Number(d && d.dx) || 0, dy = Number(d && d.dy) || 0;
+    if (!dx && !dy) return;
+    const b = lyricWin.getBounds();
+    let area;
+    try { area = screen.getDisplayMatching(b).workArea; }
+    catch (err) { area = screen.getPrimaryDisplay().workArea; }
+    const keepVisible = 64;
+    const minY = area.y - (LYRIC_H - keepVisible);
+    const maxY = area.y + area.height - keepVisible;
+    const x = Math.min(Math.max(b.x + dx, area.x - LYRIC_W + keepVisible), area.x + area.width - keepVisible);
+    const y = Math.min(Math.max(b.y + dy, minY), maxY);
+    lyricWin.setBounds({ x, y, width: b.width, height: b.height }, false);
+  });
+  ipcMain.on('lyric:dragEnd', () => {
+    if (!lyricWin || lyricWin.isDestroyed()) return;
+    try { const c = loadCfg(); c.lyricBounds = lyricWin.getBounds(); saveCfg(c); } catch (e) { /* 忽略 */ }
+  });
+  ipcMain.on('lyric:resetBounds', () => {
+    if (!lyricWin || lyricWin.isDestroyed()) return;
+    const area = screen.getPrimaryDisplay().workArea;
+    const b = lyricWin.getBounds();
+    lyricWin.setBounds({
+      x: area.x + Math.round((area.width - b.width) / 2),
+      y: area.y + Math.round((area.height - b.height) / 2),
+      width: b.width, height: b.height,
+    }, false);
+    try { const c = loadCfg(); c.lyricBounds = lyricWin.getBounds(); saveCfg(c); } catch (e) { /* 忽略 */ }
+  });
+
   ipcMain.on('lyric:offset', (e, delta) => {
     if (win) win.webContents.send('lyric:offset', Number(delta) || 0);
   });
@@ -1888,6 +1927,7 @@ public class Audio {
       lastLyricStyle = { ...lastLyricStyle, layout: cfg.single ? 'single' : 'double',
         align: ({ '左对齐': 'left', '右对齐': 'right' })[cfg.align] || 'center',
         topmost: cfg.alwaysTop !== false, gradient: !cfg.dark || cfg.dark === '默认渐变',
+        theme: cfg.dark || '星云幻彩', fontScale: cfg.fontScale || '标准', bg: cfg.bg || '无',
         played: colors[cfg.dark] || (lastLyricStyle && lastLyricStyle.played) || '#1ecd8a' };
       if (win && !win.isDestroyed()) win.webContents.send('lyric:configChanged', { ...lastLyricStyle, trans: cfg.showTrans !== '不显示' });
     } catch (e2) { /* 忽略 */ }
