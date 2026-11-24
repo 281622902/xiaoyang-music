@@ -845,7 +845,8 @@
         UzzApi.getPlaylists(cats[(idx + 1) % cats.length], 80, 0),
       ]);
       const seen = new Set();
-      const pool = settled.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value)
+      const pool = settled.flatMap((r, idx) => r.status === 'fulfilled'
+        ? r.value.map((p) => ({ ...p, __source: cats[idx] })) : [])
         .filter((p) => { const k = String(p.id); if (seen.has(k)) return false; seen.add(k); return true; });
       const list = shuffleSeeded(pool, seed).slice(0, 15);
       grid.innerHTML = list.map((p) => `
@@ -855,6 +856,7 @@
             <span class="plc-plays">▶ ${fmtCount(p.playCount)}</span>
           </div>
           <div class="plc-name">${escapeHtml(p.name)}</div>
+          <div class="plc-src">来自「${escapeHtml(p.__source || '精选')}」· 每日轮换</div>
         </div>`).join('');
     } catch (e) {
       grid.innerHTML = `<div class="loading-pad" style="grid-column:1/-1">推荐歌单加载失败：${escapeHtml(e.message || e)}</div>`;
@@ -3137,6 +3139,8 @@
       // 搜索历史
       searchHistory = [kw].concat(searchHistory.filter((h) => h !== kw)).slice(0, 10);
       saveJSON('uzz.searchHistory', searchHistory);
+      const histLine = $('searchHistoryLine');
+      if (histLine) histLine.textContent = searchHistory.length ? '最近搜索：' + searchHistory.slice(0, 3).join(' / ') : '';
       hideSuggest();
     }
     if (loading) return;
@@ -3178,9 +3182,12 @@
     $('searchTabsBar').classList.remove('hidden');
     try {
       const { list, total } = await UzzApi.search(curKeyword, curType, curPage, 20);
-      curTotal = total;
-      $('searchMeta').textContent = total ? `共 ${total} 个结果` : '';
-      renderResults(list);
+      const vendor = $('searchVendor')?.value || 'all';
+      const shown = vendor === 'all' ? list : list.filter((t) => (t.vendor || 'netease') === vendor);
+      curTotal = vendor === 'all' ? total : shown.length;
+      const vendorLabel = ({ netease: '网易云', kugou: '酷狗', qq: 'QQ音乐', kuwo: '酷我', local: '本地' })[vendor] || '';
+      $('searchMeta').textContent = total ? `共 ${total} 个结果${vendor === 'all' ? '' : ` · 当前 ${shown.length} 条${vendorLabel}`}` : '';
+      renderResults(shown);
     } catch (e) {
       const msg = (e && e.message) || String(e);
       let hint = '';
@@ -3476,6 +3483,10 @@
         savePlaylists(); renderPlaylistNav(); renderLibrary();
         toast(`已保存 ${tracks.length} 首到「${pl.name}」`);
       });
+    });
+    $('searchVendor')?.addEventListener('change', () => {
+      if (!curKeyword) return;
+      curPage = 1; doSearch(false);
     });
     bindShortcuts();
 
