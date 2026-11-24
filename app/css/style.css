@@ -2031,3 +2031,5 @@ body.mm-anim.mm-hiding .mm-lyric-box {
 .dp-pwd { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 .dp-pwd summary { cursor: pointer; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
 .dp-pwd .xy-secondary { width: 100%; margin-top: 4px; }
+.desktop-profile .dp-check { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; font-size: 11px; }
+.desktop-profile .dp-check input { margin: 0; }

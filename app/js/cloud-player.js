@@ -63,8 +63,16 @@
       if (!global.XYSync) { el.textContent = '云同步组件未加载'; return; }
       try {
         const p = await global.XYSync.preview();
-        el.textContent = `本机 ${p.localPlaylists} 张歌单 / 云端 ${p.cloudPlaylists} 张 · 云端收藏 ${p.cloudFavorites} 首 · 版本 ${p.revision}`;
+        el.textContent = `本机 ${p.localPlaylists} 张歌单 / 云端 ${p.cloudPlaylists} 张 · 收藏 ${p.cloudFavorites} 首 · 最近播放 ${p.cloudRecent || 0} 首 · 版本 ${p.revision}`;
       } catch (error) { el.textContent = '同步状态读取失败：' + (error.message || error); }
+    }
+    const recentSync = $('desktopRecentSync');
+    if (recentSync) {
+      recentSync.checked = localStorage.getItem('uzz.sync.recent') !== '0';
+      recentSync.addEventListener('change', () => {
+        localStorage.setItem('uzz.sync.recent', recentSync.checked ? '1' : '0');
+        say(recentSync.checked ? '最近播放将随歌单同步' : '已关闭最近播放同步');
+      });
     }
     $('desktopProfileSave')?.addEventListener('click', saveProfile);
     $('desktopPwdSave')?.addEventListener('click', savePassword);
