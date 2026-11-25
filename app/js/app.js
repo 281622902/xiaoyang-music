@@ -3677,6 +3677,8 @@
     // ── 顶栏功能按钮：换肤 / Mini 模式 / 设置 ──
     // 皮肤管理 = 独立全屏皮肤页（网易云式：tabs 个性皮肤/头像挂件/音乐桌面）
     function openSkinOverlay() {
+      // 顶栏按钮无缝切换：已打开则再点一次关闭
+      if (document.body.classList.contains('skin-open')) { closeSkinOverlay(); return; }
       // 打开前刷新会员状态（会员分区门禁）
       const user = window.XYCloud?.user;
       if (user && window.getVipInfo) {
@@ -3690,6 +3692,7 @@
       document.body.classList.remove('skin-open');
       $('skinOverlay').classList.add('hidden');
     }
+    window.XYApp.closeSkinOverlay = closeSkinOverlay;
     const tbSkin = $('tbSkin');
     if (tbSkin) tbSkin.addEventListener('click', openSkinOverlay);
     // 皮肤页顶部 tabs：个性皮肤 / 头像挂件 / 音乐桌面
@@ -3760,8 +3763,7 @@
       };
       paintDt();
     }
-    const skinClose = $('skinClose');
-    if (skinClose) skinClose.addEventListener('click', closeSkinOverlay);
+    // 皮肤页关闭：顶栏皮肤/设置按钮切换（不再有 ✕ 按钮）
     const tbMini = $('tbMini');
     if (tbMini) {
       tbMini.addEventListener('click', () => {
@@ -3776,7 +3778,11 @@
       });
     }
     const tbSettings = $('tbSettings');
-    if (tbSettings) tbSettings.addEventListener('click', () => showView('settings'));
+    if (tbSettings) tbSettings.addEventListener('click', () => {
+      // 皮肤页打开时点设置：无缝切回设置页（先关皮肤页）
+      if (document.body.classList.contains('skin-open')) closeSkinOverlay();
+      showView('settings');
+    });
 
     // 播放页右上角「播放器模式」：复用顶栏 Mini 开关（先收起播放页再进 Mini）
     const fpMini = $('fpMini');

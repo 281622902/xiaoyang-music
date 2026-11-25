@@ -388,8 +388,6 @@ html.custom-bg .set-scroll .set-page .st-row {
 .mdesk-info .xy-primary { min-height: 40px; padding: 8px 22px; border-radius: 999px; }
 
 /* ── 独立皮肤页补充（sk-toolbar / 自定义换肤按钮 / 弹出面板） ── */
-.sk-close { width: 34px; height: 34px; border-radius: 50%; font-size: 18px; color: var(--text-2); }
-.sk-close:hover { color: var(--text); background: var(--bg-2); }
 .sk-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .sk-custom-btn {
   display: flex; align-items: center; gap: 8px; font-size: 13px;
