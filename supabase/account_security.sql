@@ -129,3 +129,43 @@ end;
 $$;
 revoke all on function public.admin_reset_user_password(text, text) from public, anon;
 grant execute on function public.admin_reset_user_password(text, text) to authenticated;
+
+-- 校验密保答案（更改密保前验证；仅本人登录态；共享防暴力计数）
+create or replace function public.verify_security_answers(p_answers jsonb)
+returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_att     int;
+  v_locked  timestamptz;
+  v_total   int;
+  v_correct int;
+begin
+  if v_uid is null then return 'not logged in'; end if;
+  select max(locked_until), max(attempts) into v_locked, v_att
+    from public.account_security where user_id = v_uid;
+  if v_locked is not null and v_locked > now() then
+    return 'too many attempts, retry after ' || to_char(v_locked, 'HH24:MI');
+  end if;
+  select count(*),
+         coalesce(sum(case when exists (
+           select 1 from jsonb_array_elements(coalesce(p_answers, '[]'::jsonb)) a
+           where (a->>'slot')::int = s.slot
+             and left(coalesce(a->>'answer_hash', ''), 64) = s.answer_hash
+         ) then 1 else 0 end), 0)
+    into v_total, v_correct
+    from public.account_security s where s.user_id = v_uid;
+  if v_total = 0 then return 'security question not set for this account'; end if;
+  if v_correct < v_total then
+    update public.account_security
+      set attempts = v_att + 1,
+          locked_until = case when v_att + 1 >= 5 then now() + interval '30 minutes' else locked_until end
+      where user_id = v_uid;
+    return 'wrong security answer';
+  end if;
+  update public.account_security set attempts = 0, locked_until = null where user_id = v_uid;
+  return 'ok';
+end;
+$$;
+revoke all on function public.verify_security_answers(jsonb) from public, anon;
+grant execute on function public.verify_security_answers(jsonb) to authenticated;

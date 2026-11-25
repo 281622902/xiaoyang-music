@@ -393,6 +393,14 @@
                   <button id="secMgrToggle" class="xy-secondary hidden" type="button">设置密保</button>
                 </div>
                 <p class="sec-mgr-sub">至少设置 3 个密保问题（支持自定义问题），忘记密码时须全部答对方可找回密码，答案请牢记</p>
+                <form id="secMgrVerify" class="sec-mgr-form hidden" autocomplete="off" novalidate>
+                  <p class="sec-mgr-sub">为保障账户安全，更改密保前请先回答当前设置的密保问题</p>
+                  <div id="secMgrVList" class="sec-mgr-vlist"></div>
+                  <div class="sec-mgr-btns">
+                    <button class="xy-primary" type="submit">验证密保</button>
+                    <button id="secMgrVCancel" class="xy-secondary" type="button">取消</button>
+                  </div>
+                </form>
                 <form id="secMgrForm" class="sec-mgr-form hidden" autocomplete="off" novalidate>
                   <div class="sec-mgr-slot">
                     <div class="sec-mgr-qrow">

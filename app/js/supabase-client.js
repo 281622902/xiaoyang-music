@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.15.3', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.15.4', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -208,6 +208,26 @@
       const msg = String(data || '');
       const mapped = SEC_RESET_MSG[msg] || (/^too many attempts/.test(msg) ? '尝试次数过多，请 ' + msg.replace('too many attempts, retry after ', '') + ' 后再试' : msg);
       throw new Error(mapped || '重置失败，请稍后再试');
+    }
+    return true;
+  }
+  // 更改密保前校验：验证本人已设的全部密保答案（登录态；共享防暴力计数）
+  async function verifySecurityAnswers(answers) {
+    const list = [];
+    for (const item of (Array.isArray(answers) ? answers : [])) {
+      list.push({ slot: item.slot, answer_hash: await hashSecurityAnswer(item.answer) });
+    }
+    const { data, error } = await client().rpc('verify_security_answers', {
+      p_answers: list.map((a) => ({ slot: a.slot, answer_hash: a.hash })),
+    });
+    if (error) {
+      const raw = String(error.message || '');
+      throw new Error(/Failed to fetch|network/i.test(raw) ? '网络连接失败，请检查网络后重试' : '验证失败，请稍后再试');
+    }
+    if (data !== 'ok') {
+      const msg = String(data || '');
+      const mapped = SEC_RESET_MSG[msg] || (/^too many attempts/.test(msg) ? '尝试次数过多，请 ' + msg.replace('too many attempts, retry after ', '') + ' 后再试' : msg);
+      throw new Error(mapped || '验证失败，请稍后再试');
     }
     return true;
   }
@@ -497,11 +517,11 @@
     createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist,
     updateProfile, changePassword, compressAvatar,
     sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket,
-    isAdmin, isAdminAsync, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip, getSecurityQuestion, setSecurityQuestion, resetPasswordBySecurity, adminResetUserPassword });
+    isAdmin, isAdminAsync, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip, getSecurityQuestion, setSecurityQuestion, resetPasswordBySecurity, verifySecurityAnswers, adminResetUserPassword });
   // 同步挂到 XYCloud，避免调用方在 window / XYCloud 两个对象间踩坑
   Object.assign(cloud, { registerUser, loginUser, logoutUser, updateProfile, changePassword, compressAvatar,
     sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket,
-    isAdmin, isAdminAsync, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip, getSecurityQuestion, setSecurityQuestion, resetPasswordBySecurity, adminResetUserPassword });
+    isAdmin, isAdminAsync, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip, getSecurityQuestion, setSecurityQuestion, resetPasswordBySecurity, verifySecurityAnswers, adminResetUserPassword });
   cloud.getUpdateInfo = async function () {
     let native = null, androidInfo = null;
     try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }

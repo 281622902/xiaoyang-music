@@ -59,7 +59,7 @@ returns table (
 language sql stable security definer set search_path = public as $$
   select
     u.id,
-    regexp_replace(regexp_replace(coalesce(u.phone, ''), '^\+86', ''), '^86(?=1[0-9]{10}$)', ''),
+    right(coalesce(u.phone,''), 11),
     coalesce(u.raw_user_meta_data ->> 'nickname', ''),
     coalesce(u.raw_user_meta_data ->> 'username', ''),
     u.created_at,
@@ -67,7 +67,7 @@ language sql stable security definer set search_path = public as $$
     v.expires_at
   from auth.users u
   left join public.vip_members v
-    on v.phone = regexp_replace(regexp_replace(coalesce(u.phone, ''), '^\+86', ''), '^86(?=1[0-9]{10}$)', '')
+    on v.phone = right(coalesce(u.phone,''), 11)
   where coalesce(u.phone, '') <> ''
   order by u.created_at desc;
 $$;

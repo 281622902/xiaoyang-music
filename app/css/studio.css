@@ -408,3 +408,7 @@ html[data-theme="dark"] .ne-sec-alert { background: #1f222b; }
 
 /* 资料编辑块在设置页内完整展开（不再用旧 profile 卡的 250px 内滚动） */
 .set-page .desktop-profile { max-height: none; overflow: visible; }
+
+/* ── 更改密保验证步骤 ── */
+.sec-mgr-vlist { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.sec-mgr-btns { display: flex; gap: 10px; align-items: center; }
