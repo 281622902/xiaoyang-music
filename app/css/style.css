@@ -884,7 +884,7 @@ html[data-theme="light"] .fp-bottom { background: rgba(255,255,255,.5); border-t
 /* Mini 模式：只保留标题栏 + 播放条 */
 body.mini-mode .body-row, body.mini-mode #fullPlayer, body.mini-mode .drawer { display: none !important; }
 body.mini-mode .main { margin-bottom: 0; }
-body.mini-mode .skin-overlay { left: 0; top: 0; border-left: 0; border-top: 0; border-radius: 0; box-shadow: none; }
+body.mini-mode .skin-overlay { left: 0; top: 0; bottom: 0; }
 body.mini-mode .main-navbar { display: none; }
 body.mini-mode .playerbar { position: relative; }
 
@@ -1239,24 +1239,22 @@ body.is-playing .pb-cover { animation: pb-cover-spin 12s linear infinite; }
   font-family: inherit; margin: 0 1px;
 }
 
-/* ── #8 换肤：全屏皮肤页 ── */
+/* ── #8 换肤：独立皮肤页（版式与设置页一致：透明融入主界面） ── */
 .skin-overlay {
-  position: fixed; top: 44px; right: 0; bottom: 0; left: 208px; z-index: 300;
-  background: var(--bg-0); display: flex; flex-direction: column;
-  border-left: 1px solid var(--line);
-  border-top: 1px solid var(--line);
-  border-radius: 16px 0 0 0;
-  box-shadow: -12px 0 32px rgba(0, 0, 0, .18);
+  position: fixed; top: 44px; right: 0; bottom: 84px; left: 208px; z-index: 300;
+  background: transparent; display: flex; flex-direction: column;
 }
 .skin-overlay.hidden { display: none; }
-.sk-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 28px; border-bottom: 1px solid var(--line); flex: 0 0 auto;
+/* 皮肤页打开时隐藏背后页面内容，透明背景与主界面完全融合（同设置页） */
+body.skin-open .view, body.skin-open .main-navbar { visibility: hidden; }
+.sk-close {
+  position: absolute; top: 14px; right: 18px; z-index: 5;
+  font-size: 16px; padding: 6px 10px; border-radius: 8px; color: var(--text-2);
 }
-.sk-title { font-size: 17px; font-weight: 700; }
-.sk-close { font-size: 16px; padding: 6px 10px; border-radius: 8px; color: var(--text-2); }
 .sk-close:hover { background: var(--bg-2); color: var(--text); }
-.sk-body { flex: 1; overflow-y: auto; padding: 20px 28px; }
+.sk-top { padding: 30px 60px 0; flex: 0 0 auto; }
+.sk-h1 { font-size: 30px; font-weight: 600; color: var(--text); margin-bottom: 26px; }
+.sk-body { flex: 1; overflow-y: auto; padding: 26px 60px 60px; }
 .sk-sec { font-size: 14px; font-weight: 700; margin: 6px 0 14px; }
 .skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
 .skin-card {

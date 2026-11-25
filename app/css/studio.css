@@ -187,11 +187,24 @@ html[data-theme="dark"] .ne-reset-sub { color: var(--text-2); }
 .tb-vip.is-admin { background: linear-gradient(135deg, #8f7bf5, #5c3fd6); }
 
 /* ── 皮肤页（网易云布局） ── */
-.sk-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 30px 0; }
-.sk-tabs { display: flex; gap: 26px; }
-.sk-tab { font-size: 16px; color: var(--text-2); padding: 10px 2px; position: relative; }
-.sk-tab.active { color: var(--text); font-weight: 800; }
-.sk-tab.active::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: 2px; width: 26px; height: 3px; border-radius: 2px; background: var(--accent); }
+.sk-top { padding: 30px 60px 0; flex: 0 0 auto; }
+.sk-h1 { font-size: 30px; font-weight: 600; color: var(--text); margin-bottom: 26px; }
+.sk-tabs {
+  display: flex; gap: 34px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--line); position: relative;
+}
+.sk-tabs::-webkit-scrollbar { display: none; }
+.sk-tab {
+  position: relative; background: none; border: none; cursor: pointer;
+  font-size: 15px; color: var(--text-2); padding: 0 0 13px; white-space: nowrap;
+  transition: color .15s;
+}
+.sk-tab:hover { color: var(--text); }
+.sk-tab.active { color: var(--text); font-weight: 600; }
+.sk-tab.active::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 3px; background: var(--accent); border-radius: 2px;
+}
 .sk-body { padding: 16px 30px 26px; }
 .sk-filter { display: flex; gap: 12px; margin-bottom: 18px; }
 .sk-fbtn {

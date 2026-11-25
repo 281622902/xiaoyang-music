@@ -3683,7 +3683,12 @@
         window.getVipInfo(user.phone).then((v) => { window.__vipInfo = v; renderSkins(); renderPendants(); paintCustomSkinGate(); }).catch(() => {});
       }
       renderSkins(); renderPendants(); paintCustomSkinGate();
+      document.body.classList.add('skin-open');
       $('skinOverlay').classList.remove('hidden');
+    }
+    function closeSkinOverlay() {
+      document.body.classList.remove('skin-open');
+      $('skinOverlay').classList.add('hidden');
     }
     const tbSkin = $('tbSkin');
     if (tbSkin) tbSkin.addEventListener('click', openSkinOverlay);
@@ -3756,7 +3761,7 @@
       paintDt();
     }
     const skinClose = $('skinClose');
-    if (skinClose) skinClose.addEventListener('click', () => $('skinOverlay').classList.add('hidden'));
+    if (skinClose) skinClose.addEventListener('click', closeSkinOverlay);
     const tbMini = $('tbMini');
     if (tbMini) {
       tbMini.addEventListener('click', () => {

@@ -1202,15 +1202,16 @@
     <div id="addPlMenu" class="add-pl hidden"></div>
 
 
-    <!-- ══════ 个性换肤（全屏独立页，参考网易云皮肤页） ══════ -->
+    <!-- ══════ 个性换肤（独立页，版式与设置页完全一致：大标题 + 横向 tab） ══════ -->
     <div id="skinOverlay" class="skin-overlay hidden">
-      <div class="sk-head">
+      <button id="skinClose" class="sk-close" title="关闭">✕</button>
+      <div class="sk-top">
+        <h1 class="sk-h1">个性换肤</h1>
         <nav class="sk-tabs" id="skTabs">
           <button class="sk-tab active" data-skt="skin" type="button">个性皮肤</button>
           <button class="sk-tab" data-skt="pendant" type="button">头像挂件</button>
           <button class="sk-tab" data-skt="desktop" type="button">音乐桌面</button>
         </nav>
-        <button id="skinClose" class="sk-close" title="关闭">✕</button>
       </div>
       <div class="sk-body">
         <div id="skPaneSkin">
