@@ -25,6 +25,7 @@
     toast._t = setTimeout(() => t.classList.add('hidden'), 1800);
   }
   window.toast = toast; // 供 profile.js / ne-login.js 等兄弟模块复用
+  window.XYApp = { applyPendant, renderPendants, paintCustomSkinGate, showView }; // 供 profile.js 联动挂件/皮肤
   function fmtCount(n) {
     n = Number(n) || 0;
     if (n >= 1e8) return (n / 1e8).toFixed(1) + '亿';
@@ -206,6 +207,8 @@
     const customMask = Number(localStorage.getItem('uzz.theme.bgMask') || 45) / 100;
     rootStyle.setProperty('--skin-bg', customBg ? `url("${customBg}")` : 'none');
     rootStyle.setProperty('--skin-bg-mask', String(customMask));
+    // 应用后给根节点打标 → CSS 让主容器变半透明露出背景图
+    document.documentElement.classList.toggle('custom-bg', !!customBg);
     applyPlayerLayout();
   }
   // 播放页布局：与整包皮肤叠加，只改结构不改配色
@@ -332,6 +335,73 @@
         renderSkins();
         toast('皮肤已切换：' + card.querySelector('.skin-name').textContent.replace('浅色', '').replace('深色', '').replace('✓', '').trim());
       });
+    });
+  }
+
+  /* ── 自定义换肤（会员专享）：门禁UI ── */
+  function paintCustomSkinGate() {
+    const box = $('customSkinBox');
+    if (!box) return;
+    const ok = vipUnlocked();
+    $('customSkinLock').classList.toggle('hidden', ok);
+    $('customSkinBody').classList.toggle('hidden', !ok);
+    box.classList.toggle('vip-open', ok);
+  }
+
+  /* ── 头像挂件商城：SVG 挂件，免费 + VIP ── */
+  const PENDANTS = [
+    { id: '', name: '无挂件', vip: 0, svg: '' },
+    { id: 'ring-star', name: '星辉环', vip: 0, svg: '<defs><linearGradient id="pdA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7ec9ff"/><stop offset="1" stop-color="#4d7dff"/></linearGradient></defs><circle cx="16" cy="16" r="14.6" fill="none" stroke="url(#pdA)" stroke-width="2" stroke-dasharray="4 3"/><circle cx="27" cy="8" r="2.4" fill="#ffe37e"/><circle cx="5" cy="22" r="1.6" fill="#9fd4ff"/>' },
+    { id: 'sakura', name: '樱花环', vip: 0, svg: '<circle cx="16" cy="16" r="14.4" fill="none" stroke="#ffb7d5" stroke-width="2"/><g fill="#ff9ec4"><circle cx="27" cy="7" r="3"/><circle cx="31" cy="13" r="2"/></g><g fill="#ffd3e6"><circle cx="4" cy="24" r="2.4"/><circle cx="8" cy="29" r="1.8"/></g>' },
+    { id: 'moon', name: '月牙', vip: 0, svg: '<path d="M26 4 A 14 14 0 1 0 27 27 A 11 11 0 0 1 26 4 Z" fill="#ffe9a8"/><circle cx="23" cy="9" r="1.6" fill="#fff6d8"/>' },
+    { id: 'crown', name: '鎏金王冠', vip: 1, svg: '<defs><linearGradient id="pdC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#d99a2b"/></linearGradient></defs><path d="M6 20 L6 10 L11.5 14.5 L16 7 L20.5 14.5 L26 10 L26 20 Z" fill="url(#pdC)" stroke="#a8721a" stroke-width="1"/><rect x="6" y="20" width="20" height="3.4" rx="1.6" fill="url(#pdC)" stroke="#a8721a" stroke-width="1"/><circle cx="16" cy="5.6" r="1.7" fill="#ff6b81"/>' },
+    { id: 'devil', name: '恶魔之角', vip: 1, svg: '<path d="M3 14 C1 7 4 2 9 1 C7 5 8 8 10 11 C7 12 4.5 13 3 14 Z" fill="#e04141"/><path d="M29 14 C31 7 28 2 23 1 C25 5 24 8 22 11 C25 12 27.5 13 29 14 Z" fill="#e04141"/>' },
+    { id: 'halo', name: '天使光环', vip: 2, svg: '<defs><linearGradient id="pdH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff2b0"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#ffe37e"/></linearGradient></defs><ellipse cx="16" cy="4.6" rx="12.5" ry="3.4" fill="none" stroke="url(#pdH)" stroke-width="2.6"/><ellipse cx="16" cy="4.6" rx="12.5" ry="3.4" fill="none" stroke="#fff" stroke-width=".7" opacity=".8"/>' },
+    { id: 'flame', name: '烈焰环', vip: 1, svg: '<defs><linearGradient id="pdF" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9d3c"/><stop offset="1" stop-color="#e23b3b"/></linearGradient></defs><circle cx="16" cy="16" r="14.4" fill="none" stroke="url(#pdF)" stroke-width="2.4" stroke-dasharray="7 3" stroke-linecap="round"/><path d="M27 3 C29.5 5.5 30 8.5 28.5 11 C26.5 9.5 25.5 6.5 27 3 Z" fill="#ffb35c"/>' },
+    { id: 'neon', name: '霓虹环', vip: 1, svg: '<circle cx="16" cy="16" r="14.4" fill="none" stroke="#b26bff" stroke-width="2"/><circle cx="16" cy="16" r="11.6" fill="none" stroke="#58e6ff" stroke-width="1.2" stroke-dasharray="2 2.6"/><circle cx="28.6" cy="12" r="1.8" fill="#58e6ff"/><circle cx="3.4" cy="20" r="1.5" fill="#b26bff"/>' },
+  ];
+  function pendantSvg(p) {
+    return '<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">' + p.svg + '</svg>';
+  }
+  function renderPendants() {
+    const grid = $('pendantGrid');
+    if (!grid) return;
+    const unlocked = vipUnlocked();
+    const cur = localStorage.getItem('uzz.avatar.pendant') || '';
+    grid.innerHTML = PENDANTS.map((p) => {
+      const locked = p.vip && !unlocked;
+      const lockTxt = p.vip === 2 ? 'SVIP' : 'VIP';
+      return `<button class="pd-card${cur === p.id ? ' active' : ''}${locked ? ' vip-locked' : ''}" data-pd="${p.id}" data-vip="${p.vip}">
+        <span class="pd-ava"><img src="icon.svg" alt="">${p.svg ? '<span class="pd-layer">' + pendantSvg(p) + '</span>' : ''}</span>
+        <span class="pd-name">${p.name}${p.vip ? '<i class="skin-viptag">' + lockTxt + '</i>' : ''}</span>
+      </button>`;
+    }).join('');
+    grid.querySelectorAll('.pd-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        if (card.dataset.vip !== '0' && !vipUnlocked()) {
+          toast('会员专享挂件，请联系管理员开通会员');
+          return;
+        }
+        localStorage.setItem('uzz.avatar.pendant', card.dataset.pd);
+        applyPendant();
+        renderPendants();
+        toast(card.dataset.pd ? '挂件已佩戴：' + card.querySelector('.pd-name').textContent.replace(/SVIP|VIP/, '').trim() : '已摘下挂件');
+      });
+    });
+  }
+  function applyPendant() {
+    const id = localStorage.getItem('uzz.avatar.pendant') || '';
+    const p = PENDANTS.find((x) => x.id === id);
+    document.querySelectorAll('.ap-wrap').forEach((wrap) => {
+      let layer = wrap.querySelector('.ap-layer');
+      if (!p || !p.svg) { if (layer) layer.remove(); wrap.classList.remove('has-pd'); return; }
+      if (!layer) {
+        layer = document.createElement('span');
+        layer.className = 'ap-layer';
+        wrap.appendChild(layer);
+      }
+      layer.innerHTML = pendantSvg(p);
+      wrap.classList.add('has-pd');
     });
   }
 
@@ -2050,10 +2120,7 @@
       applyTheme();
       toast('已保存');
     });
-    $('stOpenSkins') && $('stOpenSkins').addEventListener('click', () => {
-      const sk = $('skinOverlay');
-      if (sk) sk.classList.remove('hidden');
-    });
+    // stOpenSkins（个性化皮肤…）在下方 bindTopbarActions 统一绑定 → 跳设置皮肤分区
     // 字体选择：真实写入 CSS 变量，立即全站生效
     fillFontSelect('stFont', '默认');
     (function bindFontReal() {
@@ -3600,29 +3667,22 @@
     }
 
     // ── 顶栏功能按钮：换肤 / Mini 模式 / 设置 ──
+    // 皮肤管理内嵌设置页（个性皮肤/头像挂件/音乐桌面三个分区）
+    function gotoSkinTab(tab) {
+      showView('settings');
+      const btn = document.querySelector('#setTabs button[data-tab="' + tab + '"]');
+      if (btn) btn.click();
+    }
     const tbSkin = $('tbSkin');
     if (tbSkin) {
       tbSkin.addEventListener('click', () => {
-        // 打开皮肤页前刷新会员状态（会员分区门禁）
+        // 进入皮肤页前刷新会员状态（会员分区门禁）
         const user = window.XYCloud?.user;
         if (user && window.getVipInfo) {
-          window.getVipInfo(user.phone).then((v) => { window.__vipInfo = v; renderSkins(); }).catch(() => renderSkins());
+          window.getVipInfo(user.phone).then((v) => { window.__vipInfo = v; renderSkins(); renderPendants(); paintCustomSkinGate(); }).catch(() => {});
         }
-        renderSkins();
-        $('skinOverlay').classList.remove('hidden');
-      });
-    }
-    // 皮肤页顶部 tabs：个性皮肤 / 头像挂件 / 音乐桌面
-    const skTabs = $('skTabs');
-    if (skTabs) {
-      skTabs.addEventListener('click', (e) => {
-        const tab = e.target.closest('.sk-tab');
-        if (!tab) return;
-        skTabs.querySelectorAll('.sk-tab').forEach((b) => b.classList.toggle('active', b === tab));
-        const key = tab.dataset.skt;
-        $('skPaneSkin').classList.toggle('hidden', key !== 'skin');
-        $('skPanePendant').classList.toggle('hidden', key !== 'pendant');
-        $('skPaneDesktop').classList.toggle('hidden', key !== 'desktop');
+        renderSkins(); renderPendants(); paintCustomSkinGate();
+        gotoSkinTab('skin');
       });
     }
     // 官方 / 会员 分区筛选
@@ -3636,17 +3696,19 @@
         renderSkins();
       });
     }
-    const skOpenDesktop = $('skOpenDesktop');
-    if (skOpenDesktop) {
-      skOpenDesktop.addEventListener('click', () => {
+    // 设置页「常规」里的 个性化皮肤… 按钮
+    const stOpenSkinsBtn = $('stOpenSkins');
+    if (stOpenSkinsBtn) stOpenSkinsBtn.addEventListener('click', () => gotoSkinTab('skin'));
+    // 音乐桌面分区
+    const stOpenMdesk = $('stOpenMdesk');
+    if (stOpenMdesk) {
+      stOpenMdesk.addEventListener('click', () => {
         if (window.uzzBridge && window.uzzBridge.openMusicDesktop) {
           window.uzzBridge.openMusicDesktop();
           toast('音乐桌面已打开，可在桌面摆放歌词小窗');
         } else toast('请在桌面版使用音乐桌面');
       });
     }
-    const skinClose = $('skinClose');
-    if (skinClose) skinClose.addEventListener('click', () => $('skinOverlay').classList.add('hidden'));
     const tbMini = $('tbMini');
     if (tbMini) {
       tbMini.addEventListener('click', () => {
@@ -3683,17 +3745,20 @@
     bindSettingsExtra();
     bindHomeModuleSettings();
     applyHomeModules();
-    // 自定义图片皮肤：本地压缩后写入 localStorage，不上传
+    // 自定义换肤（会员专享）：本地压缩后写入 localStorage，不上传
     $('skinBgInput')?.addEventListener('change', async (e) => {
-      const file = e.target.files && e.target.files[0]; e.target.value = '';
+      e.target.value = '';
+      if (!vipUnlocked()) { paintCustomSkinGate(); toast('自定义换肤为会员专享，请联系管理员开通会员'); return; }
+      const file = e.target.files && e.target.files[0];
       if (!file) return;
       try {
         const data = await (window.compressAvatar ? window.compressAvatar(file, 1600) : Promise.reject(new Error('图片处理器未加载')));
-        localStorage.setItem('uzz.theme.bg', data); applyTheme(); toast('图片背景已应用');
+        localStorage.setItem('uzz.theme.bg', data); applyTheme(); toast('自定义背景已应用');
       } catch (err) { toast(err.message || '图片处理失败'); }
     });
     $('skinBgClear')?.addEventListener('click', () => {
-      localStorage.removeItem('uzz.theme.bg'); applyTheme(); toast('已清除图片背景');
+      if (!vipUnlocked()) return;
+      localStorage.removeItem('uzz.theme.bg'); applyTheme(); toast('已清除自定义背景');
     });
     $('skinBgOpacity')?.addEventListener('input', (e) => {
       const v = e.target.value;
@@ -3880,7 +3945,7 @@
 
     // ── 设置：分类导航（点击切换 + 鼠标滚轮切换/滚动） ──
     const setNav = $('setTabs');
-    const setTabsOrder = ['general', 'system', 'play', 'keys', 'download', 'desktop', 'about'];
+    const setTabsOrder = ['general', 'system', 'play', 'keys', 'download', 'desktop', 'skin', 'pendant', 'mdesk', 'about'];
     function gotoSetTab(tab) {
       if (!setTabsOrder.includes(tab)) return;
       setTabsOrder.forEach((t) => {
@@ -3940,6 +4005,9 @@
     bind();
     bindThemeSettings();
     renderSkins();
+    renderPendants();
+    applyPendant();
+    paintCustomSkinGate();
     renderPlaylistNav();
     loadRecommend();
     loadDiscoverCharts();

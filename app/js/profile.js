@@ -243,13 +243,21 @@
     if (pv) pv.textContent = logged ? (cloud().displayUser ? cloud().displayUser(user) : '已绑定') : '未登录';
     const ps = $('dpPhoneStatus');
     if (ps && !logged) ps.textContent = '';
-    // 会员管理 tab：仅管理员可见
+    // 会员管理 tab：仅管理员可见（先客户端预判，再用数据库 RPC 权威修正）
     const admin = logged && global.isAdmin && global.isAdmin();
     const vaTab = $('pfTabVipAdmin');
     if (vaTab) {
       vaTab.classList.toggle('hidden', !admin);
       if (!admin) { const pane = $('pfPaneVipadmin'); if (pane) pane.classList.add('hidden'); }
+      if (logged && global.isAdminAsync) {
+        global.isAdminAsync().then((realAdmin) => {
+          vaTab.classList.toggle('hidden', !realAdmin);
+          if (!realAdmin) { const pane = $('pfPaneVipadmin'); if (pane) pane.classList.add('hidden'); }
+        }).catch(() => {});
+      }
     }
+    // 主页大头像佩戴挂件
+    if (global.XYApp?.applyPendant) global.XYApp.applyPendant();
     renderPane(pfTab);
   }
 

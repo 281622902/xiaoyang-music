@@ -238,3 +238,105 @@ html[data-theme="dark"] .ne-reset-sub { color: var(--text-2); }
 .pfva-acts { flex: none; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .pfva-acts .xy-secondary { font-size: 11px; padding: 4px 9px; min-height: 0; border-radius: 8px; }
 .pfva-remove { color: var(--accent) !important; border-color: var(--accent) !important; }
+
+/* ══════════════ v3.15.0 设置页皮肤分区 / 挂件 / 音乐桌面 / 自定义换肤 ══════════════ */
+
+/* ── 自定义背景模式：主容器半透明露出背景图 ── */
+html.custom-bg .main,
+html.custom-bg .titlebar,
+html.custom-bg .playerbar {
+  background: color-mix(in srgb, var(--bg-1) 74%, transparent);
+}
+html.custom-bg .sidebar {
+  background: color-mix(in srgb, var(--bg-1) 82%, transparent);
+}
+html.custom-bg .listen-hero,
+html.custom-bg .ncm-settings {
+  background: transparent;
+}
+html.custom-bg .set-scroll .set-page .st-row {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+/* ── 设置页内官方/会员筛选（沿用 skin-grid/skin-card 全局样式） ── */
+.sk-filter { display: flex; gap: 12px; margin-bottom: 18px; }
+.sk-fbtn {
+  font-size: 13px; color: var(--text-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 18px; background: transparent; transition: all .15s;
+}
+.sk-fbtn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-weak); }
+
+/* ── 自定义换肤卡（会员专享） ── */
+.sk-sec .inline-viptag { position: static; margin-left: 8px; vertical-align: middle; }
+.skin-custom-vip {
+  border: 1px dashed var(--line); border-radius: 16px; padding: 20px 22px;
+  background: var(--bg-1); max-width: 620px;
+}
+.skin-custom-vip.vip-open { border-style: solid; }
+.scv-lock { text-align: center; padding: 14px 6px; }
+.scv-lock-ic { font-size: 30px; margin-bottom: 8px; }
+.scv-lock-t { font-size: 14.5px; font-weight: 700; margin-bottom: 6px; }
+.scv-lock-s { font-size: 12px; color: var(--text-2); line-height: 1.7; }
+.scv-body.hidden { display: none; }
+.scv-lock.hidden { display: none; }
+.skin-custom { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sk-upload {
+  padding: 9px 16px; border: 1px solid var(--accent); border-radius: 999px;
+  background: var(--accent-weak); color: var(--accent); font-size: 13px; cursor: pointer;
+}
+.sk-upload:hover { filter: brightness(1.08); }
+.skin-custom .xy-secondary { padding: 9px 14px; }
+.sk-opacity { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); }
+.sk-opacity input { width: 110px; accent-color: var(--accent); }
+.skin-tip { font-size: 12px; margin-top: 10px; }
+
+/* ── 头像挂件 ── */
+.pendant-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 14px; max-width: 720px; margin-top: 14px;
+}
+.pd-card {
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px 8px 10px;
+  background: var(--bg-1); display: flex; flex-direction: column; align-items: center; gap: 8px;
+  transition: border-color .15s, transform .1s; position: relative;
+}
+.pd-card:hover { border-color: var(--accent); }
+.pd-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak); }
+.pd-card.vip-locked .pd-ava { filter: saturate(.4) brightness(.75); }
+.pd-ava { position: relative; width: 56px; height: 56px; flex: none; }
+.pd-ava img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; margin: 6px; }
+.pd-layer { position: absolute; inset: 0; pointer-events: none; }
+.pd-layer svg { width: 100%; height: 100%; }
+.pd-name { font-size: 12px; color: var(--text); display: flex; align-items: center; gap: 4px; }
+.pd-name .skin-viptag { position: static; transform: scale(.85); }
+
+/* 头像挂件容器（顶栏 + 个人主页通用） */
+.ap-wrap { position: relative; display: inline-grid; place-items: center; flex: none; }
+.ap-layer { position: absolute; inset: -30%; pointer-events: none; z-index: 2; }
+.ap-layer svg { width: 100%; height: 100%; }
+
+/* ── 音乐桌面设置卡 ── */
+.mdesk-card {
+  display: flex; gap: 26px; align-items: center;
+  border: 1px solid var(--line); border-radius: 18px; padding: 26px 30px;
+  background: var(--bg-1); max-width: 720px;
+}
+.mdesk-preview {
+  flex: none; width: 210px; border-radius: 14px; padding: 18px;
+  background: linear-gradient(145deg, rgba(126, 201, 255, .16), rgba(236, 65, 65, .12));
+  border: 1px solid var(--line); display: flex; align-items: center; gap: 14px;
+}
+.mdesk-cover {
+  width: 58px; height: 58px; border-radius: 12px; flex: none;
+  background: linear-gradient(135deg, #fb6a7d, #ec4141);
+  display: grid; place-items: center; color: #fff; font-size: 26px;
+}
+.mdesk-lines { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.mdesk-lines b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mdesk-lines i { font-style: normal; font-size: 11px; color: var(--text-2); }
+.mdesk-info { flex: 1; min-width: 0; }
+.mdesk-info h3 { font-size: 17px; margin-bottom: 8px; }
+.mdesk-info p { font-size: 12.5px; color: var(--text-2); line-height: 1.8; margin-bottom: 10px; }
+.mdesk-feats { list-style: none; margin: 0 0 16px; display: flex; flex-direction: column; gap: 5px; }
+.mdesk-feats li { font-size: 12px; color: var(--text-2); }
+.mdesk-info .xy-primary { min-height: 40px; padding: 8px 22px; border-radius: 999px; }

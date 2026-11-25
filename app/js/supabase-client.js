@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.14.0', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.15.0', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -123,11 +123,28 @@
   /* ---------- 会员体系 + 管理员（见 supabase/vip_members.sql） ---------- */
   // 管理员手机号白名单：客户端仅用于展示入口；真正的写权限由数据库 RLS 强制
   const ADMIN_PHONES = ['18474728056'];
+  let adminRpcCache = null; // null = 未查询；true/false = 数据库判定结果
+  // 手机号规范化：兼容 Supabase 存储的 '+86…' 与 '86…' 两种前缀（实测库里是 86 前缀无 + 号）
+  function normalizeAdminPhone(value) {
+    return String(value ?? '').replace(/^\+86/, '').replace(/^86(?=1\d{10}$)/, '');
+  }
   function isAdmin() {
+    // 优先用数据库侧缓存结果
+    if (adminRpcCache !== null) return adminRpcCache;
     const user = cloud.user;
     if (!user || !user.phone) return false;
-    const phone = String(user.phone).replace(/^\+86/, '');
-    return ADMIN_PHONES.includes(phone);
+    return ADMIN_PHONES.includes(normalizeAdminPhone(user.phone));
+  }
+  // 数据库侧权威判定：is_current_user_admin()（RPC，免疫客户端改动与手机号格式差异）
+  async function isAdminAsync() {
+    const user = cloud.user;
+    if (!user) { adminRpcCache = null; return false; }
+    try {
+      const { data, error } = await client().rpc('is_current_user_admin');
+      if (!error && typeof data === 'boolean') { adminRpcCache = data; return data; }
+    } catch (e) { /* 回退客户端判定 */ }
+    adminRpcCache = null;
+    return isAdmin();
   }
   function normalizePhoneKey(value) {
     const p = String(value ?? '').replace(/\D/g, '').replace(/^86(?=\d{11}$)/, '');
@@ -397,11 +414,11 @@
     createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist,
     updateProfile, changePassword, compressAvatar,
     sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket,
-    isAdmin, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip });
+    isAdmin, isAdminAsync, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip });
   // 同步挂到 XYCloud，避免调用方在 window / XYCloud 两个对象间踩坑
   Object.assign(cloud, { registerUser, loginUser, logoutUser, updateProfile, changePassword, compressAvatar,
     sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket,
-    isAdmin, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip });
+    isAdmin, isAdminAsync, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip });
   cloud.getUpdateInfo = async function () {
     let native = null, androidInfo = null;
     try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }

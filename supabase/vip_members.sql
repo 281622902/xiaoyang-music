@@ -33,7 +33,7 @@ language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from auth.users u
     where u.id = auth.uid()
-      and regexp_replace(coalesce(u.phone, ''), '^\+86', '') = '18474728056'
+      and regexp_replace(regexp_replace(coalesce(u.phone, ''), '^\+86', ''), '^86(?=1[0-9]{10}$)', '') = '18474728056'
   );
 $$;
 
@@ -59,7 +59,7 @@ returns table (
 language sql stable security definer set search_path = public as $$
   select
     u.id,
-    regexp_replace(coalesce(u.phone, ''), '^\+86', ''),
+    regexp_replace(regexp_replace(coalesce(u.phone, ''), '^\+86', ''), '^86(?=1[0-9]{10}$)', ''),
     coalesce(u.raw_user_meta_data ->> 'nickname', ''),
     coalesce(u.raw_user_meta_data ->> 'username', ''),
     u.created_at,
@@ -67,7 +67,7 @@ language sql stable security definer set search_path = public as $$
     v.expires_at
   from auth.users u
   left join public.vip_members v
-    on v.phone = regexp_replace(coalesce(u.phone, ''), '^\+86', '')
+    on v.phone = regexp_replace(regexp_replace(coalesce(u.phone, ''), '^\+86', ''), '^86(?=1[0-9]{10}$)', '')
   where coalesce(u.phone, '') <> ''
   order by u.created_at desc;
 $$;
@@ -75,3 +75,16 @@ $$;
 revoke all on function public.admin_list_users() from public, anon;
 grant execute on function public.admin_list_users() to authenticated;
 grant execute on function public.is_admin() to authenticated;
+
+-- v3.15.0 补充：数据库侧权威管理员判定（RPC，免疫客户端改动与手机号格式差异）
+create or replace function public.is_current_user_admin()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from auth.users u
+    where u.id = auth.uid()
+      and regexp_replace(regexp_replace(coalesce(u.phone, ''), '^\+86', ''), '^86(?=1[0-9]{10}$)', '') = '18474728056'
+  );
+$$;
+revoke all on function public.is_current_user_admin() from public, anon;
+grant execute on function public.is_current_user_admin() to authenticated;
