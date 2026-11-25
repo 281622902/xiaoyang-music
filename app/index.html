@@ -1311,8 +1311,13 @@
           </div>
         </div>
       </div>
-      <!-- 歌词列表：鼠标移到某行高亮并显示 -->
+      <!-- 列表区：歌词 / 歌单目录（☰ 按钮直达歌单目录） -->
       <div id="mmLyricBox" class="mm-lyric-box">
+        <div class="mm-viewtabs" id="mmViewTabs">
+          <button class="mm-viewtab" data-mmview="lyric" type="button">歌词</button>
+          <button class="mm-viewtab on" data-mmview="queue" type="button">歌单目录</button>
+          <span class="mm-viewcount" id="mmQueueCount"></span>
+        </div>
         <ul class="mm-list" id="mmList"></ul>
       </div>
       <div class="mm-now hidden"><div class="mm-t" id="mmTitle2"></div></div>

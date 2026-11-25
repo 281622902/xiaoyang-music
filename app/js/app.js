@@ -1800,13 +1800,29 @@
       const t = $('tbMini'); if (t) t.click();      // 切回常规模式
       setTimeout(() => { try { Player.openFull(); } catch (e) { /* 忽略 */ } }, 60);
     });
-    // 列表显示 / 隐藏
+    // ☰ 按钮 = 歌单目录：点击直达目录；目录已展开时再点收起。歌词用面板内 tab 切回。
     const mmListBtn = $('mmListToggle');
     const mmLyricBox = $('mmLyricBox');
     if (mmListBtn && mmLyricBox) {
+      // 面板内 歌词 / 歌单目录 两个 tab
+      document.querySelectorAll('.mm-viewtab').forEach((tab) => {
+        tab.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setMiniListView(tab.dataset.mmview);
+          mmListKey = '';
+          if (window.Player) renderMiniList(window.Player.getState());
+        });
+      });
+      applyMiniListView();
       mmListBtn.addEventListener('click', () => {
-        const showing = mmLyricBox.classList.contains('hidden');   // 本次是否要显示
-        // 收起：先淡出歌词区，再让窗口收高 → 视觉上内容先消失、窗口后缩，无跳动感
+        const visible = !mmLyricBox.classList.contains('hidden');
+        // 展示歌词时点 ☰ → 切到歌单目录（窗口高度不变）；目录已展示时点 ☰ → 收起
+        const showing = !visible || mmView !== 'queue';
+        if (showing) {
+          setMiniListView('queue');
+          mmListKey = '';
+        }
+        // 收起：先淡出列表区，再让窗口收高 → 视觉上内容先消失、窗口后缩，无跳动感
         // 展开：先把窗口放高，再淡入 → 窗口先到位、内容后出现
         const applySize = () => {
           if (window.uzzBridge && window.uzzBridge.setMiniListVisible) {
@@ -1830,7 +1846,7 @@
           setTimeout(() => document.body.classList.remove('mm-anim'), 160);
         }
         mmListBtn.classList.toggle('on', showing);
-        mmListBtn.title = showing ? '隐藏列表' : '显示列表';
+        mmListBtn.title = showing ? '隐藏歌单目录' : '显示歌单目录';
         document.body.classList.toggle('mm-nolist', !showing);   // 收起态：控制条更紧凑
         localStorage.setItem('uzz.mm.list', showing ? '1' : '0');
       });
@@ -1838,8 +1854,10 @@
       if (localStorage.getItem('uzz.mm.list') === '0') {
         mmLyricBox.classList.add('hidden');
         mmListBtn.classList.remove('on');
-        mmListBtn.title = '显示列表';
+        mmListBtn.title = '显示歌单目录';
         document.body.classList.add('mm-nolist');
+      } else if (mmListBtn) {
+        mmListBtn.title = '隐藏歌单目录';
       }
     }
     // 列表 hover：加 .hovering 让该行更实（纯视觉增强）
@@ -1916,20 +1934,36 @@
     }, 1500);
   }
   let mmListKey = '';
-  // mini 列表：优先显示当前歌歌词（参考图），无歌词时回退到播放队列
+  let mmView = 'queue';  // mini 面板视图：lyric=歌词 / queue=歌单目录（☰ 默认直达目录）
+  function setMiniListView(v) {
+    mmView = v === 'lyric' ? 'lyric' : 'queue';
+    try { localStorage.setItem('uzz.mm.view', mmView); } catch (e) {}
+    applyMiniListView();
+  }
+  function applyMiniListView() {
+    try { if (localStorage.getItem('uzz.mm.view') === 'lyric') mmView = 'lyric'; } catch (e) {}
+    document.querySelectorAll('.mm-viewtab').forEach((tab) => {
+      tab.classList.toggle('on', tab.dataset.mmview === mmView);
+    });
+  }
+  // mini 列表：歌词 tab 显示歌词；歌单目录 tab 始终显示当前播放队列
   function renderMiniList(st) {
     const q = (st && st.queue) || [];
     const cur = (st && st.current) || {};
     const lyrics = (st && st.lyrics) || [];
     const tlyrics = (st && st.tlyrics) || [];
     const curT = window.__mmCurT || 0;
+    const cnt = $('mmQueueCount');
+    if (cnt) cnt.textContent = q.length ? q.length + ' 首' : '';
     // 播放时间由 Player 定时写入 __mmCurT，用于定位当前歌词行
-    const key = q.length + '|' + (cur.id || '') + '|' + (cur.vendor || '') + '|' + lyrics.length;
+    const curIdx = q.findIndex((t) => t.id === cur.id && t.vendor === cur.vendor);
+    const key = mmView + '|' + q.length + '|' + curIdx + '|' + (cur.id || '')
+      + '|' + (cur.vendor || '') + '|' + lyrics.length + '|' + (q[0] && q[0].id || '');
     if (key === mmListKey) return;
     mmListKey = key;
     const ul = $('mmList');
     if (!ul) return;
-    if (lyrics.length) {
+    if (mmView === 'lyric' && lyrics.length) {
       // 歌词模式：显示歌词行，点击可跳转到该时间
       ul.innerHTML = lyrics.map((l, i) => {
         const tr = tlyrics[i] && tlyrics[i].text ? tlyrics[i].text : '';
@@ -1940,9 +1974,11 @@
         </li>`;
       }).join('');
     } else {
+      // 歌单目录（及无歌词时的回退）：当前播放队列，点击即切歌
       ul.innerHTML = q.length ? q.map((t, i) => {
-        const on = t.id === cur.id && t.vendor === cur.vendor;
+        const on = i === curIdx || (t.id === cur.id && t.vendor === cur.vendor);
         return `<li data-i="${i}" class="${on ? 'on' : ''}">
+          <span class="mm-qnum">${on ? '' : i + 1}</span>
           <span class="mm-marker">${on ? '<i></i>' : ''}</span>
           <span class="mm-name">${escapeHtml(t.name)}</span>
           <span class="mm-artist">${escapeHtml(t.artist || '')}</span>

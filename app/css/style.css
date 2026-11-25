@@ -1669,6 +1669,27 @@ body.is-playing .ncm-row.playing .idx-pause { display: inline; }
 .mm-empty { justify-content: center; color: var(--text-2); font-size: 12.5px; cursor: default; }
 .mm-artist { flex: 0 0 34%; font-size: 11.5px; color: var(--text-2); opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 .mm-now.hidden { display: none; }
+/* mini 列表视图切换：歌词 / 歌单目录 */
+.mm-viewtabs {
+  display: flex; align-items: center; gap: 16px; flex: 0 0 auto;
+  padding: 6px 12px 7px; border-bottom: 1px solid var(--line);
+  -webkit-app-region: no-drag;
+}
+.mm-viewtab {
+  position: relative; padding: 2px 0; font-size: 12px;
+  color: var(--text-2); cursor: pointer;
+}
+.mm-viewtab:hover { color: var(--text); }
+.mm-viewtab.on { color: var(--accent); font-weight: 700; }
+.mm-viewtab.on::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -7px;
+  height: 2px; border-radius: 2px; background: var(--accent);
+}
+.mm-viewcount { margin-left: auto; font-size: 11px; color: var(--text-2); opacity: .7; }
+.mm-qnum {
+  width: 16px; flex: 0 0 16px; text-align: right;
+  font-size: 11px; color: var(--text-2); opacity: .72;
+}
 .mm-tr {
   display: block; font-style: normal; font-size: 11px;
   color: var(--text-2); opacity: .72; margin-top: 2px;
