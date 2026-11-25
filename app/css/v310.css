@@ -50,7 +50,7 @@ html[data-theme="light"] {
   border-radius: 999px !important;
   border: 1px solid var(--v310-line) !important;
   background: var(--v310-glass) !important;
-  padding-left: 16px !important;
+  padding-left: 42px !important;
   transition: border-color .16s, box-shadow .16s, background .16s;
 }
 .titlebar input:focus,

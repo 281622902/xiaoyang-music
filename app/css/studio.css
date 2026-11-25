@@ -412,3 +412,11 @@ html[data-theme="dark"] .ne-sec-alert { background: #1f222b; }
 /* ── 更改密保验证步骤 ── */
 .sec-mgr-vlist { width: 100%; display: flex; flex-direction: column; gap: 4px; }
 .sec-mgr-btns { display: flex; gap: 10px; align-items: center; }
+
+/* ── v3.15.6 搜索框移入顶栏（网易云式） ── */
+.titlebar .tb-search { flex: 0 1 400px; margin-left: 14px; min-width: 240px; }
+.titlebar .tb-search .search { width: 100%; max-width: none; }
+.titlebar .tb-search .search input { height: 32px; font-size: 12.5px; }
+.titlebar .tb-search .search #searchGo { left: 2px; width: 30px; height: 30px; }
+.titlebar .tb-search .search #btnVoice { right: 4px; width: 26px; height: 26px; }
+.titlebar .tb-search .suggest { top: 40px; right: 0; }

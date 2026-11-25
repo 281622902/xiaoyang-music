@@ -19,6 +19,32 @@
         <img class="brand-logo" src="icon.svg" alt="" draggable="false" />
         <span class="brand-name">xymusic</span>
       </div>
+      <div class="tb-search no-drag">
+        <div class="search">
+          <button id="searchGo" title="搜索" aria-label="搜索">
+            <svg viewBox="0 0 24 24" class="ic"><path d="M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <input id="searchInput" type="search" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" />
+          <button id="btnVoice" title="语音搜索" aria-label="语音搜索">
+            <svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z" fill="currentColor"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <!-- 搜索推荐浮层 -->
+          <div id="suggestBox" class="suggest hidden">
+            <div id="sgGuess" class="sg-sec">
+              <div class="sg-title">猜你喜欢</div>
+              <div id="sgGuessChips" class="sg-chips"></div>
+            </div>
+                <div class="sg-sec">
+                  <div class="sg-title">热搜榜</div>
+                  <ol id="sgHot" class="sg-hot"></ol>
+                </div>
+                <div id="sgSongs" class="sg-sec hidden">
+                  <div class="sg-title">相关搜索</div>
+                  <ul id="sgSongList" class="sg-songs"></ul>
+                </div>
+          </div>
+        </div>
+      </div>
       <div class="tb-drag"></div>
       <div class="tb-actions no-drag"><button id="accountOpen" class="account-trigger" title="我的主页"><span class="ap-wrap" id="topbarAvaWrap"><img id="topbarAvatar" class="tb-avatar" src="icon.svg" alt="" draggable="false" /></span><span id="accountLabel">登录账户</span><i id="topbarVip" class="tb-vip hidden">VIP</i></button>
         <button id="tbSkin" title="个性换肤" aria-label="个性换肤">
@@ -91,32 +117,6 @@
         <div class="main-navbar no-drag">
           <div class="mn-navbtns">
             <button id="navBack" title="后退">‹</button>
-          </div>
-          <div class="mn-search">
-            <div class="search">
-              <button id="searchGo" title="搜索" aria-label="搜索">
-                <svg viewBox="0 0 24 24" class="ic"><path d="M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              </button>
-              <input id="searchInput" type="search" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" />
-              <button id="btnVoice" title="语音搜索" aria-label="语音搜索">
-                <svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z" fill="currentColor"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              </button>
-              <!-- 搜索推荐浮层 -->
-              <div id="suggestBox" class="suggest hidden">
-                <div id="sgGuess" class="sg-sec">
-                  <div class="sg-title">猜你喜欢</div>
-                  <div id="sgGuessChips" class="sg-chips"></div>
-                </div>
-                <div class="sg-sec">
-                  <div class="sg-title">热搜榜</div>
-                  <ol id="sgHot" class="sg-hot"></ol>
-                </div>
-                <div id="sgSongs" class="sg-sec hidden">
-                  <div class="sg-title">相关搜索</div>
-                  <ul id="sgSongList" class="sg-songs"></ul>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
         <!-- 顶栏：搜索筛选 tab（仅在搜索后显示，参考网易云） -->
