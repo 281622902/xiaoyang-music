@@ -295,6 +295,59 @@
           <div id="collectGrid" class="pl-grid"></div>
         </main>
 
+        <!-- 视图：个人主页（网易云风格）：点击顶栏头像进入 -->
+        <main id="viewProfile" class="view hidden">
+          <section class="pf-hero">
+            <img id="pfAvatar" class="pf-avatar" src="icon.svg" alt="用户头像" draggable="false" />
+            <div class="pf-head">
+              <h2 id="pfName">未登录</h2>
+              <div class="pf-stats">
+                <span class="pf-stat"><b id="pfCountPl">0</b><i>歌单</i></span>
+                <span class="pf-stat"><b id="pfCountFav">0</b><i>收藏</i></span>
+                <span class="pf-stat"><b id="pfCountRecent">0</b><i>最近播放</i></span>
+              </div>
+              <p id="pfSub" class="pf-sub">登录云端账户，收藏与歌单随账号随身携带</p>
+            </div>
+            <div class="pf-hero-actions">
+              <button id="pfEditBtn" class="xy-secondary hidden" type="button">编辑资料</button>
+              <button id="cloudLogout" class="xy-secondary hidden" type="button">退出登录</button>
+              <button id="pfLoginBtn" class="xy-primary hidden" type="button">立即登录</button>
+            </div>
+          </section>
+
+          <nav class="pf-tabs" id="pfTabs">
+            <button class="pf-tab active" data-pf="playlists" type="button">我的歌单</button>
+            <button class="pf-tab" data-pf="favs" type="button">我的收藏</button>
+            <button class="pf-tab" data-pf="recent" type="button">最近播放</button>
+            <button class="pf-tab" data-pf="settings" type="button">资料与同步</button>
+          </nav>
+
+          <section class="pf-pane" id="pfPanePlaylists"><div id="pfPlaylistGrid" class="pf-grid"></div></section>
+
+          <section class="pf-pane hidden" id="pfPaneFavs">
+            <div class="account-buttons"><button id="cloudRefresh" class="xy-secondary" type="button">刷新云端收藏</button></div>
+            <ul id="cloudFavorites" class="cloud-collection"></ul>
+          </section>
+
+          <section class="pf-pane hidden" id="pfPaneRecent"><div id="pfRecentList" class="pf-recent"></div></section>
+
+          <section class="pf-pane hidden" id="pfPaneSettings">
+            <div id="cloudMember">
+              <div class="desktop-profile">
+                <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
+                <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
+                <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
+                <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
+                <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
+                <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
+              </div>
+              <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
+              <div class="account-buttons"></div>
+            </div>
+            <details id="legacyAccount"><summary>本机备份账户（旧版）</summary><p>保留原有本机备份功能，本机账户与云端账户分别登录。</p><div id="accountGuest"><div class="account-tabs"><button id="accountLoginTab" class="active" type="button">登录</button><button id="accountRegisterTab" type="button">注册账户</button></div><form id="accountForm" class="account-form"><label>用户名<input id="accountUsername" autocomplete="username" minlength="2" maxlength="24" required placeholder="2–24 个字母、数字或汉字"/></label><label>密码<input id="accountPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="至少 8 位"/></label><button id="accountSubmit" class="xy-primary" type="submit">登录</button></form></div><div id="accountMember" class="hidden"><h3 id="accountName"></h3><p>当前是本机账户。本地音频不会上传，备份只包含在线收藏、歌单与部分偏好。</p><div class="account-buttons"><button id="accountBackup" class="xy-primary">备份收藏与歌单</button><button id="accountRestore" class="xy-secondary">恢复账户备份</button></div><button id="accountLogout" class="account-logout">退出登录</button></div><div id="accountStatus" class="account-status" aria-live="polite"></div></details>
+          </section>
+        </main>
+
         <!-- 视图：设置（左侧子分类导航 + 右侧可滚动内容，点子项跳转，参考网易云） -->
         <main id="viewSettings" class="view hidden ncm-settings">
           <div class="set-top">
@@ -1260,58 +1313,6 @@
     <button id="neQrBack" class="ne-link ne-qr-back" type="button">选择其它登录模式 ›</button>
   </div>
 </section></div>
-<!-- ══════ 个人主页（网易云风格）：点击顶栏头像进入 ══════ -->
-<main id="viewProfile" class="view hidden">
-  <section class="pf-hero">
-    <img id="pfAvatar" class="pf-avatar" src="icon.svg" alt="用户头像" draggable="false" />
-    <div class="pf-head">
-      <h2 id="pfName">未登录</h2>
-      <div class="pf-stats">
-        <span class="pf-stat"><b id="pfCountPl">0</b><i>歌单</i></span>
-        <span class="pf-stat"><b id="pfCountFav">0</b><i>收藏</i></span>
-        <span class="pf-stat"><b id="pfCountRecent">0</b><i>最近播放</i></span>
-      </div>
-      <p id="pfSub" class="pf-sub">登录云端账户，收藏与歌单随账号随身携带</p>
-    </div>
-    <div class="pf-hero-actions">
-      <button id="pfEditBtn" class="xy-secondary hidden" type="button">编辑资料</button>
-      <button id="cloudLogout" class="xy-secondary hidden" type="button">退出登录</button>
-      <button id="pfLoginBtn" class="xy-primary hidden" type="button">立即登录</button>
-    </div>
-  </section>
-
-  <nav class="pf-tabs" id="pfTabs">
-    <button class="pf-tab active" data-pf="playlists" type="button">我的歌单</button>
-    <button class="pf-tab" data-pf="favs" type="button">我的收藏</button>
-    <button class="pf-tab" data-pf="recent" type="button">最近播放</button>
-    <button class="pf-tab" data-pf="settings" type="button">资料与同步</button>
-  </nav>
-
-  <section class="pf-pane" id="pfPanePlaylists"><div id="pfPlaylistGrid" class="pf-grid"></div></section>
-
-  <section class="pf-pane hidden" id="pfPaneFavs">
-    <div class="account-buttons"><button id="cloudRefresh" class="xy-secondary" type="button">刷新云端收藏</button></div>
-    <ul id="cloudFavorites" class="cloud-collection"></ul>
-  </section>
-
-  <section class="pf-pane hidden" id="pfPaneRecent"><div id="pfRecentList" class="pf-recent"></div></section>
-
-  <section class="pf-pane hidden" id="pfPaneSettings">
-    <div id="cloudMember">
-      <div class="desktop-profile">
-        <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
-        <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
-        <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
-        <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
-        <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
-        <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
-      </div>
-      <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
-      <div class="account-buttons"></div>
-    </div>
-    <details id="legacyAccount"><summary>本机备份账户（旧版）</summary><p>保留原有本机备份功能，本机账户与云端账户分别登录。</p><div id="accountGuest"><div class="account-tabs"><button id="accountLoginTab" class="active" type="button">登录</button><button id="accountRegisterTab" type="button">注册账户</button></div><form id="accountForm" class="account-form"><label>用户名<input id="accountUsername" autocomplete="username" minlength="2" maxlength="24" required placeholder="2–24 个字母、数字或汉字"/></label><label>密码<input id="accountPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="至少 8 位"/></label><button id="accountSubmit" class="xy-primary" type="submit">登录</button></form></div><div id="accountMember" class="hidden"><h3 id="accountName"></h3><p>当前是本机账户。本地音频不会上传，备份只包含在线收藏、歌单与部分偏好。</p><div class="account-buttons"><button id="accountBackup" class="xy-primary">备份收藏与歌单</button><button id="accountRestore" class="xy-secondary">恢复账户备份</button></div><button id="accountLogout" class="account-logout">退出登录</button></div><div id="accountStatus" class="account-status" aria-live="polite"></div></details>
-  </section>
-</main>
 <div id="toast" class="toast hidden"></div>
   </div>
 
