@@ -21,6 +21,23 @@
         const p = logged && cloud.profile ? cloud.profile(cloud.user) : null;
         ta.src = (p && p.avatar) || 'icon.svg';
       }
+      // VIP 徽章：会员有效 或 管理员显示
+      const badge = $('topbarVip');
+      if (badge) {
+        const admin = logged && global.isAdmin && global.isAdmin();
+        if (admin) { badge.textContent = '管理员'; badge.classList.remove('hidden'); badge.classList.add('is-admin'); }
+        else {
+          badge.classList.remove('is-admin');
+          if (logged && global.getVipInfo) {
+            global.getVipInfo(cloud.user.phone).then((v) => {
+              window.__vipInfo = v;
+              badge.textContent = v.tier === 'svip' ? 'SVIP' : 'VIP';
+              badge.classList.toggle('hidden', !v.active);
+              if (window.XYProfile) window.XYProfile.render();
+            }).catch(() => badge.classList.add('hidden'));
+          } else badge.classList.add('hidden');
+        }
+      }
       if (cloud.user) { fillProfile(cloud.user); refreshSyncStatus(); }
       if (window.XYProfile) window.XYProfile.render();
     }

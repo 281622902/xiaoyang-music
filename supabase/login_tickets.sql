@@ -58,8 +58,14 @@ create policy "login_tickets_update"
   using (expires_at > now() and status <> 'confirmed')
   with check (status in ('scanned', 'confirmed') and user_id = auth.uid() or status = 'scanned');
 
--- 清理辅助：视图 + 惰性删除。若库中启用了 pg_cron 可加定时任务：
+-- 清理辅助：过期票据允许任何人删除（过期票据无价值，方便客户端/定时任务惰性 GC）
+-- 若库中启用了 pg_cron 可加定时任务：
 --   select cron.schedule('login_tickets_gc', '*/5 * * * *',
 --     $$delete from public.login_tickets where expires_at < now() - interval '2 minutes'$$);
+drop policy if exists "login_tickets_delete_expired" on public.login_tickets;
+create policy "login_tickets_delete_expired"
+  on public.login_tickets for delete
+  to anon, authenticated
+  using (expires_at < now());
 create index if not exists login_tickets_expires_idx
   on public.login_tickets (expires_at);

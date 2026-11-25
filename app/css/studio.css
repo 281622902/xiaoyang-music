@@ -177,3 +177,64 @@ html[data-theme="dark"] .ne-reset-sub { color: var(--text-2); }
 .dp-phone-row .xy-secondary { white-space: nowrap; min-height: 38px; }
 .dp-phone .xy-primary { width: 100%; margin-top: 10px; }
 .dp-phone .account-status { margin-top: 8px; }
+
+/* ── 顶栏 VIP 徽章 ── */
+.tb-vip {
+  flex: none; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .5px;
+  color: #fff; background: linear-gradient(135deg, #f5c26b, #d99a2b);
+  border-radius: 8px; padding: 2px 7px; line-height: 1.4;
+}
+.tb-vip.is-admin { background: linear-gradient(135deg, #8f7bf5, #5c3fd6); }
+
+/* ── 皮肤页（网易云布局） ── */
+.sk-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 30px 0; }
+.sk-tabs { display: flex; gap: 26px; }
+.sk-tab { font-size: 16px; color: var(--text-2); padding: 10px 2px; position: relative; }
+.sk-tab.active { color: var(--text); font-weight: 800; }
+.sk-tab.active::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: 2px; width: 26px; height: 3px; border-radius: 2px; background: var(--accent); }
+.sk-body { padding: 16px 30px 26px; }
+.sk-filter { display: flex; gap: 12px; margin-bottom: 18px; }
+.sk-fbtn {
+  font-size: 13px; color: var(--text-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 18px; transition: all .15s;
+}
+.sk-fbtn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-weak); }
+.sk-sec { font-size: 14px; font-weight: 700; margin: 22px 0 12px; }
+.skin-card { position: relative; }
+.skin-check {
+  position: absolute; right: 8px; top: 8px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--accent); color: #fff;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 2;
+}
+.skin-viptag {
+  position: absolute; left: 8px; top: 8px; font-size: 10px; font-weight: 800;
+  color: #fff; background: linear-gradient(135deg, #f5c26b, #d99a2b);
+  border-radius: 7px; padding: 1px 6px; z-index: 2; letter-spacing: .5px;
+}
+.skin-card.vip-locked .skin-prev { filter: saturate(.35) brightness(.8); }
+.skin-card.vip-locked:hover .skin-prev { filter: saturate(.6) brightness(.9); }
+.sk-desktop-card {
+  max-width: 460px; margin: 40px auto; text-align: center;
+  border: 1px solid var(--line); border-radius: 16px; padding: 34px 30px; background: var(--bg-1);
+}
+.sk-desktop-card h3 { font-size: 18px; margin-bottom: 10px; }
+.sk-desktop-card p { font-size: 12.5px; color: var(--text-2); line-height: 1.8; margin-bottom: 18px; }
+
+/* ── 会员管理（管理员） ── */
+.pfva-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.pfva-list { display: flex; flex-direction: column; gap: 8px; }
+.pfva-row {
+  display: flex; align-items: center; gap: 14px;
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+  background: var(--bg-1);
+}
+.pfva-row.is-vip { border-color: rgba(217, 154, 43, .55); }
+.pfva-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pfva-phone { font-size: 13.5px; }
+.pfva-meta { font-size: 11.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pfva-vip { flex: none; font-size: 12px; font-weight: 700; color: var(--text-2); }
+.pfva-row.is-vip .pfva-vip { color: #d99a2b; }
+.pfva-acts { flex: none; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pfva-acts .xy-secondary { font-size: 11px; padding: 4px 9px; min-height: 0; border-radius: 8px; }
+.pfva-remove { color: var(--accent) !important; border-color: var(--accent) !important; }

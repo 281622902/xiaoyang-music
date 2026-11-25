@@ -4,7 +4,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const cloud = () => global.XYCloud || {};
-  const PANES = ['playlists', 'favs', 'recent', 'settings'];
+  const PANES = ['playlists', 'favs', 'recent', 'settings', 'vipadmin'];
   let pfTab = 'playlists';
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -41,6 +41,70 @@
 
     // 未登录 → 打开登录弹窗；编辑资料 → 跳设置 tab
     $('pfLoginBtn').addEventListener('click', () => { $('accountOpen').click(); $('cloudPhone')?.focus(); });
+
+    // ── 会员管理（仅管理员）：用户列表 + 开通/取消会员 ──
+    $('pfvaRefresh').addEventListener('click', () => renderVipAdmin(true));
+    $('pfvaList').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const phone = btn.dataset.phone, act = btn.dataset.act;
+      const done = (msg) => { global.toast && global.toast(msg); renderVipAdmin(true); };
+      try {
+        if (act === 'remove') {
+          btn.disabled = true;
+          await global.adminRemoveVip(phone);
+          done('已取消 ' + phone + ' 的会员');
+        } else {
+          const days = Number(btn.dataset.days || 0);
+          const tier = btn.dataset.tier || 'vip';
+          btn.disabled = true;
+          await global.adminSetVip(phone, tier, days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null);
+          done(days > 0 ? '已开通 ' + phone + ' 会员 ' + days + ' 天' : '已开通 ' + phone + ' 永久会员');
+        }
+      } catch (error) {
+        global.toast && global.toast(error.message || '操作失败');
+        btn.disabled = false;
+      }
+    });
+    async function renderVipAdmin(force) {
+      const list = $('pfvaList'), count = $('pfvaCount');
+      const admin = !!(cloud().user && global.isAdmin && global.isAdmin());
+      $('pfTabVipAdmin').classList.toggle('hidden', !admin);
+      if (!admin) { list.innerHTML = '<div class="empty-state"><div class="empty-title">仅管理员可访问</div></div>'; return; }
+      if (list.dataset.loaded && !force) return;
+      list.dataset.loaded = '1';
+      count.textContent = '用户列表加载中…';
+      try {
+        const users = await global.adminListUsers();
+        count.textContent = '共 ' + users.length + ' 位注册用户 · 点击按钮开通/取消会员';
+        if (!users.length) { list.innerHTML = '<div class="empty-state"><div class="empty-title">还没有注册用户</div></div>'; return; }
+        const now = Date.now();
+        list.innerHTML = users.map((u) => {
+          const exp = u.vip_expires_at ? Date.parse(u.vip_expires_at) : null;
+          const active = !!u.vip_tier && (exp === null || exp > now);
+          const vipText = active ? (u.vip_tier === 'svip' ? 'SVIP' : 'VIP') + (exp === null ? ' · 永久' : ' · 至 ' + new Date(exp).toLocaleDateString()) : '非会员';
+          return `<div class="pfva-row${active ? ' is-vip' : ''}">
+            <div class="pfva-info">
+              <b class="pfva-phone">${esc(u.phone)}${u.user_id === (cloud().user && cloud().user.id) ? '（我）' : ''}</b>
+              <span class="pfva-meta">${esc(u.nickname || u.username || '未设置昵称')} · 注册于 ${new Date(u.created_at).toLocaleDateString()}</span>
+            </div>
+            <span class="pfva-vip">${vipText}</span>
+            <span class="pfva-acts">
+              ${active ? '' : `<button class="xy-secondary" data-act="grant" data-phone="${esc(u.phone)}" data-days="30" data-tier="vip">开通1月</button>
+              <button class="xy-secondary" data-act="grant" data-phone="${esc(u.phone)}" data-days="90" data-tier="vip">开通3月</button>
+              <button class="xy-secondary" data-act="grant" data-phone="${esc(u.phone)}" data-days="365" data-tier="vip">开通1年</button>
+              <button class="xy-secondary" data-act="grant" data-phone="${esc(u.phone)}" data-days="0" data-tier="svip">永久SVIP</button>`}
+              ${active ? `<button class="xy-secondary pfva-remove" data-act="remove" data-phone="${esc(u.phone)}">取消会员</button>` : ''}
+            </span>
+          </div>`;
+        }).join('');
+      } catch (error) {
+        count.textContent = '';
+        list.innerHTML = '<div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-sub">' + esc(error.message || error) + '</div></div>';
+        list.dataset.loaded = '';
+      }
+    }
+    global.__renderVipAdmin = renderVipAdmin;
 
     /* ── 绑定手机号 / 换绑（依赖短信服务，两步验证） ── */
     const phoneStatus = (text) => { const el = $('dpPhoneStatus'); if (el) el.textContent = text || ''; };
@@ -116,6 +180,7 @@
   function renderPane(name) {
     if (name === 'playlists') renderPlaylists();
     else if (name === 'recent') renderRecent();
+    else if (name === 'vipadmin' && global.__renderVipAdmin) global.__renderVipAdmin(true);
   }
 
   function renderPlaylists() {
@@ -178,6 +243,13 @@
     if (pv) pv.textContent = logged ? (cloud().displayUser ? cloud().displayUser(user) : '已绑定') : '未登录';
     const ps = $('dpPhoneStatus');
     if (ps && !logged) ps.textContent = '';
+    // 会员管理 tab：仅管理员可见
+    const admin = logged && global.isAdmin && global.isAdmin();
+    const vaTab = $('pfTabVipAdmin');
+    if (vaTab) {
+      vaTab.classList.toggle('hidden', !admin);
+      if (!admin) { const pane = $('pfPaneVipadmin'); if (pane) pane.classList.add('hidden'); }
+    }
     renderPane(pfTab);
   }
 

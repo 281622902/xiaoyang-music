@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.13.2', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.14.0', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -118,6 +118,58 @@
       .eq('token', token).maybeSingle();
     if (error) throw new Error('查询登录状态失败：' + error.message);
     return data; // null = 票据已过期或被清理
+  }
+
+  /* ---------- 会员体系 + 管理员（见 supabase/vip_members.sql） ---------- */
+  // 管理员手机号白名单：客户端仅用于展示入口；真正的写权限由数据库 RLS 强制
+  const ADMIN_PHONES = ['18474728056'];
+  function isAdmin() {
+    const user = cloud.user;
+    if (!user || !user.phone) return false;
+    const phone = String(user.phone).replace(/^\+86/, '');
+    return ADMIN_PHONES.includes(phone);
+  }
+  function normalizePhoneKey(value) {
+    const p = String(value ?? '').replace(/\D/g, '').replace(/^86(?=\d{11}$)/, '');
+    if (!/^1\d{10}$/.test(p)) throw new Error('手机号格式不正确');
+    return p;
+  }
+  // 查询任意手机号的会员状态：{ tier, expiresAt, active }；无记录 = 非会员
+  async function getVipInfo(phone) {
+    const key = normalizePhoneKey(phone ?? (cloud.user && cloud.user.phone) ?? '');
+    const { data, error } = await client().from('vip_members')
+      .select('tier, expires_at')
+      .eq('phone', key).maybeSingle();
+    if (error) throw new Error('查询会员状态失败：' + error.message);
+    if (!data) return { tier: '', expiresAt: null, active: false };
+    const expires = data.expires_at ? Date.parse(data.expires_at) : null;
+    const active = data.tier === 'svip' || data.tier === 'vip'
+      ? (expires === null || expires > Date.now())
+      : false;
+    return { tier: data.tier, expiresAt: expires, active };
+  }
+  // ── 管理员操作（RLS 强制仅 18474728056 可写） ──
+  async function adminListUsers() {
+    if (!isAdmin()) throw new Error('仅管理员可查看用户列表');
+    const { data, error } = await client().rpc('admin_list_users');
+    if (error) throw new Error('读取用户列表失败：' + error.message);
+    return data || [];
+  }
+  async function adminSetVip(phone, tier, expiresAt) {
+    if (!isAdmin()) throw new Error('仅管理员可设置会员');
+    const key = normalizePhoneKey(phone);
+    const { error } = await client().from('vip_members')
+      .upsert({ phone: key, tier, expires_at: expiresAt, updated_at: new Date().toISOString() });
+    if (error) throw new Error('设置会员失败：' + error.message);
+    return true;
+  }
+  async function adminRemoveVip(phone) {
+    if (!isAdmin()) throw new Error('仅管理员可取消会员');
+    const key = normalizePhoneKey(phone);
+    const { error } = await client().from('vip_members')
+      .delete().eq('phone', key);
+    if (error) throw new Error('取消会员失败：' + error.message);
+    return true;
   }
   async function logoutUser() {
     const { error } = await client().auth.signOut({ scope: 'local' });
@@ -344,10 +396,12 @@
   Object.assign(global, { registerUser, loginUser, logoutUser, addFavorite, getFavorites,
     createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist,
     updateProfile, changePassword, compressAvatar,
-    sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket });
+    sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket,
+    isAdmin, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip });
   // 同步挂到 XYCloud，避免调用方在 window / XYCloud 两个对象间踩坑
   Object.assign(cloud, { registerUser, loginUser, logoutUser, updateProfile, changePassword, compressAvatar,
-    sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket });
+    sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket,
+    isAdmin, getVipInfo, adminListUsers, adminSetVip, adminRemoveVip });
   cloud.getUpdateInfo = async function () {
     let native = null, androidInfo = null;
     try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }

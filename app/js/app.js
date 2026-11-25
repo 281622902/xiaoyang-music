@@ -258,10 +258,10 @@
     { id: 'pine', name: '松涛夜绿', mode: 'dark', accent: '#35c26e',
       pal: { '--bg-0': '#0e1a13', '--bg-1': '#122118', '--bg-2': '#182b1f', '--bg-3': '#213828', '--text': '#e4f2e8', '--text-2': '#93b2a0', '--line': '#24402e', '--shadow': 'rgba(0,0,0,.5)', '--vinyl-face': '#152419' },
       prev: 'linear-gradient(135deg,#1d3a27,#0e1a13)' },
-    { id: 'goldage', name: '流金岁月', mode: 'light', accent: '#c08a1e',
+    { id: 'goldage', name: '流金岁月', mode: 'light', accent: '#c08a1e', vip: true,
       pal: { '--bg-0': '#f7f0df', '--bg-1': '#fffdf6', '--bg-2': '#f4ecd6', '--bg-3': '#ead9b5', '--text': '#3d3015', '--text-2': '#7c6a3c', '--line': '#e6d6b2', '--shadow': 'rgba(120,90,30,.13)', '--vinyl-face': '#3a2f1a' },
       prev: 'linear-gradient(135deg,#f6e8c4,#e2c88a)' },
-    { id: 'gilt', name: '鎏金夜', mode: 'dark', accent: '#d9a40e',
+    { id: 'gilt', name: '鎏金夜', mode: 'dark', accent: '#d9a40e', vip: true,
       pal: { '--bg-0': '#1c1610', '--bg-1': '#231c13', '--bg-2': '#2c2318', '--bg-3': '#3a2f1f', '--text': '#f5ecda', '--text-2': '#bfa87e', '--line': '#413521', '--shadow': 'rgba(0,0,0,.5)', '--vinyl-face': '#221a10' },
       prev: 'linear-gradient(135deg,#3a2f1f,#1c1610)' },
     { id: 'ocean', name: '蔚蓝海洋', mode: 'light', accent: '#1976d2',
@@ -270,10 +270,10 @@
     { id: 'deepsea', name: '深海蓝', mode: 'dark', accent: '#3f8cff',
       pal: { '--bg-0': '#0c1524', '--bg-1': '#101c30', '--bg-2': '#16253d', '--bg-3': '#1f3350', '--text': '#e3edf9', '--text-2': '#8fa6c4', '--line': '#24395a', '--shadow': 'rgba(0,0,0,.5)', '--vinyl-face': '#13203a' },
       prev: 'linear-gradient(135deg,#1b3050,#0c1524)' },
-    { id: 'lemon', name: '柠檬汽水', mode: 'light', accent: '#dca800',
+    { id: 'lemon', name: '柠檬汽水', mode: 'light', accent: '#dca800', vip: true,
       pal: { '--bg-0': '#fbf7dd', '--bg-1': '#fffef2', '--bg-2': '#f7f2cd', '--bg-3': '#efe6a8', '--text': '#423b10', '--text-2': '#7a7030', '--line': '#eee5a6', '--shadow': 'rgba(130,110,20,.13)', '--vinyl-face': '#3c3512' },
       prev: 'linear-gradient(135deg,#faf3bd,#eedd85)' },
-    { id: 'grape', name: '魅紫', mode: 'dark', accent: '#9d5ce8',
+    { id: 'grape', name: '魅紫', mode: 'dark', accent: '#9d5ce8', vip: true,
       pal: { '--bg-0': '#170f26', '--bg-1': '#1e152f', '--bg-2': '#261c3b', '--bg-3': '#332550', '--text': '#efe8fa', '--text-2': '#a795c7', '--line': '#372a55', '--shadow': 'rgba(0,0,0,.5)', '--vinyl-face': '#221638' },
       prev: 'linear-gradient(135deg,#2c2044,#170f26)' },
     { id: 'mocha', name: '摩卡棕', mode: 'dark', accent: '#c08a5a',
@@ -287,33 +287,49 @@
     document.querySelectorAll('#themeMode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
     document.querySelectorAll('#accentSwatches button').forEach((b) => b.classList.toggle('active', b.dataset.accent === accent));
   }
+  let skinFilter = 'official';
+  function vipUnlocked() {
+    // 会员有效 或 管理员 → 解锁会员皮肤
+    if (window.XYCloud?.isAdmin?.()) return true;
+    const v = window.__vipInfo;
+    return !!(v && v.active);
+  }
   function renderSkins() {
     const grid = $('skinGrid');
     if (!grid) return;
     const stored = localStorage.getItem('uzz.theme.skin');
     const mode = localStorage.getItem('uzz.theme.mode') || 'dark';
     const accent = localStorage.getItem('uzz.theme.accent') || '#ec4141';
-    grid.innerHTML = SKINS.map((s) => {
+    const list = SKINS.filter((s) => (skinFilter === 'vip' ? s.vip : !s.vip));
+    const unlocked = vipUnlocked();
+    grid.innerHTML = list.map((s) => {
       // 旧版本没有 skin 存量：按 深浅+主题色 推断经典红/极简白
       const active = stored ? (stored === s.id) : (s.id === (mode === 'light' ? 'light' : 'classic') && s.accent === accent);
-      return `<button class="skin-card${active ? ' active' : ''}" data-id="${s.id}" data-mode="${s.mode}" data-accent="${s.accent}">
+      const locked = s.vip && !unlocked;
+      return `<button class="skin-card${active ? ' active' : ''}${locked ? ' vip-locked' : ''}" data-id="${s.id}" data-mode="${s.mode}" data-accent="${s.accent}" data-vip="${s.vip ? 1 : 0}">
         <span class="skin-prev" style="background:${s.prev || (s.mode === 'light' ? '#fff' : '#171a21')}">
           <span class="skin-note">♪</span>
           <span class="skin-dot" style="background:${s.accent}"></span>
           <span class="skin-bar" style="background:${s.accent}"></span>
+          ${active ? '<span class="skin-check">✓</span>' : ''}
+          ${s.vip ? '<span class="skin-viptag">VIP</span>' : ''}
         </span>
         <span class="skin-name">${s.name}<i class="skin-mode">${s.mode === 'light' ? '浅色' : '深色'}</i></span>
       </button>`;
     }).join('');
     grid.querySelectorAll('.skin-card').forEach((card) => {
       card.addEventListener('click', () => {
+        if (card.dataset.vip === '1' && !vipUnlocked()) {
+          toast('会员专享皮肤，请联系管理员开通会员');
+          return;
+        }
         const mode = card.dataset.mode, accent = card.dataset.accent;
         localStorage.setItem('uzz.theme.skin', card.dataset.id);
         localStorage.setItem('uzz.theme.mode', mode);
         localStorage.setItem('uzz.theme.accent', accent);
         applyTheme();
         syncThemeControls(mode, accent);
-        grid.querySelectorAll('.skin-card').forEach((c) => c.classList.toggle('active', c === card));
+        renderSkins();
         toast('皮肤已切换：' + card.querySelector('.skin-name').textContent.replace('浅色', '').replace('深色', '').replace('✓', '').trim());
       });
     });
@@ -3587,8 +3603,46 @@
     const tbSkin = $('tbSkin');
     if (tbSkin) {
       tbSkin.addEventListener('click', () => {
+        // 打开皮肤页前刷新会员状态（会员分区门禁）
+        const user = window.XYCloud?.user;
+        if (user && window.getVipInfo) {
+          window.getVipInfo(user.phone).then((v) => { window.__vipInfo = v; renderSkins(); }).catch(() => renderSkins());
+        }
         renderSkins();
         $('skinOverlay').classList.remove('hidden');
+      });
+    }
+    // 皮肤页顶部 tabs：个性皮肤 / 头像挂件 / 音乐桌面
+    const skTabs = $('skTabs');
+    if (skTabs) {
+      skTabs.addEventListener('click', (e) => {
+        const tab = e.target.closest('.sk-tab');
+        if (!tab) return;
+        skTabs.querySelectorAll('.sk-tab').forEach((b) => b.classList.toggle('active', b === tab));
+        const key = tab.dataset.skt;
+        $('skPaneSkin').classList.toggle('hidden', key !== 'skin');
+        $('skPanePendant').classList.toggle('hidden', key !== 'pendant');
+        $('skPaneDesktop').classList.toggle('hidden', key !== 'desktop');
+      });
+    }
+    // 官方 / 会员 分区筛选
+    const skFilter = $('skFilter');
+    if (skFilter) {
+      skFilter.addEventListener('click', (e) => {
+        const btn = e.target.closest('.sk-fbtn');
+        if (!btn) return;
+        skinFilter = btn.dataset.skf;
+        skFilter.querySelectorAll('.sk-fbtn').forEach((b) => b.classList.toggle('active', b === btn));
+        renderSkins();
+      });
+    }
+    const skOpenDesktop = $('skOpenDesktop');
+    if (skOpenDesktop) {
+      skOpenDesktop.addEventListener('click', () => {
+        if (window.uzzBridge && window.uzzBridge.openMusicDesktop) {
+          window.uzzBridge.openMusicDesktop();
+          toast('音乐桌面已打开，可在桌面摆放歌词小窗');
+        } else toast('请在桌面版使用音乐桌面');
       });
     }
     const skinClose = $('skinClose');

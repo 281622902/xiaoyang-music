@@ -20,7 +20,7 @@
         <span class="brand-name">xymusic</span>
       </div>
       <div class="tb-drag"></div>
-      <div class="tb-actions no-drag"><button id="accountOpen" class="account-trigger" title="我的主页"><img id="topbarAvatar" class="tb-avatar" src="icon.svg" alt="" draggable="false" /><span id="accountLabel">登录账户</span></button>
+      <div class="tb-actions no-drag"><button id="accountOpen" class="account-trigger" title="我的主页"><img id="topbarAvatar" class="tb-avatar" src="icon.svg" alt="" draggable="false" /><span id="accountLabel">登录账户</span><i id="topbarVip" class="tb-vip hidden">VIP</i></button>
         <button id="tbSkin" title="个性换肤" aria-label="个性换肤">
           <svg viewBox="0 0 24 24"><path d="M20.4 6.5 16 4l-1.5 2h-5L8 4 3.6 6.5a1 1 0 0 0-.4 1.3L4.6 10l1.4-.6V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.4l1.4.6 1.4-2.2a1 1 0 0 0-.4-1.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 6a2.5 2.5 0 0 0 5 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
@@ -315,12 +315,13 @@
             </div>
           </section>
 
-          <nav class="pf-tabs" id="pfTabs">
-            <button class="pf-tab active" data-pf="playlists" type="button">我的歌单</button>
-            <button class="pf-tab" data-pf="favs" type="button">我的收藏</button>
-            <button class="pf-tab" data-pf="recent" type="button">最近播放</button>
-            <button class="pf-tab" data-pf="settings" type="button">资料与同步</button>
-          </nav>
+  <nav class="pf-tabs" id="pfTabs">
+    <button class="pf-tab active" data-pf="playlists" type="button">我的歌单</button>
+    <button class="pf-tab" data-pf="favs" type="button">我的收藏</button>
+    <button class="pf-tab" data-pf="recent" type="button">最近播放</button>
+    <button class="pf-tab" data-pf="settings" type="button">资料与同步</button>
+    <button class="pf-tab hidden" data-pf="vipadmin" id="pfTabVipAdmin" type="button">会员管理</button>
+  </nav>
 
           <section class="pf-pane" id="pfPanePlaylists"><div id="pfPlaylistGrid" class="pf-grid"></div></section>
 
@@ -330,6 +331,14 @@
           </section>
 
           <section class="pf-pane hidden" id="pfPaneRecent"><div id="pfRecentList" class="pf-recent"></div></section>
+
+          <section class="pf-pane hidden" id="pfPaneVipadmin">
+            <div class="pfva-head">
+              <span id="pfvaCount" class="pf-sub">用户列表加载中…</span>
+              <button id="pfvaRefresh" class="xy-secondary" type="button">刷新</button>
+            </div>
+            <div id="pfvaList" class="pfva-list"></div>
+          </section>
 
           <section class="pf-pane hidden" id="pfPaneSettings">
             <div id="cloudMember">
@@ -1145,22 +1154,41 @@
     <!-- ══════ 加入歌单浮层 ══════ -->
     <div id="addPlMenu" class="add-pl hidden"></div>
 
-    <!-- ══════ 个性换肤（全屏，参考网易云皮肤页） ══════ -->
+    <!-- ══════ 个性换肤（全屏，网易云皮肤页布局） ══════ -->
     <div id="skinOverlay" class="skin-overlay hidden">
       <div class="sk-head">
-        <span class="sk-title">个性皮肤</span>
+        <nav class="sk-tabs" id="skTabs">
+          <button class="sk-tab active" data-skt="skin" type="button">个性皮肤</button>
+          <button class="sk-tab" data-skt="pendant" type="button">头像挂件</button>
+          <button class="sk-tab" data-skt="desktop" type="button">音乐桌面</button>
+        </nav>
         <button id="skinClose" class="sk-close" title="关闭">✕</button>
       </div>
       <div class="sk-body">
-        <div class="sk-sec">官方</div>
-        <div class="skin-grid" id="skinGrid"></div>
-        <div class="sk-sec">自定义图片背景</div>
-        <div class="skin-custom">
-          <label class="sk-upload">选择本地图片<input id="skinBgInput" type="file" accept="image/*" hidden></label>
-          <button id="skinBgClear" class="xy-secondary" type="button">清除背景</button>
-          <label class="sk-opacity">遮罩 <input id="skinBgOpacity" type="range" min="10" max="85" value="45"><span id="skinBgVal">45%</span></label>
+        <div id="skPaneSkin">
+          <div class="sk-filter" id="skFilter">
+            <button class="sk-fbtn active" data-skf="official" type="button">官方</button>
+            <button class="sk-fbtn" data-skf="vip" type="button">会员</button>
+          </div>
+          <div class="skin-grid" id="skinGrid"></div>
+          <div class="sk-sec">自定义图片背景</div>
+          <div class="skin-custom">
+            <label class="sk-upload">选择本地图片<input id="skinBgInput" type="file" accept="image/*" hidden></label>
+            <button id="skinBgClear" class="xy-secondary" type="button">清除背景</button>
+            <label class="sk-opacity">遮罩 <input id="skinBgOpacity" type="range" min="10" max="85" value="45"><span id="skinBgVal">45%</span></label>
+          </div>
+          <p class="muted skin-tip">点击皮肤一键应用；自定义图片会压缩后保存在本机，不上传。</p>
         </div>
-        <p class="muted skin-tip">点击官方皮肤一键应用；自定义图片会压缩后保存在本机，不上传。</p>
+        <div id="skPanePendant" class="hidden">
+          <div class="empty-state"><div class="empty-ic">✨</div><div class="empty-title">头像挂件商城筹备中</div><div class="empty-sub">海量头像挂件将在后续版本上线，敬请期待</div></div>
+        </div>
+        <div id="skPaneDesktop" class="hidden">
+          <div class="sk-desktop-card">
+            <h3>音乐桌面</h3>
+            <p>把正在播放的歌曲封面与歌词常驻桌面，透明小窗随心摆放，不影响其他工作。</p>
+            <button id="skOpenDesktop" class="xy-primary" type="button">打开音乐桌面</button>
+          </div>
+        </div>
       </div>
     </div>
 
