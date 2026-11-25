@@ -221,6 +221,39 @@ html[data-theme="dark"] .ne-reset-sub { color: var(--text-2); }
 .sk-desktop-card h3 { font-size: 18px; margin-bottom: 10px; }
 .sk-desktop-card p { font-size: 12.5px; color: var(--text-2); line-height: 1.8; margin-bottom: 18px; }
 
+/* ── 音乐桌面主题选择 ── */
+.sk-dthemes { max-width: 560px; margin: 0 auto 40px; }
+.dtheme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; }
+.dtheme-card {
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  padding: 8px; border-radius: 12px; border: 2px solid transparent;
+  transition: border-color .15s, transform .15s;
+}
+.dtheme-card:hover { transform: translateY(-2px); }
+.dtheme-card.active { border-color: var(--accent); }
+.dtheme-prev {
+  width: 100%; height: 56px; border-radius: 9px; display: flex;
+  align-items: flex-end; justify-content: center; gap: 4px;
+  padding-bottom: 8px; border: 1px solid rgba(128,128,128,.2);
+}
+.dtheme-prev i { width: 6px; border-radius: 2px; }
+.dtheme-prev[data-dtp="midnight"] { background: linear-gradient(135deg,#181c26,#0c0f16); }
+.dtheme-prev[data-dtp="midnight"] i { background: linear-gradient(180deg,#8fb7ff,#76ddc8); }
+.dtheme-prev[data-dtp="nebula"] { background: linear-gradient(135deg,#2c1e42,#140c22); }
+.dtheme-prev[data-dtp="nebula"] i { background: linear-gradient(180deg,#7fd0ff,#b48cff); }
+.dtheme-prev[data-dtp="sunset"] { background: linear-gradient(135deg,#3a2012,#1e0e08); }
+.dtheme-prev[data-dtp="sunset"] i { background: linear-gradient(180deg,#ff7a59,#ffab6b); }
+.dtheme-prev[data-dtp="sakura"] { background: linear-gradient(135deg,#381e2c,#1e101a); }
+.dtheme-prev[data-dtp="sakura"] i { background: linear-gradient(180deg,#ffc7e0,#ff9fc0); }
+.dtheme-prev[data-dtp="pine"] { background: linear-gradient(135deg,#142a20,#0a1610); }
+.dtheme-prev[data-dtp="pine"] i { background: linear-gradient(180deg,#b8f0d0,#7fe0a8); }
+.dtheme-prev[data-dtp="mist"] { background: linear-gradient(135deg,#f8fafd,#e8eef6); }
+.dtheme-prev[data-dtp="mist"] i { background: linear-gradient(180deg,#7cc4ff,#4f9efc); }
+.dtheme-prev i:nth-child(1) { height: 10px; }
+.dtheme-prev i:nth-child(2) { height: 20px; }
+.dtheme-prev i:nth-child(3) { height: 14px; }
+.dtheme-name { font-size: 12px; color: var(--text-2); }
+
 /* ── 会员管理（管理员） ── */
 .pfva-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .pfva-list { display: flex; flex-direction: column; gap: 8px; }

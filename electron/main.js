@@ -121,6 +121,11 @@ let minToTray = true; // 关闭窗口时最小化到托盘（默认开）
 
 // ══════ 更新要点（升级完成后首次启动弹窗展示） ══════
 const WHATS_NEW = {
+  '3.16.0': [
+    '音乐桌面全新改版：滚动歌词同步高亮 + 律动波动特效',
+    '音乐桌面新增 6 款主题（深夜青/星云紫/落日橙/樱语粉/松涛绿/晨雾白），换肤页可选、小窗 🎨 可切换',
+    '换肤界面与顶部保持距离，与设置页版式一致',
+  ],
   '3.15.6': [
     '搜索框移入顶部标题栏（网易云式），修复搜索图标与文字重叠',
   ],
@@ -693,8 +698,8 @@ function openMusicDesktop() {
   if (musicDesktopWin && !musicDesktopWin.isDestroyed()) { musicDesktopWin.focus(); return musicDesktopWin; }
   const area = screen.getPrimaryDisplay().workArea;
   musicDesktopWin = new BrowserWindow({
-    width: 460, height: 300,
-    x: area.x + area.width - 480, y: area.y + 80,
+    width: 480, height: 380,
+    x: area.x + area.width - 500, y: area.y + 80,
     frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true,
     backgroundColor: '#00000000',

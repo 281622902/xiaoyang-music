@@ -3727,6 +3727,34 @@
         } else toast('请在桌面版使用音乐桌面');
       });
     }
+    // 音乐桌面主题选择（写入 localStorage，桌面小窗随 payload 实时换肤）
+    const DESKTOP_THEMES = [
+      { id: 'midnight', name: '深夜青' },
+      { id: 'nebula', name: '星云紫' },
+      { id: 'sunset', name: '落日橙' },
+      { id: 'sakura', name: '樱语粉' },
+      { id: 'pine', name: '松涛绿' },
+      { id: 'mist', name: '晨雾白' },
+    ];
+    const dthemeGrid = $('dthemeGrid');
+    if (dthemeGrid) {
+      const getDt = () => { try { return localStorage.getItem('uzz.desktopTheme') || 'midnight'; } catch (e) { return 'midnight'; } };
+      const paintDt = () => {
+        const cur = getDt();
+        dthemeGrid.innerHTML = DESKTOP_THEMES.map((t) => `
+          <button class="dtheme-card ${cur === t.id ? 'active' : ''}" data-dt="${t.id}" type="button" title="${t.name}">
+            <span class="dtheme-prev" data-dtp="${t.id}"><i></i><i></i><i></i></span>
+            <span class="dtheme-name">${t.name}${cur === t.id ? ' ✓' : ''}</span>
+          </button>`).join('');
+        dthemeGrid.querySelectorAll('.dtheme-card').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            try { localStorage.setItem('uzz.desktopTheme', btn.dataset.dt); } catch (e) {}
+            paintDt(); toast('音乐桌面主题已切换：' + btn.querySelector('.dtheme-name').textContent.replace(' ✓', ''));
+          });
+        });
+      };
+      paintDt();
+    }
     const skinClose = $('skinClose');
     if (skinClose) skinClose.addEventListener('click', () => $('skinOverlay').classList.add('hidden'));
     const tbMini = $('tbMini');
@@ -3799,6 +3827,9 @@
         playing: !!(audio && !audio.paused),
         position: audio ? audio.currentTime : 0,
         duration: audio ? audio.duration : 0,
+        key: t ? String(t.id || t.name || '') : '',
+        lrc: t ? (t.lyric || '') : '',
+        theme: (() => { try { return localStorage.getItem('uzz.desktopTheme') || 'midnight'; } catch (e) { return 'midnight'; } })(),
       });
     }, 600);
     const qSave = $('queueSave');
