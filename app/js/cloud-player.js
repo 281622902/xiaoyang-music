@@ -12,12 +12,17 @@
       clearTimeout(cloud.toastTimer); cloud.toastTimer = setTimeout(() => $('toast').classList.add('hidden'), 3500);
     }
     function renderAuth() {
-      $('cloudGuest').classList.toggle('hidden', !!cloud.user);
-      $('cloudMember').classList.toggle('hidden', !cloud.user);
-      const name = cloud.user ? (cloud.displayName ? cloud.displayName(cloud.user) : cloud.displayUser(cloud.user)) : '';
-      $('cloudUserName').textContent = name;
-      $('accountLabel').textContent = name || '账户与云端';
+      const logged = !!cloud.user;
+      const name = logged ? (cloud.displayName ? cloud.displayName(cloud.user) : cloud.displayUser(cloud.user)) : '';
+      $('accountLabel').textContent = logged ? name : '登录账户';
+      // 顶栏头像：登录后显示用户头像，未登录回落默认 Logo
+      const ta = $('topbarAvatar');
+      if (ta) {
+        const p = logged && cloud.profile ? cloud.profile(cloud.user) : null;
+        ta.src = (p && p.avatar) || 'icon.svg';
+      }
       if (cloud.user) { fillProfile(cloud.user); refreshSyncStatus(); }
+      if (window.XYProfile) window.XYProfile.render();
     }
     /* ── 桌面端资料中心：头像 / 昵称 / 用户名 / 密码 ── */
     let pendingAvatar = '';
@@ -128,22 +133,8 @@
       } catch (error) { if (ticket === listGeneration && authTicket === authGeneration) say(error.message); }
       finally { if (ticket === listGeneration) $('cloudRefresh').disabled = false; }
     }
-    function setMode(value) {
-      mode = value; $('cloudLoginTab').classList.toggle('active', value === 'login');
-      $('cloudRegisterTab').classList.toggle('active', value === 'register');
-      $('cloudSubmit').textContent = value === 'login' ? '登录云端账户' : '注册并登录';
-      $('cloudPassword').autocomplete = value === 'login' ? 'current-password' : 'new-password'; say('');
-    }
-    $('cloudLoginTab').onclick = () => setMode('login'); $('cloudRegisterTab').onclick = () => setMode('register');
-    $('cloudForm').addEventListener('submit', async event => {
-      event.preventDefault(); $('cloudSubmit').disabled = true; say('正在处理…');
-      try {
-        const data = await global[mode === 'login' ? 'loginUser' : 'registerUser']($('cloudPhone').value, $('cloudPassword').value);
-        $('cloudPassword').value = '';
-        say(data.session ? '登录成功' : '注册完成，尚未建立会话，请核对 Supabase 手机号确认设置');
-      } catch (error) { say(error.message); }
-      finally { $('cloudSubmit').disabled = !cloud.available; }
-    });
+    // 登录/注册/验证码/扫码交互已迁至 ne-login.js（网易云样式登录卡）；
+    // 这里只保留云端收藏列表与退出登录的绑定。
     $('cloudLogout').addEventListener('click', async () => {
       $('cloudLogout').disabled = true;
       try { await global.logoutUser(); $('cloudPassword').value = ''; say('已退出云端账户'); }

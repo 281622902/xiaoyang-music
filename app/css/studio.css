@@ -18,3 +18,142 @@ button,input,select,textarea{font:inherit}button{line-height:1.35}button:focus-v
 @media(max-width:700px){.hero-record{display:none}.listen-hero{min-height:180px}.sidebar{width:150px;flex-basis:150px}.account-trigger #accountLabel{display:none}.view{padding:16px}.banner-row{grid-template-columns:repeat(2,1fr)}.st-row{grid-template-columns:1fr}.st-row>.st-hint{grid-column:1}}
 .sidebar{overflow-y:auto;overflow-x:hidden}.side-section{flex:0 0 auto;min-height:76px;margin-top:0}.playlist-nav{flex:none;min-height:36px;max-height:180px}.side-foot{flex-shrink:0}.brand-name{display:inline}.tb-actions .account-trigger{display:flex!important;flex-direction:row;min-height:36px;max-height:40px;padding:6px 12px!important}.st-radio>span:first-of-type{padding-left:24px}.st-radio>span:first-of-type::before{box-sizing:border-box;width:16px;height:16px;border-width:2px}.st-radio input:checked+span:first-of-type::before{border-width:5px}
 .sidebar nav{flex-shrink:0}.sidebar .side-section.side-sec-created,.sidebar .side-section.side-sec-collected{flex:0 0 auto;min-height:94px}.sidebar .playlist-nav.pln-short{flex:0 0 auto;min-height:36px}.banner::after{display:none}.studio-empty{border:1px dashed var(--line);border-radius:12px;padding:22px;color:var(--text-2);font-size:12px;width:100%}
+
+/* ══════════════════════════════════════════════════════════
+   网易云风格登录卡（ne-card）+ 个人主页（viewProfile）  v3.13.0
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 顶栏头像 ── */
+.tb-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: var(--bg-2); flex: none; }
+
+/* ── 登录卡：白色圆角卡片，明暗主题均保持高对比 ── */
+.ne-card {
+  position: relative; width: min(400px, 100%); max-height: 92vh; overflow-y: auto;
+  border-radius: 18px; padding: 40px 44px 30px;
+  background: #ffffff; color: #26282e;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .5);
+}
+html[data-theme="dark"] .ne-card { background: #1f222b; color: var(--text); }
+.ne-close { position: absolute; right: 14px; top: 10px; width: 32px; height: 32px; border-radius: 50%; font-size: 22px; color: #9aa1af; }
+.ne-close:hover { color: inherit; background: rgba(128, 128, 128, .14); }
+.ne-corner {
+  position: absolute; left: 0; top: 0; width: 44px; height: 44px;
+  border-radius: 18px 0 18px 0; color: #b9bec9;
+  display: grid; place-items: center;
+}
+.ne-corner svg { width: 20px; height: 20px; }
+.ne-corner:hover { color: var(--accent); background: var(--accent-weak); }
+.ne-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 4px 0 26px; }
+.ne-brand img { width: 44px; height: 44px; border-radius: 12px; }
+.ne-brand b { font-size: 22px; letter-spacing: .5px; }
+
+.ne-mode { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 20px; }
+.ne-mode-btn { font-size: 14px; color: #9aa1af; padding: 4px 2px; }
+html[data-theme="dark"] .ne-mode-btn { color: var(--text-2); }
+.ne-mode-btn.active { color: inherit; font-weight: 700; }
+.ne-mode-btn.active::after { content: ''; display: block; margin: 4px auto 0; width: 18px; height: 2px; border-radius: 1px; background: var(--accent); }
+.ne-mode-sep { width: 1px; height: 12px; background: #d8dbe2; }
+html[data-theme="dark"] .ne-mode-sep { background: var(--line); }
+
+.ne-form { display: flex; flex-direction: column; gap: 12px; }
+.ne-field {
+  display: flex; align-items: center; min-height: 46px;
+  border: 1px solid #e2e5ea; border-radius: 12px; padding: 0 14px;
+  background: #f6f7f9; transition: border-color .15s;
+}
+html[data-theme="dark"] .ne-field { background: var(--bg-0); border-color: var(--line); }
+.ne-field:focus-within { border-color: var(--accent); }
+.ne-field input {
+  flex: 1; min-width: 0; border: 0; outline: none; background: transparent;
+  font-size: 14px; color: inherit; padding: 10px 0;
+}
+.ne-field input::placeholder { color: #b3b9c4; }
+html[data-theme="dark"] .ne-field input::placeholder { color: var(--text-2); }
+.ne-86 { font-size: 13.5px; color: inherit; flex: none; }
+.ne-86-sep { width: 1px; height: 18px; background: #d8dbe2; margin: 0 12px 0 10px; }
+html[data-theme="dark"] .ne-86-sep { background: var(--line); }
+.ne-code-row input { font-size: 15px; letter-spacing: 2px; }
+.ne-send {
+  flex: none; font-size: 13px; color: var(--accent); padding: 6px 2px 6px 10px;
+}
+.ne-send:disabled { color: #b3b9c4; }
+
+.ne-opts { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 0; }
+.ne-auto { display: flex; align-items: center; gap: 7px; font-size: 13px; color: inherit; cursor: pointer; }
+.ne-auto input { accent-color: var(--accent); margin: 0; }
+.ne-link { font-size: 13px; color: var(--accent); }
+.ne-link:hover { text-decoration: underline; }
+
+.ne-primary {
+  width: 100%; min-height: 46px; margin-top: 10px; border-radius: 999px;
+  font-size: 15.5px; font-weight: 600; color: #fff;
+  background: linear-gradient(90deg, #fb6a7d, #ec4141);
+  transition: filter .15s, transform .05s;
+}
+.ne-primary:hover { filter: brightness(1.06); }
+.ne-primary:active { transform: scale(.985); }
+.ne-primary:disabled { filter: grayscale(.4) brightness(.9); }
+
+.ne-scan-row { text-align: center; margin-top: 14px; }
+.ne-agree { display: flex; align-items: center; justify-content: center; gap: 2px; margin-top: 14px; font-size: 11.5px; color: #9aa1af; }
+html[data-theme="dark"] .ne-agree { color: var(--text-2); }
+.ne-agree label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.ne-agree input { accent-color: var(--accent); margin: 0; }
+.ne-agree a { color: var(--accent); opacity: .85; }
+.ne-agree a:hover { opacity: 1; }
+
+/* ── 扫码视图 ── */
+.ne-qr-title { text-align: center; font-size: 17px; margin: 6px 0 18px; }
+.ne-qr-wrap { position: relative; width: 200px; margin: 0 auto; }
+.ne-qr-img { width: 200px; height: 200px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; }
+.ne-qr-img canvas { width: 200px; height: 200px; image-rendering: pixelated; }
+.ne-qr-mask {
+  position: absolute; inset: 0; border-radius: 10px;
+  background: rgba(255, 255, 255, .92);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  font-size: 13px; color: #40434b;
+}
+html[data-theme="dark"] .ne-qr-mask { background: rgba(20, 22, 28, .88); color: var(--text); }
+.ne-qr-mask-ic { width: 44px; height: 44px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; font-size: 20px; }
+.ne-qr-tip { text-align: center; font-size: 13px; color: #9aa1af; margin-top: 14px; }
+html[data-theme="dark"] .ne-qr-tip { color: var(--text-2); }
+.ne-qr-back { display: block; margin: 10px auto 0; }
+
+/* ── 个人主页（viewProfile） ── */
+#viewProfile { padding-top: 14px; }
+.pf-hero { display: flex; align-items: center; gap: 22px; margin: 10px 0 8px; }
+.pf-avatar {
+  width: 108px; height: 108px; border-radius: 50%; object-fit: cover;
+  background: var(--bg-2); border: 3px solid var(--bg-1);
+  box-shadow: 0 8px 30px var(--shadow);
+}
+.pf-head { flex: 1; min-width: 0; }
+.pf-head h2 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+.pf-stats { display: flex; gap: 26px; margin-bottom: 8px; }
+.pf-stat { display: flex; align-items: baseline; gap: 5px; font-size: 13px; color: var(--text-2); }
+.pf-stat b { font-size: 17px; color: var(--text); font-weight: 700; }
+.pf-stat i { font-style: normal; }
+.pf-sub { font-size: 12.5px; color: var(--text-2); }
+.pf-hero-actions { display: flex; gap: 10px; align-self: flex-start; margin-top: 8px; }
+
+.pf-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 6px 0 18px; }
+.pf-tab { font-size: 14px; color: var(--text-2); padding: 10px 18px; position: relative; }
+.pf-tab.active { color: var(--text); font-weight: 700; }
+.pf-tab.active::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; width: 24px; height: 3px; border-radius: 2px; background: var(--accent); }
+
+.pf-pane { min-height: 260px; }
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+.pf-pane .account-buttons { display: flex; gap: 10px; margin: 10px 0 16px; }
+#pfPaneFavs .account-buttons { margin: 4px 0 14px; }
+.pf-recent { display: flex; flex-direction: column; }
+.pfr-row {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
+}
+.pfr-row:hover { background: var(--bg-2); }
+.pfr-ic { color: var(--text-2); font-size: 11px; width: 14px; text-align: center; flex: none; }
+.pfr-name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46%; }
+.pfr-artist { color: var(--text-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#pfPaneSettings .desktop-profile { max-width: 520px; }
+#pfPaneSettings #cloudMember > .account-buttons { margin: 14px 0 8px; }

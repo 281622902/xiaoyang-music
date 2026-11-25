@@ -20,7 +20,7 @@
         <span class="brand-name">xymusic</span>
       </div>
       <div class="tb-drag"></div>
-      <div class="tb-actions no-drag"><button id="accountOpen" class="account-trigger" title="我的账户"><span class="account-dot">人</span><span id="accountLabel">登录账户</span></button>
+      <div class="tb-actions no-drag"><button id="accountOpen" class="account-trigger" title="我的主页"><img id="topbarAvatar" class="tb-avatar" src="icon.svg" alt="" draggable="false" /><span id="accountLabel">登录账户</span></button>
         <button id="tbSkin" title="个性换肤" aria-label="个性换肤">
           <svg viewBox="0 0 24 24"><path d="M20.4 6.5 16 4l-1.5 2h-5L8 4 3.6 6.5a1 1 0 0 0-.4 1.3L4.6 10l1.4-.6V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.4l1.4.6 1.4-2.2a1 1 0 0 0-.4-1.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 6a2.5 2.5 0 0 0 5 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
@@ -1204,25 +1204,114 @@
     <div id="dropOverlay" class="drop-overlay hidden"><div class="drop-symbol">↓</div><strong>把好音乐放进来</strong><span>松开即可添加并播放 · 支持多文件与文件夹</span><span class="drop-formats">MP3 · FLAC · WAV · AAC · M4A · OGG · OPUS</span></div>
 <div id="updateAvailableModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="updAvailTitle"><h2 id="updAvailTitle">发现新版本</h2><p class="account-subtitle">xymusic 有新版本可用：<b id="updAvailVer">—</b></p><div class="account-buttons"><button id="updAvailLater" class="xy-secondary" type="button">稍后再说</button><button id="updAvailNow" class="xy-primary" type="button">立即升级</button></div></section></div>
 <div id="homeModuleModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="homeModuleTitle"><button id="homeModuleClose" class="xy-close" aria-label="关闭">×</button><h2 id="homeModuleTitle">发现页模块</h2><p class="account-subtitle">调整首页模块的显示与顺序。“推荐偏好”会改变歌单池。</p><div id="homeModuleList" class="hm-list"></div><label class="hm-mode">推荐偏好<select id="stRecMode" class="st-sel"><option value="default">默认</option><option value="familiar">熟悉</option><option value="explore">探索</option><option value="mix">混合</option></select></label><button id="homeModuleDone" class="xy-primary">完成</button></section></div>
-<div id="accountModal" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button id="accountClose" class="xy-close" aria-label="关闭">×</button><img class="account-logo" src="icon.svg" alt="xymusic"/><h2 id="accountTitle">你的音乐，有处安放</h2><p id="accountSubtitle">登录云端账户，让在线收藏随账号保存。本地音频保留在当前设备。</p>
-<section aria-label="云端账户">
-  <div id="cloudGuest"><div class="account-tabs"><button id="cloudLoginTab" class="active" type="button">手机号登录</button><button id="cloudRegisterTab" type="button">注册</button></div>
-    <form id="cloudForm" class="account-form"><label>手机号<input id="cloudPhone" type="tel" inputmode="tel" autocomplete="tel-national" required placeholder="请输入手机号"/></label><label>密码<input id="cloudPassword" type="password" autocomplete="current-password" required placeholder="请输入密码"/></label><button id="cloudSubmit" class="xy-primary" type="submit">登录云端账户</button></form>
-  </div>
-  <div id="cloudMember" class="hidden"><h3 id="cloudUserName"></h3>
-    <div class="desktop-profile">
-      <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
-      <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
-      <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
-      <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
-      <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
-      <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
+<!-- ══════ 登录弹窗（网易云样式）：验证码/密码/扫码 三模式 ══════ -->
+<div id="accountModal" class="xy-overlay hidden"><section class="ne-card" role="dialog" aria-modal="true" aria-labelledby="neBrandName">
+  <button id="neQrCorner" class="ne-corner" type="button" title="扫码登录" aria-label="扫码登录">
+    <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3zM14 18v3M18 14h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+  </button>
+  <button id="accountClose" class="xy-close ne-close" aria-label="关闭">×</button>
+
+  <!-- 登录模式视图 -->
+  <div id="neLoginView">
+    <div class="ne-brand"><img src="icon.svg" alt="" draggable="false" /><b id="neBrandName">xymusic</b></div>
+    <div class="ne-mode" id="neModeTabs">
+      <button id="neModeCode" class="ne-mode-btn active" type="button">验证码登录</button>
+      <span class="ne-mode-sep" aria-hidden="true"></span>
+      <button id="neModePwd" class="ne-mode-btn" type="button">密码登录</button>
     </div>
-    <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
-    <p>播放在线歌曲后，点带云标记的红心收藏；旁边的红心用于本机收藏。</p><div class="account-buttons"><button id="cloudRefresh" class="xy-secondary" type="button">刷新云端收藏</button><button id="cloudLogout" class="xy-secondary" type="button">退出云端账户</button></div><ul id="cloudFavorites" class="cloud-collection"></ul></div>
-  <p id="cloudAccountStatus" class="account-status" role="status" aria-live="polite"></p>
-</section>
-<details id="legacyAccount"><summary>本机备份账户（旧版）</summary><p>保留原有本机备份功能，本机账户与云端账户分别登录。</p><div id="accountGuest"><div class="account-tabs"><button id="accountLoginTab" class="active" type="button">登录</button><button id="accountRegisterTab" type="button">注册账户</button></div><form id="accountForm" class="account-form"><label>用户名<input id="accountUsername" autocomplete="username" minlength="2" maxlength="24" required placeholder="2–24 个字母、数字或汉字"/></label><label>密码<input id="accountPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="至少 8 位"/></label><button id="accountSubmit" class="xy-primary" type="submit">登录</button></form></div><div id="accountMember" class="hidden"><h3 id="accountName"></h3><p>当前是本机账户。本地音频不会上传，备份只包含在线收藏、歌单与部分偏好。</p><div class="account-buttons"><button id="accountBackup" class="xy-primary">备份收藏与歌单</button><button id="accountRestore" class="xy-secondary">恢复账户备份</button></div><button id="accountLogout" class="account-logout">退出登录</button></div><div id="accountStatus" class="account-status" aria-live="polite"></div></details></section></div>
+    <form id="cloudForm" class="ne-form" autocomplete="off" novalidate>
+      <div class="ne-field">
+        <span class="ne-86">+86</span><i class="ne-86-sep" aria-hidden="true"></i>
+        <input id="cloudPhone" type="tel" inputmode="numeric" maxlength="11" autocomplete="tel-national" placeholder="请输入手机号" aria-label="手机号"/>
+      </div>
+      <div class="ne-field" id="nePwdField">
+        <input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="请输入登录密码" aria-label="密码"/>
+      </div>
+      <div class="ne-field ne-code-row hidden" id="neCodeField">
+        <input id="neCodeInput" type="text" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" aria-label="验证码"/>
+        <button id="neSendCode" class="ne-send" type="button">获取验证码</button>
+      </div>
+      <div class="ne-field hidden" id="neRegField">
+        <input id="neRegPwd2" type="password" autocomplete="new-password" minlength="6" maxlength="128" placeholder="再次输入密码（注册）" aria-label="确认密码"/>
+      </div>
+      <div class="ne-opts">
+        <label class="ne-auto"><input id="neAutoLogin" type="checkbox" checked /><span>自动登录</span></label>
+        <button id="neRegisterLink" class="ne-link" type="button">注册账户</button>
+      </div>
+      <button id="cloudSubmit" class="ne-primary" type="submit">密码登录</button>
+    </form>
+    <div class="ne-scan-row"><button id="neOpenQr" class="ne-link" type="button">扫码登录更方便 ›</button></div>
+    <p id="cloudAccountStatus" class="account-status" role="status" aria-live="polite"></p>
+    <div class="ne-agree">
+      <label><input id="neAgree" type="checkbox" checked /><span>同意</span></label>
+      <a href="#" id="neTerms">《服务条款》</a><a href="#" id="nePrivacy">《隐私政策》</a>
+    </div>
+  </div>
+
+  <!-- 扫码登录视图（手机端扫码确认接入后即可用） -->
+  <div id="neQrView" class="hidden">
+    <h3 class="ne-qr-title">扫码登录更安全</h3>
+    <div class="ne-qr-wrap">
+      <div id="neQrBox" class="ne-qr-img" aria-label="登录二维码"></div>
+      <div id="neQrMask" class="ne-qr-mask hidden"><div class="ne-qr-mask-ic">✓</div><span id="neQrMaskText">等待扫码</span></div>
+    </div>
+    <p class="ne-qr-tip">使用 xymusic 手机版 扫码登录</p>
+    <button id="neQrRefresh" class="ne-link hidden" type="button">二维码已过期，点击刷新</button>
+    <button id="neQrBack" class="ne-link ne-qr-back" type="button">选择其它登录模式 ›</button>
+  </div>
+</section></div>
+<!-- ══════ 个人主页（网易云风格）：点击顶栏头像进入 ══════ -->
+<main id="viewProfile" class="view hidden">
+  <section class="pf-hero">
+    <img id="pfAvatar" class="pf-avatar" src="icon.svg" alt="用户头像" draggable="false" />
+    <div class="pf-head">
+      <h2 id="pfName">未登录</h2>
+      <div class="pf-stats">
+        <span class="pf-stat"><b id="pfCountPl">0</b><i>歌单</i></span>
+        <span class="pf-stat"><b id="pfCountFav">0</b><i>收藏</i></span>
+        <span class="pf-stat"><b id="pfCountRecent">0</b><i>最近播放</i></span>
+      </div>
+      <p id="pfSub" class="pf-sub">登录云端账户，收藏与歌单随账号随身携带</p>
+    </div>
+    <div class="pf-hero-actions">
+      <button id="pfEditBtn" class="xy-secondary hidden" type="button">编辑资料</button>
+      <button id="cloudLogout" class="xy-secondary hidden" type="button">退出登录</button>
+      <button id="pfLoginBtn" class="xy-primary hidden" type="button">立即登录</button>
+    </div>
+  </section>
+
+  <nav class="pf-tabs" id="pfTabs">
+    <button class="pf-tab active" data-pf="playlists" type="button">我的歌单</button>
+    <button class="pf-tab" data-pf="favs" type="button">我的收藏</button>
+    <button class="pf-tab" data-pf="recent" type="button">最近播放</button>
+    <button class="pf-tab" data-pf="settings" type="button">资料与同步</button>
+  </nav>
+
+  <section class="pf-pane" id="pfPanePlaylists"><div id="pfPlaylistGrid" class="pf-grid"></div></section>
+
+  <section class="pf-pane hidden" id="pfPaneFavs">
+    <div class="account-buttons"><button id="cloudRefresh" class="xy-secondary" type="button">刷新云端收藏</button></div>
+    <ul id="cloudFavorites" class="cloud-collection"></ul>
+  </section>
+
+  <section class="pf-pane hidden" id="pfPaneRecent"><div id="pfRecentList" class="pf-recent"></div></section>
+
+  <section class="pf-pane hidden" id="pfPaneSettings">
+    <div id="cloudMember">
+      <div class="desktop-profile">
+        <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
+        <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
+        <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
+        <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
+        <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
+        <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
+      </div>
+      <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
+      <div class="account-buttons"></div>
+    </div>
+    <details id="legacyAccount"><summary>本机备份账户（旧版）</summary><p>保留原有本机备份功能，本机账户与云端账户分别登录。</p><div id="accountGuest"><div class="account-tabs"><button id="accountLoginTab" class="active" type="button">登录</button><button id="accountRegisterTab" type="button">注册账户</button></div><form id="accountForm" class="account-form"><label>用户名<input id="accountUsername" autocomplete="username" minlength="2" maxlength="24" required placeholder="2–24 个字母、数字或汉字"/></label><label>密码<input id="accountPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="至少 8 位"/></label><button id="accountSubmit" class="xy-primary" type="submit">登录</button></form></div><div id="accountMember" class="hidden"><h3 id="accountName"></h3><p>当前是本机账户。本地音频不会上传，备份只包含在线收藏、歌单与部分偏好。</p><div class="account-buttons"><button id="accountBackup" class="xy-primary">备份收藏与歌单</button><button id="accountRestore" class="xy-secondary">恢复账户备份</button></div><button id="accountLogout" class="account-logout">退出登录</button></div><div id="accountStatus" class="account-status" aria-live="polite"></div></details>
+  </section>
+</main>
 <div id="toast" class="toast hidden"></div>
   </div>
 
@@ -1240,6 +1329,10 @@
   <script defer src="js/cloud-state.js"></script>
   <script defer src="js/favorite-button.js"></script>
   <script defer src="js/cloud-player.js"></script>
+  <script defer src="vendor/qr/qrcode.js"></script>
+  <script defer src="vendor/qr/qrcode-utf8.js"></script>
+  <script defer src="js/ne-login.js"></script>
+  <script defer src="js/profile.js"></script>
   <script>
     // PWA：注册网络优先 Service Worker，刷新页面即获取最新前端资源
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {

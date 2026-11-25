@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.12.1', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.13.0', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -43,6 +43,48 @@
     const { data, error } = await client().auth.signInWithPassword({ phone: normalizePhone(phone), password: passwordValue(password) });
     if (error) throw new Error(global.XYNetwork?.describe(error) || error.message);
     return data;
+  }
+  // 验证码登录：发送短信验证码（signInWithOtp）。Supabase 需配置短信服务商；
+  // 未配置时 Supabase 返回错误，调用方把报错原样展示并引导改用密码登录。
+  async function sendLoginCode(phone) {
+    const { data, error } = await client().auth.signInWithOtp({ phone: normalizePhone(phone) });
+    if (error) {
+      const msg = global.XYNetwork?.describe(error) || error.message || '';
+      throw new Error(/sms|provider|not configured|disabled/i.test(msg)
+        ? '短信验证码服务未开通，请使用密码登录' : msg);
+    }
+    return data;
+  }
+  // 验证码登录：校验短信验证码并建立会话（会话建立后 onAuthStateChange 自动刷新界面）
+  async function verifyLoginCode(phone, code) {
+    const { data, error } = await client().auth.verifyOtp({
+      phone: normalizePhone(phone),
+      token: String(code ?? '').trim(),
+      type: 'sms',
+    });
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message || '验证码不正确');
+    return data;
+  }
+  // ── 扫码登录票据（桌面端出码轮询；手机端扫码确认，见 supabase/login_tickets.sql） ──
+  function randomToken() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function createLoginTicket() {
+    const token = randomToken();
+    const expires = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+    const { error } = await client().from('login_tickets')
+      .insert({ token, status: 'pending', expires_at: expires });
+    if (error) throw new Error('生成登录二维码失败：' + error.message);
+    return { token, expiresAt: expires };
+  }
+  async function getLoginTicket(token) {
+    const { data, error } = await client().from('login_tickets')
+      .select('status, expires_at')
+      .eq('token', token).maybeSingle();
+    if (error) throw new Error('查询登录状态失败：' + error.message);
+    return data; // null = 票据已过期或被清理
   }
   async function logoutUser() {
     const { error } = await client().auth.signOut({ scope: 'local' });
@@ -268,7 +310,8 @@
   }
   Object.assign(global, { registerUser, loginUser, logoutUser, addFavorite, getFavorites,
     createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist,
-    updateProfile, changePassword, compressAvatar });
+    updateProfile, changePassword, compressAvatar,
+    sendLoginCode, verifyLoginCode, createLoginTicket, getLoginTicket });
   cloud.getUpdateInfo = async function () {
     let native = null, androidInfo = null;
     try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }

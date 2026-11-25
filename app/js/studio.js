@@ -46,7 +46,11 @@
   function toast(text){const el=$('toast');el.textContent=text;el.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.add('hidden'),3500);}
   document.addEventListener('DOMContentLoaded',()=>{
     renderAccount();
-    $('accountOpen').addEventListener('click',()=>{$('accountModal').classList.remove('hidden');status('');if(!window.XYCloud?.user)$('cloudPhone')?.focus();});
+    $('accountOpen').addEventListener('click',()=>{
+      // 已登录 → 进个人主页；未登录 → 打开网易云样式登录弹窗
+      if (window.XYCloud?.user && window.XYProfile) { window.XYProfile.switchPane('playlists'); document.dispatchEvent(new CustomEvent('uzz:view',{detail:'profile'})); return; }
+      $('accountModal').classList.remove('hidden');status('');if(!window.XYCloud?.user)$('cloudPhone')?.focus();
+    });
     const close=()=>{$('accountModal').classList.add('hidden');$('accountOpen').focus();};
     $('accountClose').addEventListener('click',close);$('accountModal').addEventListener('click',e=>{if(e.target===$('accountModal'))close();});
     document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});

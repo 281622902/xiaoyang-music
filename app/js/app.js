@@ -24,6 +24,7 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.add('hidden'), 1800);
   }
+  window.toast = toast; // 供 profile.js / ne-login.js 等兄弟模块复用
   function fmtCount(n) {
     n = Number(n) || 0;
     if (n >= 1e8) return (n / 1e8).toFixed(1) + '亿';
@@ -719,7 +720,7 @@
   /* ============================================================
    * 视图切换
    * ============================================================ */
-  const VIEWS = ['discover', 'search', 'playlist', 'fav', 'history', 'downloads', 'local', 'charts', 'settings', 'podcast', 'roam', 'follow', 'collect'];
+  const VIEWS = ['discover', 'search', 'playlist', 'fav', 'history', 'downloads', 'local', 'charts', 'settings', 'podcast', 'roam', 'follow', 'collect', 'profile'];
   let curView = 'discover';
   let curPlaylist = null; // {type:'online', plId, info, tracks} | {type:'local', id}
   let navStack = ['discover'];
@@ -774,6 +775,7 @@
     if (name === 'charts') loadCharts();
     if (name === 'podcast') renderPodcastView();
     if (name === 'follow') renderFollowView();
+    if (name === 'profile' && window.XYProfile) window.XYProfile.render();
   }
 
   /* ============================================================
