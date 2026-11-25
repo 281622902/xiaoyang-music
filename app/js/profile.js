@@ -54,6 +54,16 @@
           btn.disabled = true;
           await global.adminRemoveVip(phone);
           done('已取消 ' + phone + ' 的会员');
+        } else if (act === 'resetpwd') {
+          // Electron 不支持 window.prompt，用内嵌弹层输入新密码
+          askPasswordPrompt(phone).then((np) => {
+            if (!np) { return; }
+            if (np.length < 6) { global.toast && global.toast('新密码至少 6 位'); return; }
+            btn.disabled = true;
+            global.adminResetUserPassword(phone, np)
+              .then(() => done('已重置 ' + phone + ' 的登录密码'))
+              .catch((error) => { global.toast && global.toast(error.message || '操作失败'); btn.disabled = false; });
+          });
         } else {
           const days = Number(btn.dataset.days || 0);
           const tier = btn.dataset.tier || 'vip';
@@ -95,6 +105,7 @@
               <button class="xy-secondary" data-act="grant" data-phone="${esc(u.phone)}" data-days="365" data-tier="vip">开通1年</button>
               <button class="xy-secondary" data-act="grant" data-phone="${esc(u.phone)}" data-days="0" data-tier="svip">永久SVIP</button>`}
               ${active ? `<button class="xy-secondary pfva-remove" data-act="remove" data-phone="${esc(u.phone)}">取消会员</button>` : ''}
+              <button class="xy-secondary" data-act="resetpwd" data-phone="${esc(u.phone)}">重置密码</button>
             </span>
           </div>`;
         }).join('');
@@ -162,6 +173,29 @@
     try { return (global.Player && global.Player.getHistory ? global.Player.getHistory() : []) || []; }
     catch (e) { return []; }
   }
+  // 密码重置输入弹层（Electron 无 window.prompt）：返回 Promise<新密码|null>
+  function askPasswordPrompt(phone) {
+    const modal = $('pwdPrompt');
+    if (!modal) return Promise.resolve(null);
+    $('pwdPromptPhone').textContent = '目标账户：' + phone;
+    $('pwdPromptInput').value = '';
+    modal.classList.remove('hidden');
+    setTimeout(() => $('pwdPromptInput')?.focus(), 60);
+    return new Promise((resolve) => {
+      const finish = (val) => {
+        modal.classList.add('hidden');
+        $('pwdPromptOk').onclick = $('pwdPromptCancel').onclick = $('pwdPromptClose').onclick = null;
+        $('pwdPromptInput').onkeydown = null;
+        resolve(val);
+      };
+      const okBtn = $('pwdPromptOk');
+      okBtn.onclick = () => finish(($('pwdPromptInput').value || '').trim());
+      $('pwdPromptCancel').onclick = () => finish(null);
+      $('pwdPromptClose').onclick = () => finish(null);
+      $('pwdPromptInput').onkeydown = (e) => { if (e.key === 'Enter') okBtn.click(); };
+    });
+  }
+
   function esc(v) {
     return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }

@@ -106,6 +106,8 @@
         } catch (e) { /* 忽略 */ }
         say(''); closeModal();
         if (global.toast) global.toast('登录成功，收藏与歌单已同步');
+        // 登录成功后检测密保设置情况（未设置 → 弹提示）
+        checkSecuritySetup(phoneVal());
       } catch (error) {
         say(error.message || '登录失败，请稍后重试');
       } finally {
@@ -150,13 +152,116 @@
       $('neQrView').classList.add('hidden');
       $('neResetView').classList.remove('hidden');
       $('neResetPhone').value = $('cloudPhone').value || '';
+      $('neSecPhone').value = $('cloudPhone').value || '';
+      paintResetTab(resetMode);
       resetStatus('');
     }
     function backToLogin() {
       $('neResetView').classList.add('hidden');
+      $('neSecSetupView').classList.add('hidden');
       if ($('neQrView') && !$('neQrView').classList.contains('hidden')) { /* 扫码态保持 */ return; }
       $('neLoginView').classList.remove('hidden');
     }
+
+    /* ── 重置密码双模式：密保找回（默认）/ 短信找回 ── */
+    let resetMode = 'sec'; // 'sec' | 'sms'
+    function paintResetTab(m) {
+      $('neResetTabSec').classList.toggle('active', m === 'sec');
+      $('neResetTabSms').classList.toggle('active', m === 'sms');
+      $('neSecResetForm').classList.toggle('hidden', m !== 'sec');
+      $('neResetForm').classList.toggle('hidden', m !== 'sms');
+    }
+    $('neResetTabSec').addEventListener('click', () => { resetMode = 'sec'; paintResetTab('sec'); resetStatus(''); });
+    $('neResetTabSms').addEventListener('click', () => { resetMode = 'sms'; paintResetTab('sms'); resetStatus(''); });
+    // 密保找回：第一步获取问题
+    $('neSecLoadQ').addEventListener('click', async () => {
+      const phone = ($('neSecPhone').value || '').replace(/\D/g, '');
+      if (!/^1\d{10}$/.test(phone)) { resetStatus('请输入正确的 11 位手机号'); return; }
+      resetStatus('正在读取密保问题…');
+      try {
+        const q = await global.getSecurityQuestion(phone);
+        if (!q) { resetStatus('该账户未设置密保，请用短信找回或联系管理员'); return; }
+        $('neSecQuestion').textContent = '密保问题：' + q;
+        $('neSecQuestion').classList.remove('hidden');
+        $('neSecAnsField').classList.remove('hidden');
+        $('neSecPwdField').classList.remove('hidden');
+        $('neSecSubmit').classList.remove('hidden');
+        resetStatus('');
+        $('neSecAns').focus();
+      } catch (error) {
+        resetStatus(error.message || '读取密保失败');
+      }
+    });
+    // 密保找回：第二步重置密码
+    $('neSecResetForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const phone = ($('neSecPhone').value || '').replace(/\D/g, '');
+      const ans = ($('neSecAns').value || '').trim();
+      const pw = $('neSecPwd').value || '';
+      if (!/^1\d{10}$/.test(phone)) { resetStatus('请输入正确的 11 位手机号'); return; }
+      if (!ans) { resetStatus('请输入密保答案'); return; }
+      if (pw.length < 6) { resetStatus('新密码至少 6 位'); return; }
+      resetStatus('正在校验密保并重置密码…');
+      try {
+        await global.resetPasswordBySecurity(phone, ans, pw);
+        mode = 'pwd'; registering = false;
+        $('cloudPhone').value = phone; $('cloudPassword').value = pw;
+        $('neResetView').classList.add('hidden');
+        $('neLoginView').classList.remove('hidden');
+        paintMode();
+        say('密码已重置，请用新密码登录');
+        if (global.toast) global.toast('密码已重置');
+      } catch (error) {
+        resetStatus(error.message || '密码重置失败');
+      }
+    });
+
+    /* ── 设置密保视图 ── */
+    const secSetupStatus = (text) => { $('neSecSetupStatus').textContent = text || ''; };
+    function showSecSetup() {
+      ['neLoginView', 'neResetView', 'neQrView'].forEach((id) => $(id).classList.add('hidden'));
+      $('neSecSetupView').classList.remove('hidden');
+      secSetupStatus('');
+    }
+    $('neSecSetupBack').addEventListener('click', () => {
+      $('neSecSetupView').classList.add('hidden');
+      $('neLoginView').classList.remove('hidden');
+    });
+    $('neSecSetupForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const a = ($('neSecSetupA').value || '').trim();
+      const a2 = ($('neSecSetupA2').value || '').trim();
+      const q = $('neSecSetupQ').value;
+      if (!a) { secSetupStatus('请输入密保答案'); return; }
+      if (a !== a2) { secSetupStatus('两次输入的答案不一致'); return; }
+      secSetupStatus('正在保存…');
+      try {
+        await global.setSecurityQuestion(q, a);
+        secSetupStatus('');
+        $('neSecSetupView').classList.add('hidden');
+        $('neLoginView').classList.remove('hidden');
+        $('neSecAlert').classList.add('hidden');
+        if (global.toast) global.toast('密保已设置，可在忘记密码时找回账户');
+        say('');
+      } catch (error) {
+        secSetupStatus(error.message || '密保保存失败');
+      }
+    });
+
+    /* ── 登录成功后：未设置密保提示 ── */
+    async function checkSecuritySetup(phone) {
+      try {
+        const q = await global.getSecurityQuestion(phone);
+        if (!q) {
+          // 登录弹窗已自动关闭，重新展开承载提示层
+          card.classList.remove('hidden');
+          $('neSecAlert').classList.remove('hidden');
+        }
+      } catch (e) { /* 读取失败不打扰 */ }
+    }
+    $('neSecAlertSet').addEventListener('click', () => { $('neSecAlert').classList.add('hidden'); showSecSetup(); });
+    $('neSecAlertSkip').addEventListener('click', () => $('neSecAlert').classList.add('hidden'));
+
     $('neForgotPwd').addEventListener('click', showReset);
     $('neResetBack').addEventListener('click', () => { $('neResetView').classList.add('hidden'); $('neLoginView').classList.remove('hidden'); });
     $('neResetSend').addEventListener('click', async () => {

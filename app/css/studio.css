@@ -340,3 +340,41 @@ html.custom-bg .set-scroll .set-page .st-row {
 .mdesk-feats { list-style: none; margin: 0 0 16px; display: flex; flex-direction: column; gap: 5px; }
 .mdesk-feats li { font-size: 12px; color: var(--text-2); }
 .mdesk-info .xy-primary { min-height: 40px; padding: 8px 22px; border-radius: 999px; }
+
+/* ── 独立皮肤页补充（sk-toolbar / 自定义换肤按钮 / 弹出面板） ── */
+.sk-close { width: 34px; height: 34px; border-radius: 50%; font-size: 18px; color: var(--text-2); }
+.sk-close:hover { color: var(--text); background: var(--bg-2); }
+.sk-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.sk-custom-btn {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 999px; padding: 7px 16px;
+  background: var(--bg-1); color: var(--text);
+}
+.sk-custom-btn:hover { border-color: var(--accent); }
+.sk-custom-btn .tb-vip { transform: scale(.9); }
+.sk-pop { margin-bottom: 18px; }
+#skSecVip .sk-sec { margin-top: 30px; }
+.skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+
+/* ── 密保：重置双模式 tab / 问题展示 / 提示弹层 / 下拉 ── */
+.ne-reset-tabs { display: flex; justify-content: center; gap: 18px; margin-bottom: 16px; }
+.ne-rtab { font-size: 13.5px; color: var(--text-2); padding: 4px 2px; position: relative; }
+.ne-rtab.active { color: var(--text); font-weight: 700; }
+.ne-rtab.active::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; width: 18px; height: 2px; border-radius: 1px; background: var(--accent); }
+.ne-sec-q {
+  font-size: 13.5px; padding: 12px 14px; border-radius: 10px;
+  background: var(--bg-1); border: 1px dashed var(--line); color: var(--text);
+}
+.ne-select {
+  flex: 1; border: 0; outline: none; background: transparent; color: inherit;
+  font-size: 14px; padding: 10px 0;
+}
+.ne-select option { color: #26282e; background: #fff; }
+.ne-sec-alert { position: relative; margin: -10px -44px -30px; padding: 30px 44px 34px; background: #fff; }
+html[data-theme="dark"] .ne-sec-alert { background: #1f222b; }
+.ne-sec-alert-box { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.ne-sec-alert-ic { font-size: 40px; }
+.ne-sec-alert-t { font-size: 15px; font-weight: 700; line-height: 1.6; color: var(--text); }
+.ne-sec-alert-s { font-size: 12px; color: var(--text-2); line-height: 1.7; margin-bottom: 6px; }
+.ne-sec-alert .ne-primary { width: 100%; margin-top: 4px; }
+.ne-sec-alert .ne-link { margin-top: 2px; }

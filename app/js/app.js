@@ -298,14 +298,14 @@
     return !!(v && v.active);
   }
   function renderSkins() {
-    const grid = $('skinGrid');
-    if (!grid) return;
+    // 独立皮肤页双分区：#skinGrid 官方（非VIP） + #skinGridVip 会员（VIP）
+    const gO = $('skinGrid'), gV = $('skinGridVip');
+    if (!gO && !gV) return;
     const stored = localStorage.getItem('uzz.theme.skin');
     const mode = localStorage.getItem('uzz.theme.mode') || 'dark';
     const accent = localStorage.getItem('uzz.theme.accent') || '#ec4141';
-    const list = SKINS.filter((s) => (skinFilter === 'vip' ? s.vip : !s.vip));
     const unlocked = vipUnlocked();
-    grid.innerHTML = list.map((s) => {
+    const cardHtml = (s) => {
       // 旧版本没有 skin 存量：按 深浅+主题色 推断经典红/极简白
       const active = stored ? (stored === s.id) : (s.id === (mode === 'light' ? 'light' : 'classic') && s.accent === accent);
       const locked = s.vip && !unlocked;
@@ -319,8 +319,8 @@
         </span>
         <span class="skin-name">${s.name}<i class="skin-mode">${s.mode === 'light' ? '浅色' : '深色'}</i></span>
       </button>`;
-    }).join('');
-    grid.querySelectorAll('.skin-card').forEach((card) => {
+    };
+    const bind = (grid) => grid && grid.querySelectorAll('.skin-card').forEach((card) => {
       card.addEventListener('click', () => {
         if (card.dataset.vip === '1' && !vipUnlocked()) {
           toast('会员专享皮肤，请联系管理员开通会员');
@@ -336,11 +336,19 @@
         toast('皮肤已切换：' + card.querySelector('.skin-name').textContent.replace('浅色', '').replace('深色', '').replace('✓', '').trim());
       });
     });
+    const official = SKINS.filter((s) => !s.vip), vip = SKINS.filter((s) => s.vip);
+    if (gO) gO.innerHTML = official.map(cardHtml).join('');
+    if (gV) gV.innerHTML = vip.map(cardHtml).join('');
+    bind(gO); bind(gV);
+    // 筛选联动：官方 = 官方区 + 会员区同页（网易云式）；会员 = 只显示会员区
+    const secO = $('skSecOfficial'), secV = $('skSecVip');
+    if (secO) secO.classList.toggle('hidden', skinFilter === 'vip');
+    if (secV) secV.classList.toggle('hidden', false);
   }
 
   /* ── 自定义换肤（会员专享）：门禁UI ── */
   function paintCustomSkinGate() {
-    const box = $('customSkinBox');
+    const box = $('customSkinPanel');
     if (!box) return;
     const ok = vipUnlocked();
     $('customSkinLock').classList.toggle('hidden', ok);
@@ -3667,25 +3675,32 @@
     }
 
     // ── 顶栏功能按钮：换肤 / Mini 模式 / 设置 ──
-    // 皮肤管理内嵌设置页（个性皮肤/头像挂件/音乐桌面三个分区）
-    function gotoSkinTab(tab) {
-      showView('settings');
-      const btn = document.querySelector('#setTabs button[data-tab="' + tab + '"]');
-      if (btn) btn.click();
+    // 皮肤管理 = 独立全屏皮肤页（网易云式：tabs 个性皮肤/头像挂件/音乐桌面）
+    function openSkinOverlay() {
+      // 打开前刷新会员状态（会员分区门禁）
+      const user = window.XYCloud?.user;
+      if (user && window.getVipInfo) {
+        window.getVipInfo(user.phone).then((v) => { window.__vipInfo = v; renderSkins(); renderPendants(); paintCustomSkinGate(); }).catch(() => {});
+      }
+      renderSkins(); renderPendants(); paintCustomSkinGate();
+      $('skinOverlay').classList.remove('hidden');
     }
     const tbSkin = $('tbSkin');
-    if (tbSkin) {
-      tbSkin.addEventListener('click', () => {
-        // 进入皮肤页前刷新会员状态（会员分区门禁）
-        const user = window.XYCloud?.user;
-        if (user && window.getVipInfo) {
-          window.getVipInfo(user.phone).then((v) => { window.__vipInfo = v; renderSkins(); renderPendants(); paintCustomSkinGate(); }).catch(() => {});
-        }
-        renderSkins(); renderPendants(); paintCustomSkinGate();
-        gotoSkinTab('skin');
+    if (tbSkin) tbSkin.addEventListener('click', openSkinOverlay);
+    // 皮肤页顶部 tabs：个性皮肤 / 头像挂件 / 音乐桌面
+    const skTabs = $('skTabs');
+    if (skTabs) {
+      skTabs.addEventListener('click', (e) => {
+        const tab = e.target.closest('.sk-tab');
+        if (!tab) return;
+        skTabs.querySelectorAll('.sk-tab').forEach((b) => b.classList.toggle('active', b === tab));
+        const key = tab.dataset.skt;
+        $('skPaneSkin').classList.toggle('hidden', key !== 'skin');
+        $('skPanePendant').classList.toggle('hidden', key !== 'pendant');
+        $('skPaneDesktop').classList.toggle('hidden', key !== 'desktop');
       });
     }
-    // 官方 / 会员 分区筛选
+    // 官方 / 会员 分区筛选（官方 = 官方区 + 会员区同页展示；会员 = 只显示会员区）
     const skFilter = $('skFilter');
     if (skFilter) {
       skFilter.addEventListener('click', (e) => {
@@ -3696,19 +3711,24 @@
         renderSkins();
       });
     }
-    // 设置页「常规」里的 个性化皮肤… 按钮
+    // 自定义换肤面板展开/收起
+    const skCustomBtn = $('skCustomBtn');
+    if (skCustomBtn) skCustomBtn.addEventListener('click', () => $('customSkinPanel').classList.toggle('hidden'));
+    // 设置页「常规」里的 个性化皮肤… 按钮也打开独立皮肤页
     const stOpenSkinsBtn = $('stOpenSkins');
-    if (stOpenSkinsBtn) stOpenSkinsBtn.addEventListener('click', () => gotoSkinTab('skin'));
+    if (stOpenSkinsBtn) stOpenSkinsBtn.addEventListener('click', openSkinOverlay);
     // 音乐桌面分区
-    const stOpenMdesk = $('stOpenMdesk');
-    if (stOpenMdesk) {
-      stOpenMdesk.addEventListener('click', () => {
+    const skOpenDesktop = $('skOpenDesktop');
+    if (skOpenDesktop) {
+      skOpenDesktop.addEventListener('click', () => {
         if (window.uzzBridge && window.uzzBridge.openMusicDesktop) {
           window.uzzBridge.openMusicDesktop();
           toast('音乐桌面已打开，可在桌面摆放歌词小窗');
         } else toast('请在桌面版使用音乐桌面');
       });
     }
+    const skinClose = $('skinClose');
+    if (skinClose) skinClose.addEventListener('click', () => $('skinOverlay').classList.add('hidden'));
     const tbMini = $('tbMini');
     if (tbMini) {
       tbMini.addEventListener('click', () => {
@@ -3945,7 +3965,7 @@
 
     // ── 设置：分类导航（点击切换 + 鼠标滚轮切换/滚动） ──
     const setNav = $('setTabs');
-    const setTabsOrder = ['general', 'system', 'play', 'keys', 'download', 'desktop', 'skin', 'pendant', 'mdesk', 'about'];
+    const setTabsOrder = ['general', 'system', 'play', 'keys', 'download', 'desktop', 'about'];
     function gotoSetTab(tab) {
       if (!setTabsOrder.includes(tab)) return;
       setTabsOrder.forEach((t) => {

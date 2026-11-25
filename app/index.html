@@ -374,9 +374,6 @@
               <button data-tab="keys">快捷键</button>
               <button data-tab="download">音质与下载</button>
               <button data-tab="desktop">桌面与歌词</button>
-              <button data-tab="skin">个性皮肤</button>
-              <button data-tab="pendant">头像挂件</button>
-              <button data-tab="mdesk">音乐桌面</button>
               <button data-tab="about">关于 xymusic</button>
             </nav>
           </div>
@@ -750,59 +747,6 @@
             </section>
 
             <!-- ══════════ 关于 xymusic ══════════ -->
-            <!-- ══════════ 个性皮肤（网易云布局：官方/会员 + 自定义换肤会员功能） ══════════ -->
-            <section class="set-page hidden" data-page="skin">
-              <h2 class="set-sec">个性皮肤</h2>
-              <div class="sk-filter" id="skFilter">
-                <button class="sk-fbtn active" data-skf="official" type="button">官方</button>
-                <button class="sk-fbtn" data-skf="vip" type="button">会员</button>
-              </div>
-              <div class="skin-grid" id="skinGrid"></div>
-              <div class="sk-sec">自定义换肤 <i class="skin-viptag inline-viptag">VIP</i></div>
-              <div class="skin-custom-vip" id="customSkinBox">
-                <div class="scv-lock hidden" id="customSkinLock">
-                  <div class="scv-lock-ic">🔒</div>
-                  <div class="scv-lock-t">自定义换肤为会员专享功能</div>
-                  <div class="scv-lock-s">开通会员后可上传本地图片作为全局背景，图片仅保存在本机</div>
-                </div>
-                <div class="scv-body" id="customSkinBody">
-                  <div class="skin-custom">
-                    <label class="sk-upload">选择本地图片<input id="skinBgInput" type="file" accept="image/*" hidden></label>
-                    <button id="skinBgClear" class="xy-secondary" type="button">清除背景</button>
-                    <label class="sk-opacity">遮罩 <input id="skinBgOpacity" type="range" min="10" max="85" value="45"><span id="skinBgVal">45%</span></label>
-                  </div>
-                  <p class="muted skin-tip">图片会压缩后保存在本机，不上传、不同步。遮罩越低背景图越清晰。</p>
-                </div>
-              </div>
-            </section>
-
-            <!-- ══════════ 头像挂件（会员商城） ══════════ -->
-            <section class="set-page hidden" data-page="pendant">
-              <h2 class="set-sec">头像挂件</h2>
-              <p class="muted skin-tip">选择一枚挂件，它会佩戴在你的头像上（顶栏 + 个人主页）。点击即可佩戴/摘下。</p>
-              <div class="pendant-grid" id="pendantGrid"></div>
-            </section>
-
-            <!-- ══════════ 音乐桌面 ══════════ -->
-            <section class="set-page hidden" data-page="mdesk">
-              <h2 class="set-sec">音乐桌面</h2>
-              <div class="mdesk-card">
-                <div class="mdesk-preview" aria-hidden="true">
-                  <span class="mdesk-cover">♪</span>
-                  <div class="mdesk-lines"><b>正在播放的歌曲</b><i>歌手名 · 歌词常驻桌面</i></div>
-                </div>
-                <div class="mdesk-info">
-                  <h3>把音乐放到桌面上</h3>
-                  <p>透明小窗常驻桌面：封面、歌名、歌词实时跟随播放，可随意拖拽摆放，不遮挡工作窗口。</p>
-                  <ul class="mdesk-feats">
-                    <li>· 实时同步：播放/暂停/切歌立即跟随</li>
-                    <li>· 歌词滚动显示，超小资源占用</li>
-                    <li>· 右键小窗可关闭或锁定位置</li>
-                  </ul>
-                  <button id="stOpenMdesk" class="xy-primary" type="button">打开音乐桌面</button>
-                </div>
-              </div>
-            </section>
 
             <section class="set-page hidden" data-page="about">
               <h2 class="set-sec">关于 xymusic</h2>
@@ -1212,6 +1156,63 @@
     <div id="addPlMenu" class="add-pl hidden"></div>
 
 
+    <!-- ══════ 个性换肤（全屏独立页，参考网易云皮肤页） ══════ -->
+    <div id="skinOverlay" class="skin-overlay hidden">
+      <div class="sk-head">
+        <nav class="sk-tabs" id="skTabs">
+          <button class="sk-tab active" data-skt="skin" type="button">个性皮肤</button>
+          <button class="sk-tab" data-skt="pendant" type="button">头像挂件</button>
+          <button class="sk-tab" data-skt="desktop" type="button">音乐桌面</button>
+        </nav>
+        <button id="skinClose" class="sk-close" title="关闭">✕</button>
+      </div>
+      <div class="sk-body">
+        <div id="skPaneSkin">
+          <div class="sk-toolbar">
+            <div class="sk-filter" id="skFilter">
+              <button class="sk-fbtn active" data-skf="official" type="button">官方</button>
+              <button class="sk-fbtn" data-skf="vip" type="button">会员</button>
+            </div>
+            <button id="skCustomBtn" class="sk-custom-btn" type="button"><i class="tb-vip">VIP</i> 自定义换肤</button>
+          </div>
+          <div class="skin-custom-vip sk-pop hidden" id="customSkinPanel">
+            <div class="scv-lock hidden" id="customSkinLock">
+              <div class="scv-lock-ic">🔒</div>
+              <div class="scv-lock-t">自定义换肤为会员专享功能</div>
+              <div class="scv-lock-s">开通会员后可上传本地图片作为全局背景，图片仅保存在本机</div>
+            </div>
+            <div class="scv-body" id="customSkinBody">
+              <div class="skin-custom">
+                <label class="sk-upload">选择本地图片<input id="skinBgInput" type="file" accept="image/*" hidden></label>
+                <button id="skinBgClear" class="xy-secondary" type="button">清除背景</button>
+                <label class="sk-opacity">遮罩 <input id="skinBgOpacity" type="range" min="10" max="85" value="45"><span id="skinBgVal">45%</span></label>
+              </div>
+              <p class="muted skin-tip">图片会压缩后保存在本机，不上传、不同步。遮罩越低背景图越清晰。</p>
+            </div>
+          </div>
+          <div id="skSecOfficial">
+            <div class="sk-sec">官方</div>
+            <div class="skin-grid" id="skinGrid"></div>
+          </div>
+          <div id="skSecVip">
+            <div class="sk-sec">会员</div>
+            <div class="skin-grid" id="skinGridVip"></div>
+          </div>
+        </div>
+        <div id="skPanePendant" class="hidden">
+          <p class="muted skin-tip">选择一枚挂件，它会佩戴在你的头像上（顶栏 + 个人主页）。点击即可佩戴/摘下。</p>
+          <div class="pendant-grid" id="pendantGrid"></div>
+        </div>
+        <div id="skPaneDesktop" class="hidden">
+          <div class="sk-desktop-card">
+            <h3>音乐桌面</h3>
+            <p>把正在播放的歌曲封面与歌词常驻桌面，透明小窗随心摆放，不影响其他工作。</p>
+            <button id="skOpenDesktop" class="xy-primary" type="button">打开音乐桌面</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══════ Mini 模式（顶栏控制 + 歌词列表，参考图 mini） ══════ -->
     <div id="miniMode" class="mini-mode hidden">
       <div class="mm-top">
@@ -1358,11 +1359,31 @@
     </div>
   </div>
 
-  <!-- 忘记密码视图：手机号 + 短信验证码 + 新密码 -->
+  <!-- 忘记密码视图：密保找回（默认）/ 短信找回 -->
   <div id="neResetView" class="hidden">
     <h3 class="ne-qr-title">重置密码</h3>
-    <p class="ne-reset-sub">输入绑定手机号并验证短信验证码，即可设置新密码</p>
-    <form id="neResetForm" class="ne-form" autocomplete="off" novalidate>
+    <div class="ne-reset-tabs">
+      <button id="neResetTabSec" class="ne-rtab active" type="button">密保找回</button>
+      <button id="neResetTabSms" class="ne-rtab" type="button">短信找回</button>
+    </div>
+    <!-- 密保找回：手机号 → 回答密保 → 设置新密码 -->
+    <form id="neSecResetForm" class="ne-form" autocomplete="off" novalidate>
+      <div class="ne-field">
+        <span class="ne-86">+86</span><i class="ne-86-sep" aria-hidden="true"></i>
+        <input id="neSecPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入手机号" aria-label="手机号"/>
+        <button id="neSecLoadQ" class="ne-send" type="button">获取密保</button>
+      </div>
+      <p id="neSecQuestion" class="ne-sec-q hidden"></p>
+      <div class="ne-field hidden" id="neSecAnsField">
+        <input id="neSecAns" type="text" maxlength="50" placeholder="请输入密保答案" aria-label="密保答案"/>
+      </div>
+      <div class="ne-field hidden" id="neSecPwdField">
+        <input id="neSecPwd" type="password" autocomplete="new-password" minlength="6" maxlength="128" placeholder="请设置新密码（至少 6 位）" aria-label="新密码"/>
+      </div>
+      <button class="ne-primary hidden" id="neSecSubmit" type="submit">重置密码</button>
+    </form>
+    <!-- 短信找回（短信服务配置可用时） -->
+    <form id="neResetForm" class="ne-form hidden" autocomplete="off" novalidate>
       <div class="ne-field">
         <span class="ne-86">+86</span><i class="ne-86-sep" aria-hidden="true"></i>
         <input id="neResetPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入手机号" aria-label="手机号"/>
@@ -1380,6 +1401,43 @@
     <p id="neResetStatus" class="account-status" role="status" aria-live="polite"></p>
   </div>
 
+  <!-- 设置密保视图（登录后从提示弹窗进入） -->
+  <div id="neSecSetupView" class="hidden">
+    <h3 class="ne-qr-title">设置密保问题</h3>
+    <p class="ne-reset-sub">密保用于在忘记密码时找回账户，答案请牢记</p>
+    <form id="neSecSetupForm" class="ne-form" autocomplete="off" novalidate>
+      <div class="ne-field">
+        <select id="neSecSetupQ" class="ne-select">
+          <option>你小学班主任的名字</option>
+          <option>你母亲的姓名</option>
+          <option>你出生的城市</option>
+          <option>你第一只宠物的名字</option>
+          <option>你最要好的朋友的名字</option>
+        </select>
+      </div>
+      <div class="ne-field">
+        <input id="neSecSetupA" type="text" maxlength="50" placeholder="请输入密保答案（不限大小写）" aria-label="密保答案"/>
+      </div>
+      <div class="ne-field">
+        <input id="neSecSetupA2" type="text" maxlength="50" placeholder="请再次输入密保答案" aria-label="确认密保答案"/>
+      </div>
+      <button class="ne-primary" type="submit">保存密保</button>
+    </form>
+    <button id="neSecSetupBack" class="ne-link ne-qr-back" type="button">‹ 返回登录</button>
+    <p id="neSecSetupStatus" class="account-status" role="status" aria-live="polite"></p>
+  </div>
+
+  <!-- 未设置密保提示弹层 -->
+  <div id="neSecAlert" class="hidden">
+    <div class="ne-sec-alert-box">
+      <div class="ne-sec-alert-ic">⚠️</div>
+      <div class="ne-sec-alert-t">你的账户未设置密保，存在账户隐患，请立即设置密保</div>
+      <div class="ne-sec-alert-s">设置密保后，忘记密码时可凭密保答案一键找回，无需短信验证码。</div>
+      <button id="neSecAlertSet" class="ne-primary" type="button">立即设置</button>
+      <button id="neSecAlertSkip" class="ne-link" type="button">暂不设置</button>
+    </div>
+  </div>
+
   <!-- 扫码登录视图（手机端扫码确认接入后即可用） -->
   <div id="neQrView" class="hidden">
     <h3 class="ne-qr-title">扫码登录更安全</h3>
@@ -1392,6 +1450,7 @@
     <button id="neQrBack" class="ne-link ne-qr-back" type="button">选择其它登录模式 ›</button>
   </div>
 </section></div>
+<div id="pwdPrompt" class="xy-overlay hidden"><section class="xy-dialog" role="dialog" aria-modal="true" aria-label="重置登录密码"><button id="pwdPromptClose" class="xy-close" aria-label="关闭">×</button><h3>重置登录密码</h3><p id="pwdPromptPhone" class="muted" style="margin-bottom:12px"></p><input id="pwdPromptInput" class="xy-input" type="text" maxlength="128" placeholder="请输入新密码（至少 6 位）" style="width:100%;min-height:40px;border:1px solid var(--line);border-radius:9px;padding:8px 12px;background:var(--bg-0);color:var(--text)"/><div class="account-buttons"><button id="pwdPromptOk" class="xy-primary" type="button">确定</button><button id="pwdPromptCancel" class="xy-secondary" type="button">取消</button></div></section></div>
 <div id="toast" class="toast hidden"></div>
   </div>
 
