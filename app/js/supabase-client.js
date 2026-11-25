@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.15.1', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.15.2', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -154,17 +154,29 @@
     const buf = await crypto.subtle.digest('SHA-256', enc);
     return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
   }
-  // 读取密保问题；null = 未设置
+  // 读取密保问题列表 [{slot, question}]；空数组 = 未设置
   async function getSecurityQuestion(phone) {
     const { data, error } = await client().rpc('get_security_question', { p_phone: String(phone ?? '') });
-    if (error) throw new Error('读取密保失败：' + error.message);
-    return data;
+    if (error) throw new Error(/Failed to fetch|network/i.test(String(error.message || '')) ? '网络连接失败，请检查网络后重试' : '读取密保失败，请稍后再试');
+    return Array.isArray(data) ? data : [];
   }
-  // 设置/更新密保（登录态）
-  async function setSecurityQuestion(question, answer) {
-    const hash = await hashSecurityAnswer(answer);
-    const { data, error } = await client().rpc('set_security_question', { p_question: question, p_answer_hash: hash });
-    if (error) throw new Error(error.message);
+  // 设置/更新密保（登录态）：questions = [{question, answer}]，至少 3 题
+  async function setSecurityQuestion(questions) {
+    const list = [];
+    for (const item of (Array.isArray(questions) ? questions : [])) {
+      list.push({ question: String(item.question ?? '').trim(), answer_hash: await hashSecurityAnswer(item.answer) });
+    }
+    if (!list.length) throw new Error('请至少填写 1 道密保问题');
+    const { data, error } = await client().rpc('set_security_question', { p_questions: list });
+    if (error) {
+      const raw = String(error.message || '');
+      throw new Error(
+        /at least 3/.test(raw) ? '至少设置 3 个密保问题' :
+        /max 5/.test(raw) ? '密保问题最多 5 个' :
+        /must be an array/.test(raw) ? '密保数据格式错误，请重试' :
+        /Failed to fetch|network/i.test(raw) ? '网络连接失败，请检查网络后重试' :
+        '密保保存失败，请稍后再试');
+    }
     return data;
   }
   // 密保找回密码（无需登录/短信；DB 侧含防暴力限速；DB 返回英文提示 → 中文映射）
@@ -174,16 +186,28 @@
     'wrong security answer': '密保答案不正确',
     'account not found': '账户不存在',
   };
-  async function resetPasswordBySecurity(phone, answer, newPassword) {
-    const hash = await hashSecurityAnswer(answer);
+  async function resetPasswordBySecurity(phone, answers, newPassword) {
+    // answers = [{slot, answer}]
+    const list = [];
+    for (const item of (Array.isArray(answers) ? answers : [])) {
+      list.push({ slot: item.slot, answer_hash: await hashSecurityAnswer(item.answer) });
+    }
     const { data, error } = await client().rpc('reset_password_by_security', {
-      p_phone: String(phone ?? ''), p_answer_hash: hash, p_new_password: newPassword,
+      p_phone: String(phone ?? ''),
+      p_answers: list.map((a) => ({ slot: a.slot, answer_hash: a.hash })),
+      p_new_password: newPassword,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      const raw = String(error.message || '');
+      throw new Error(
+        /Failed to fetch|network/i.test(raw) ? '网络连接失败，请检查网络后重试' :
+        /gen_salt|crypt|function .* does not exist/i.test(raw) ? '服务端组件暂不可用，请联系管理员修复' :
+        raw);
+    }
     if (data !== 'ok') {
       const msg = String(data || '');
       const mapped = SEC_RESET_MSG[msg] || (/^too many attempts/.test(msg) ? '尝试次数过多，请 ' + msg.replace('too many attempts, retry after ', '') + ' 后再试' : msg);
-      throw new Error(mapped || '重置失败');
+      throw new Error(mapped || '重置失败，请稍后再试');
     }
     return true;
   }
@@ -193,7 +217,15 @@
     const { data, error } = await client().rpc('admin_reset_user_password', {
       p_phone: String(phone ?? ''), p_new_password: newPassword,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      const raw = String(error.message || '');
+      throw new Error(
+        /only admin/.test(raw) ? '仅管理员可重置用户密码' :
+        /at least 6/.test(raw) ? '新密码至少 6 位' :
+        /gen_salt|crypt|function .* does not exist/i.test(raw) ? '服务端组件暂不可用，请联系管理员修复' :
+        /Failed to fetch|network/i.test(raw) ? '网络连接失败，请检查网络后重试' :
+        raw);
+    }
     return data;
   }
   function normalizePhoneKey(value) {

@@ -173,37 +173,48 @@
     }
     $('neResetTabSec').addEventListener('click', () => { resetMode = 'sec'; paintResetTab('sec'); resetStatus(''); });
     $('neResetTabSms').addEventListener('click', () => { resetMode = 'sms'; paintResetTab('sms'); resetStatus(''); });
-    // 密保找回：第一步获取问题
+    // 密保找回：第一步获取问题（3 题，全部答对方可重置）
+    let secQuestions = [];
+    const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     $('neSecLoadQ').addEventListener('click', async () => {
       const phone = ($('neSecPhone').value || '').replace(/\D/g, '');
       if (!/^1\d{10}$/.test(phone)) { resetStatus('请输入正确的 11 位手机号'); return; }
       resetStatus('正在读取密保问题…');
       try {
-        const q = await global.getSecurityQuestion(phone);
-        if (!q) { resetStatus('该账户未设置密保，请用短信找回或联系管理员'); return; }
-        $('neSecQuestion').textContent = '密保问题：' + q;
-        $('neSecQuestion').classList.remove('hidden');
-        $('neSecAnsField').classList.remove('hidden');
+        const list = await global.getSecurityQuestion(phone);
+        if (!Array.isArray(list) || !list.length) { resetStatus('该账户未设置密保，请用短信找回或联系管理员'); return; }
+        secQuestions = list;
+        $('neSecQList').innerHTML = list.map((item, idx) => `
+          <p class="ne-sec-q">问题 ${idx + 1}：${escHtml(item.question)}</p>
+          <div class="ne-field">
+            <input type="text" class="ne-sec-ans" data-slot="${item.slot}" maxlength="50" placeholder="请输入第 ${idx + 1} 题答案" aria-label="第 ${idx + 1} 题答案"/>
+          </div>`).join('');
+        $('neSecQList').classList.remove('hidden');
         $('neSecPwdField').classList.remove('hidden');
         $('neSecSubmit').classList.remove('hidden');
         resetStatus('');
-        $('neSecAns').focus();
+        const first = $('neSecQList .ne-sec-ans');
+        if (first) first.focus();
       } catch (error) {
         resetStatus(error.message || '读取密保失败');
       }
     });
-    // 密保找回：第二步重置密码
+    // 密保找回：第二步重置密码（全部题目答对）
     $('neSecResetForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       const phone = ($('neSecPhone').value || '').replace(/\D/g, '');
-      const ans = ($('neSecAns').value || '').trim();
       const pw = $('neSecPwd').value || '';
       if (!/^1\d{10}$/.test(phone)) { resetStatus('请输入正确的 11 位手机号'); return; }
-      if (!ans) { resetStatus('请输入密保答案'); return; }
+      const answers = Array.from($('neSecQList').querySelectorAll('.ne-sec-ans')).map((input) => ({
+        slot: Number(input.dataset.slot),
+        answer: (input.value || '').trim(),
+      }));
+      if (!answers.length) { resetStatus('请先获取密保问题'); return; }
+      if (answers.some((a) => !a.answer)) { resetStatus('请填写全部密保答案'); return; }
       if (pw.length < 6) { resetStatus('新密码至少 6 位'); return; }
       resetStatus('正在校验密保并重置密码…');
       try {
-        await global.resetPasswordBySecurity(phone, ans, pw);
+        await global.resetPasswordBySecurity(phone, answers, pw);
         mode = 'pwd'; registering = false;
         $('cloudPhone').value = phone; $('cloudPassword').value = pw;
         $('neResetView').classList.add('hidden');
@@ -216,8 +227,21 @@
       }
     });
 
-    /* ── 设置密保视图 ── */
+    /* ── 设置密保视图：3 题起步，支持自定义问题 ── */
+    const SEC_PRESETS = ['你小学班主任的名字', '你母亲的姓名', '你出生的城市', '你第一只宠物的名字', '你最要好的朋友的名字', '你父亲的姓名', '你的第一所学校'];
     const secSetupStatus = (text) => { $('neSecSetupStatus').textContent = text || ''; };
+    // 填充三个下拉（预设 + 自定义），错开默认项避免重复
+    [1, 2, 3].forEach((i) => {
+      const sel = $('neSecQ' + i);
+      if (!sel) return;
+      const offset = (i - 1) % SEC_PRESETS.length;
+      sel.innerHTML = SEC_PRESETS.slice(offset).concat(SEC_PRESETS.slice(0, offset))
+        .map((q) => '<option>' + q + '</option>').join('') + '<option value="__custom__">自定义问题…</option>';
+      sel.addEventListener('change', () => {
+        $('neSecCustom' + i).classList.toggle('hidden', sel.value !== '__custom__');
+        if (sel.value === '__custom__') $('neSecCustom' + i).focus();
+      });
+    });
     function showSecSetup() {
       ['neLoginView', 'neResetView', 'neQrView'].forEach((id) => $(id).classList.add('hidden'));
       $('neSecSetupView').classList.remove('hidden');
@@ -229,19 +253,31 @@
     });
     $('neSecSetupForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const a = ($('neSecSetupA').value || '').trim();
-      const a2 = ($('neSecSetupA2').value || '').trim();
-      const q = $('neSecSetupQ').value;
-      if (!a) { secSetupStatus('请输入密保答案'); return; }
-      if (a !== a2) { secSetupStatus('两次输入的答案不一致'); return; }
+      const slots = [1, 2, 3].map((i) => {
+        const selVal = $('neSecQ' + i).value;
+        return {
+          question: selVal === '__custom__' ? ($('neSecCustom' + i).value || '').trim() : selVal,
+          answer: ($('neSecA' + i).value || '').trim(),
+        };
+      });
+      for (let i = 0; i < slots.length; i++) {
+        if (!slots[i].question) { secSetupStatus('请填写第 ' + (i + 1) + ' 题的问题'); return; }
+        if (!slots[i].answer) { secSetupStatus('请填写第 ' + (i + 1) + ' 题的答案'); return; }
+      }
+      const seen = new Set();
+      for (let i = 0; i < slots.length; i++) {
+        const key = slots[i].question.toLowerCase();
+        if (seen.has(key)) { secSetupStatus('密保问题不能重复，请修改第 ' + (i + 1) + ' 题'); return; }
+        seen.add(key);
+      }
       secSetupStatus('正在保存…');
       try {
-        await global.setSecurityQuestion(q, a);
+        await global.setSecurityQuestion(slots);
         secSetupStatus('');
         $('neSecSetupView').classList.add('hidden');
         $('neLoginView').classList.remove('hidden');
         $('neSecAlert').classList.add('hidden');
-        if (global.toast) global.toast('密保已设置，可在忘记密码时找回账户');
+        if (global.toast) global.toast('密保已设置（3 题），可在忘记密码时找回账户');
         say('');
       } catch (error) {
         secSetupStatus(error.message || '密保保存失败');
@@ -251,8 +287,8 @@
     /* ── 登录成功后：未设置密保提示 ── */
     async function checkSecuritySetup(phone) {
       try {
-        const q = await global.getSecurityQuestion(phone);
-        if (!q) {
+        const list = await global.getSecurityQuestion(phone);
+        if (!Array.isArray(list) || !list.length) {
           // 登录弹窗已自动关闭，重新展开承载提示层
           card.classList.remove('hidden');
           $('neSecAlert').classList.remove('hidden');

@@ -1373,10 +1373,7 @@
         <input id="neSecPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入手机号" aria-label="手机号"/>
         <button id="neSecLoadQ" class="ne-send" type="button">获取密保</button>
       </div>
-      <p id="neSecQuestion" class="ne-sec-q hidden"></p>
-      <div class="ne-field hidden" id="neSecAnsField">
-        <input id="neSecAns" type="text" maxlength="50" placeholder="请输入密保答案" aria-label="密保答案"/>
-      </div>
+      <div id="neSecQList" class="ne-sec-qlist hidden"></div>
       <div class="ne-field hidden" id="neSecPwdField">
         <input id="neSecPwd" type="password" autocomplete="new-password" minlength="6" maxlength="128" placeholder="请设置新密码（至少 6 位）" aria-label="新密码"/>
       </div>
@@ -1401,25 +1398,31 @@
     <p id="neResetStatus" class="account-status" role="status" aria-live="polite"></p>
   </div>
 
-  <!-- 设置密保视图（登录后从提示弹窗进入） -->
+  <!-- 设置密保视图（登录后从提示弹窗进入）：3 题起步，支持自定义问题 -->
   <div id="neSecSetupView" class="hidden">
     <h3 class="ne-qr-title">设置密保问题</h3>
-    <p class="ne-reset-sub">密保用于在忘记密码时找回账户，答案请牢记</p>
+    <p class="ne-reset-sub">至少设置 3 个密保问题（支持自定义），忘记密码时须全部答对方可找回，答案请牢记</p>
     <form id="neSecSetupForm" class="ne-form" autocomplete="off" novalidate>
-      <div class="ne-field">
-        <select id="neSecSetupQ" class="ne-select">
-          <option>你小学班主任的名字</option>
-          <option>你母亲的姓名</option>
-          <option>你出生的城市</option>
-          <option>你第一只宠物的名字</option>
-          <option>你最要好的朋友的名字</option>
-        </select>
+      <div class="ne-field ne-sec-slot">
+        <select id="neSecQ1" class="ne-select"></select>
+        <input id="neSecCustom1" class="ne-custom-q hidden" type="text" maxlength="50" placeholder="请输入自定义问题" aria-label="自定义问题"/>
       </div>
       <div class="ne-field">
-        <input id="neSecSetupA" type="text" maxlength="50" placeholder="请输入密保答案（不限大小写）" aria-label="密保答案"/>
+        <input id="neSecA1" type="text" maxlength="50" placeholder="第 1 题答案（不限大小写）" aria-label="第 1 题答案"/>
+      </div>
+      <div class="ne-field ne-sec-slot">
+        <select id="neSecQ2" class="ne-select"></select>
+        <input id="neSecCustom2" class="ne-custom-q hidden" type="text" maxlength="50" placeholder="请输入自定义问题" aria-label="自定义问题"/>
       </div>
       <div class="ne-field">
-        <input id="neSecSetupA2" type="text" maxlength="50" placeholder="请再次输入密保答案" aria-label="确认密保答案"/>
+        <input id="neSecA2" type="text" maxlength="50" placeholder="第 2 题答案（不限大小写）" aria-label="第 2 题答案"/>
+      </div>
+      <div class="ne-field ne-sec-slot">
+        <select id="neSecQ3" class="ne-select"></select>
+        <input id="neSecCustom3" class="ne-custom-q hidden" type="text" maxlength="50" placeholder="请输入自定义问题" aria-label="自定义问题"/>
+      </div>
+      <div class="ne-field">
+        <input id="neSecA3" type="text" maxlength="50" placeholder="第 3 题答案（不限大小写）" aria-label="第 3 题答案"/>
       </div>
       <button class="ne-primary" type="submit">保存密保</button>
     </form>
