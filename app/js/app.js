@@ -50,17 +50,26 @@
     { id: 'hero', name: '欢迎横幅' },
     { id: 'banners', name: '快捷入口' },
     { id: 'charts', name: '榜单精选' },
-    { id: 'playlists', name: '推荐歌单' },
-    { id: 'heart', name: '红心推荐' },
+    { id: 'heart', name: '红心相似推荐' },
+    { id: 'playlists', name: '私人雷达歌单' },
+    { id: 'vip', name: '免费VIP歌曲' },
     { id: 'foryou', name: '猜你喜欢' },
+    { id: 'goodmusic', name: '每天听好音乐' },
+    { id: 'podcast', name: '专属播客' },
+    { id: 'audiobook', name: '宝藏有声书' },
   ];
+  const HOME_CFG_VER = 2; // 模块顺序变更时递增，强制把新模块并入默认顺序
   function getHomeCfg() {
     const all = HOME_MODULES.map((m) => m.id);
     let c = {};
     try { c = JSON.parse(localStorage.getItem('uzz.home.cfg') || '{}') || {}; } catch (e) { c = {}; }
+    // 版本升级或首次访问：按 HOME_MODULES 的默认顺序重建（老配置保留显示/隐藏与偏好）
+    if (c.ver !== HOME_CFG_VER) {
+      return { ver: HOME_CFG_VER, order: all.slice(), hidden: Array.isArray(c.hidden) ? c.hidden.filter((id) => all.includes(id)) : [], mode: c.mode || 'default' };
+    }
     const order = Array.isArray(c.order) ? c.order.filter((id) => all.includes(id)) : [];
     all.forEach((id) => { if (!order.includes(id)) order.push(id); });
-    return { order, hidden: Array.isArray(c.hidden) ? c.hidden.filter((id) => all.includes(id)) : [], mode: c.mode || 'default' };
+    return { ver: HOME_CFG_VER, order, hidden: Array.isArray(c.hidden) ? c.hidden.filter((id) => all.includes(id)) : [], mode: c.mode || 'default' };
   }
   function saveHomeCfg(cfg) { localStorage.setItem('uzz.home.cfg', JSON.stringify(cfg)); }
   function applyHomeModules() {
@@ -443,9 +452,7 @@
     let sub = t.artist;
     if (t.album) sub += ' · ' + t.album;
     const dur = t.duration ? `<span class="dur">${fmtDur(t.duration)}</span>` : '<span class="dur"></span>';
-    const cover = t.pic
-      ? `<img class="cov" src="${escapeHtml(UzzApi.picProxy(t.pic))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"/>`
-      : '<div class="cov"></div>';
+    const cover = coverImg(t.pic, 'cov');
     const num = i != null ? `<span class="idx" style="width:24px;text-align:right;color:var(--text-2);font-size:12px">${i + 1}</span>` : '';
     return `<li class="song" data-id="${escapeHtml(t.id)}" data-vendor="${escapeHtml(t.vendor)}" data-name="${escapeHtml(t.name)}" data-artist="${escapeHtml(t.artist)}" data-album="${escapeHtml(t.album)}" data-pic="${escapeHtml(t.pic)}" data-duration="${t.duration || 0}">
       ${num}${cover}
@@ -933,6 +940,30 @@
     try { localStorage.setItem('uzz.chart.prev', JSON.stringify(next)); } catch (e) {}
     return marks;
   }
+  // 统一封面：任何条目都有图，缺图时用内嵌渐变占位（保证推荐页「全部带封面」）
+  const FALLBACK_COVER = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a7bf0"/><stop offset="1" stop-color="#4a3aa8"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><circle cx="60" cy="52" r="24" fill="none" stroke="#fff" stroke-width="3" opacity=".85"/><circle cx="60" cy="52" r="7" fill="#fff" opacity=".9"/><path d="M60 76v26" stroke="#fff" stroke-width="3" opacity=".85"/></svg>');
+  function coverSrc(pic) { return pic ? UzzApi.picProxy(pic) : FALLBACK_COVER; }
+  function coverImg(pic, cls, extra) {
+    return `<img class="${cls || 'cov'}" src="${escapeHtml(coverSrc(pic))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_COVER}'"${extra || ''}/>`;
+  }
+  // 快捷入口五宫格：为每张卡片取一张真实封面做背景图
+  function paintQuickBgs(charts, playlists, songs) {
+    const picks = {
+      daily: (playlists[0] || {}).cover || (songs[0] || {}).pic,
+      heart: (songs[1] || {}).pic || (playlists[1] || {}).cover,
+      radar: (playlists[2] || {}).cover,
+      roam: (charts[0] || {}).cover,
+      simi: (songs[3] || {}).pic || (playlists[3] || {}).cover,
+    };
+    Object.keys(picks).forEach((k) => {
+      const card = document.querySelector(`.quick-card[data-qk="${k}"] .qc-bg`);
+      if (!card) return;
+      const src = picks[k];
+      card.style.backgroundImage = `url("${coverSrc(src)}")`;
+    });
+  }
+
   // 发现页「榜单精选」双列榜单卡片（与音乐榜单页共用 /api/charts）
   async function loadDiscoverCharts() {
     const row = $('chartsRow');
@@ -942,11 +973,12 @@
       // 榜单数据本身实时，展示位按日期轮换，首页每天有变化
       const seed = recSeed('charts');
       const charts = shuffleSeeded(await UzzApi.getCharts(), seed).slice(0, 12);
+      window.__homeCharts = charts;
       // 先渲染榜单卡片，前三首异步填充（避免详情接口拖慢整页）
       row.innerHTML = charts.map((c) => `
         <div class="chart-card rec-chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}"${c.vendor ? ` data-vendor="${escapeHtml(c.vendor)}"` : ''}>
           <div class="rcc-head">
-            <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${c.cover ? `<img src="${escapeHtml(c.cover)}" alt="">` : (c.icon || '📊')}</div>
+            <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${coverImg(c.cover, 'ch-cover')}</div>
             <div class="rcc-meta"><div class="ch-name">${escapeHtml(c.name)}</div><div class="ch-desc">${escapeHtml(c.desc || '实时榜单')}</div></div>
           </div>
           <div class="rcc-songs" data-chart="${escapeHtml(c.id)}"><div class="rcc-song muted">加载前三首…</div></div>
@@ -967,7 +999,7 @@
           const top = r.tracks.slice(0, 3);
           const mk = chartRankMarks([c], [top])[0];
           box.innerHTML = top.length ? top.map((t, j) => `
-            <div class="rcc-song"><span class="rcc-n">${j + 1}</span><span class="rcc-t">${escapeHtml(t.name)} - ${escapeHtml(t.artist)}</span><em class="rcc-mk ${mk[j] === '▲' ? 'up' : mk[j] === '▼' ? 'down' : ''}">${mk[j]}</em></div>`).join('')
+            <div class="rcc-song">${coverImg(t.pic, 'rcc-cov')}<span class="rcc-n">${j + 1}</span><span class="rcc-t">${escapeHtml(t.name)} - ${escapeHtml(t.artist)}</span><em class="rcc-mk ${mk[j] === '▲' ? 'up' : mk[j] === '▼' ? 'down' : ''}">${mk[j]}</em></div>`).join('')
             : '<div class="rcc-song muted">点击打开榜单</div>';
         }).catch(() => {
           const box = row.querySelectorAll('.rcc-songs')[ci];
@@ -1055,21 +1087,25 @@
       grid.innerHTML = list.map((p) => `
         <div class="pl-card" data-id="${escapeHtml(p.id)}">
           <div style="position:relative">
-            <img class="plc-img" src="${escapeHtml(UzzApi.picProxy(p.cover))}" loading="lazy" onerror="this.style.visibility='hidden'" alt="" />
+            ${coverImg(p.cover, 'plc-img')}
             <span class="plc-plays">▶ ${fmtCount(p.playCount)}</span>
           </div>
           <div class="plc-name">${escapeHtml(p.name)}</div>
           <div class="plc-src">来自「${escapeHtml(p.__source || '精选')}」· 每日轮换</div>
         </div>`).join('');
+      window.__homePlaylists = list;
+      paintQuickBgs(window.__homeCharts || [], list, window.__homeHotSongs || []);
     } catch (e) {
       grid.innerHTML = `<div class="loading-pad" style="grid-column:1/-1">推荐歌单加载失败：${escapeHtml(e.message || e)}</div>`;
+      paintQuickBgs(window.__homeCharts || [], [], window.__homeHotSongs || []);
     }
   }
 
-  /* ── 推荐页：红心相似推荐 / 猜你喜欢 双列歌曲模块 ── */
-  const recLists = { heart: [], foryou: [] };
+  /* ── 推荐页：红心相似推荐 / 猜你喜欢 / 免费VIP 双列歌曲模块 ── */
+  const recLists = { heart: [], foryou: [], vip: [] };
+  const REC_UL = { heart: 'heartList', foryou: 'foryouList', vip: 'vipList' };
   function renderRecSongs(key) {
-    const ul = $(key === 'heart' ? 'heartList' : 'foryouList');
+    const ul = $(REC_UL[key] || (key === 'heart' ? 'heartList' : 'foryouList'));
     if (!ul) return;
     ul.innerHTML = recLists[key].length
       ? recLists[key].map((t, i) => trackLi(t, i)).join('')
@@ -1114,6 +1150,73 @@
       recLists.foryou = shuffleSeeded(tracks, seed).filter((t) => { const k = t.id + '|' + t.vendor; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 12);
       renderRecSongs('foryou');
     } catch (e) { if (ul) ul.innerHTML = `<li class="loading-pad">推荐加载失败：${escapeHtml(e.message || e)}</li>`; }
+  }
+
+  /* ── ④ 每天免费听VIP歌曲：热歌榜曲目（带封面，可播放） ── */
+  async function loadVipSongs() {
+    recLists.vip = [];
+    const ul = $('vipList');
+    if (ul) ul.innerHTML = '<li class="loading-pad"><span class="spin"></span> 推荐加载中…</li>';
+    try {
+      const seed = recSeed('vip');
+      const pool = (await UzzApi.getPlaylist(TOPLIST.hot, 30)).tracks;
+      window.__homeHotSongs = pool;
+      const list = shuffleSeeded(pool, seed).slice(0, 12);
+      recLists.vip = list;
+      renderRecSongs('vip');
+      paintQuickBgs(window.__homeCharts || [], window.__homePlaylists || [], pool);
+    } catch (e) { if (ul) ul.innerHTML = `<li class="loading-pad">推荐加载失败：${escapeHtml(e.message || e)}</li>`; }
+  }
+
+  /* ── 通用横排封面卡片模块（歌单/播客/有声书共用） ── */
+  function renderMixGrid(boxId, items) {
+    const box = $(boxId);
+    if (!box) return;
+    box.innerHTML = items.length ? items.map((it) => `
+      <div class="mix-card" data-id="${escapeHtml(it.id)}" data-kind="${escapeHtml(it.kind || 'playlist')}" data-name="${escapeHtml(it.name)}">
+        <div class="mix-cover">${coverImg(it.cover, 'mix-img')}<span class="mix-play">▶</span>${it.sub ? `<span class="mix-badge">${escapeHtml(it.sub)}</span>` : ''}</div>
+        <div class="mix-name">${escapeHtml(it.name)}</div>
+        <div class="mix-desc">${escapeHtml(it.desc || '')}</div>
+      </div>`).join('')
+      : '<div class="loading-pad">暂无内容</div>';
+  }
+  function plToMix(p, kind) {
+    return { id: p.id, name: p.name, cover: p.cover, desc: p.desc || (p.playCount ? `▶ ${fmtCount(p.playCount)} 次播放` : ''), kind: kind || 'playlist' };
+  }
+  /* ── ⑥ 每天听点儿好音乐：轮换真实歌单 ── */
+  async function loadGoodMusic() {
+    try {
+      const seed = recSeed('goodmusic');
+      const cats = ['华语', '民谣', '轻音乐', '治愈', '流行', '古风'];
+      const cat = cats[seed % cats.length];
+      const list = await UzzApi.getPlaylists(cat, 24, seed % 20);
+      renderMixGrid('goodMusicGrid', shuffleSeeded(list, seed).slice(0, 6).map((p) => ({ ...plToMix(p), desc: `来自「${cat}」· 每日精选` })));
+    } catch (e) { renderMixGrid('goodMusicGrid', []); }
+  }
+  /* ── ⑦ 你的专属播客：订阅优先，否则推荐播客歌单 ── */
+  async function loadHomePodcast() {
+    try {
+      const seed = recSeed('podcast');
+      let list = [];
+      try { list = (loadPodcastSubs() || []).map((s) => ({ id: s.url || s.id, name: s.title || s.name, cover: s.cover, desc: s.desc || '我的订阅', kind: 'podcast' })); } catch (e) {}
+      if (!list.length) {
+        const pls = await UzzApi.getPlaylists('播客', 18, seed % 15);
+        list = pls.slice(0, 6).map((p) => ({ ...plToMix(p, 'podcast'), desc: p.desc || '播客精选' }));
+      }
+      renderMixGrid('homePodcastGrid', shuffleSeeded(list, seed).slice(0, 6));
+    } catch (e) { renderMixGrid('homePodcastGrid', []); }
+  }
+  /* ── ⑧ 你的宝藏有声书：有声书/知识分类歌单 ── */
+  async function loadHomeAudiobook() {
+    try {
+      const seed = recSeed('audiobook');
+      const cats = ['有声书', '知识', '相声', '故事'];
+      let list = [];
+      for (const cat of cats) {
+        try { const r = await UzzApi.getPlaylists(cat, 12, seed % 10); if (r && r.length) { list = r; break; } } catch (e) {}
+      }
+      renderMixGrid('homeAudioGrid', shuffleSeeded(list, seed).slice(0, 6).map((p) => ({ ...plToMix(p, 'audiobook'), desc: p.desc || '有声读物 · 随时畅听' })));
+    } catch (e) { renderMixGrid('homeAudioGrid', []); }
   }
 
   /* ============================================================
@@ -3711,7 +3814,11 @@
         if (key === 'charts') loadDiscoverCharts();
         else if (key === 'playlists') loadRecommend();
         else if (key === 'heart') loadHeartSongs();
+        else if (key === 'vip') loadVipSongs();
         else if (key === 'foryou') loadForYou();
+        else if (key === 'goodmusic') loadGoodMusic();
+        else if (key === 'podcast') loadHomePodcast();
+        else if (key === 'audiobook') loadHomeAudiobook();
         return;
       }
       if (btn.dataset.playall) {
@@ -3722,6 +3829,17 @@
     });
     bindListClick($('heartList'));
     bindListClick($('foryouList'));
+    bindListClick($('vipList'));
+    // 横排封面卡片（歌单/播客/有声书）：点击打开对应歌单
+    ['goodMusicGrid', 'homePodcastGrid', 'homeAudioGrid'].forEach((id) => {
+      const box = $(id); if (!box) return;
+      box.addEventListener('click', (e) => {
+        const card = e.target.closest('.mix-card'); if (!card) return;
+        const idv = card.dataset.id;
+        if (card.dataset.kind === 'podcast' && /^https?:/i.test(idv)) { window.open(idv, '_blank'); return; }
+        if (idv) openOnlinePlaylist(idv, { title: card.dataset.name });
+      });
+    });
     // 榜单精选（发现页横向卡片）
     $('chartsRow').addEventListener('click', (e) => {
       const c = e.target.closest('.chart-card');
@@ -4217,6 +4335,11 @@
     loadDiscoverCharts();
     loadHeartSongs();
     loadForYou();
+    // 首屏关键模块加载后再拉新增模块，避免并发请求拖慢推荐歌单首屏
+    setTimeout(() => loadVipSongs(), 800);
+    setTimeout(() => loadGoodMusic(), 1400);
+    setTimeout(() => loadHomePodcast(), 2000);
+    setTimeout(() => loadHomeAudiobook(), 2600);
     // 每日推荐 banner 显示当日日期（网易云式 17 / 10）
     {
       const { m, day } = dailyDate();

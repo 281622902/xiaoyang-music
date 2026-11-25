@@ -479,15 +479,19 @@ html[data-theme="dark"] .ne-sec-alert { background: #1f222b; }
   color: #fff; text-align: left; transition: transform .16s, box-shadow .16s;
 }
 .quick-card:hover { transform: translateY(-3px); box-shadow: var(--v310-shadow); }
-.quick-card::after { content: ''; position: absolute; right: -26px; top: -26px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,.12); }
+.quick-card::after { content: ''; position: absolute; right: -26px; top: -26px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,.10); }
+/* 五宫格真实封面背景图（图1效果） */
+.qc-bg { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .9; z-index: 0; }
+.qc-shade { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,.12) 0%, rgba(0,0,0,.20) 45%, rgba(0,0,0,.68) 100%); }
 .qk-daily { background: linear-gradient(135deg,#5a8cff,#2654c8); }
 .qk-heart { background: linear-gradient(135deg,#ff86ab,#d83e73); }
 .qk-radar { background: linear-gradient(135deg,#43bfae,#17796f); }
 .qk-roam  { background: linear-gradient(135deg,#f2ab54,#bd6a1d); }
 .qk-simi  { background: linear-gradient(135deg,#9a7bf0,#5b3db8); }
+.qc-ic, .qc-t, .qc-s { position: relative; z-index: 2; text-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .qc-ic { font-size: 24px; line-height: 1; }
 .qc-t { font-size: 16px; font-weight: 700; }
-.qc-s { font-size: 11px; opacity: .82; }
+.qc-s { font-size: 11px; opacity: .92; }
 .rec-sec { margin-bottom: 28px; }
 .rec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .rec-head h2 { font-size: 19px; font-weight: 700; color: var(--text); margin: 0; }
@@ -514,6 +518,8 @@ html[data-theme="dark"] .ne-sec-alert { background: #1f222b; }
 .rcc-meta .ch-desc { font-size: 11px; color: var(--text-2); margin-top: 3px; }
 .rcc-songs { display: flex; flex-direction: column; gap: 4px; }
 .rcc-song { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); min-width: 0; }
+.rcc-cov { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 4px; object-fit: cover; }
+.rcc-mk { margin-left: auto; }
 .rcc-n { width: 15px; text-align: center; color: var(--text-2); font-weight: 700; }
 .rcc-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rcc-mk { font-style: normal; font-size: 11px; color: var(--text-2); }
@@ -530,4 +536,34 @@ html[data-theme="dark"] .ne-sec-alert { background: #1f222b; }
 @media (max-width: 1100px) {
   .rec-quick { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .rec-charts-grid, .rec-song-list { grid-template-columns: 1fr; }
+}
+
+/* ══════ 推荐页：每天听好音乐 / 播客 / 有声书 横排封面卡片 ══════ */
+.rec-mix-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; }
+.mix-card { min-width: 0; cursor: pointer; transition: transform .16s; }
+.mix-card:hover { transform: translateY(-3px); }
+.mix-cover {
+  position: relative; width: 100%; aspect-ratio: 1 / 1; overflow: hidden;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2);
+}
+.mix-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mix-play {
+  position: absolute; right: 8px; bottom: 8px; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px; color: #fff;
+  background: var(--accent); opacity: 0; transform: translateY(4px); transition: opacity .16s, transform .16s;
+}
+.mix-card:hover .mix-play { opacity: 1; transform: translateY(0); }
+.mix-badge {
+  position: absolute; left: 6px; top: 6px; font-size: 10px; padding: 2px 7px; border-radius: 999px;
+  color: #fff; background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+}
+.mix-name { font-size: 12.5px; color: var(--text); font-weight: 600; margin-top: 8px; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-desc { font-size: 10.5px; color: var(--text-2); margin-top: 3px; line-height: 1.4; height: 28px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 1100px) {
+  .rec-mix-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+@media (max-width: 700px) {
+  .rec-mix-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
