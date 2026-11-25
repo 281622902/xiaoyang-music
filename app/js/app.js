@@ -51,6 +51,8 @@
     { id: 'banners', name: '快捷入口' },
     { id: 'charts', name: '榜单精选' },
     { id: 'playlists', name: '推荐歌单' },
+    { id: 'heart', name: '红心推荐' },
+    { id: 'foryou', name: '猜你喜欢' },
   ];
   function getHomeCfg() {
     const all = HOME_MODULES.map((m) => m.id);
@@ -911,24 +913,43 @@
       grid.innerHTML = '<div class="loading-pad" style="grid-column:1/-1">榜单加载失败：' + escapeHtml(e.message || e) + '</div>';
     }
   }
-  // 发现页「榜单精选」横向卡片（与音乐榜单页共用 /api/charts）
+  // 推荐位随机种子：同一天固定，点「↻」换一批时递增
+  function recSeed(salt) {
+    const { y, m, day } = dailyDate();
+    let bump = 0; try { bump = Number(localStorage.getItem('uzz.home.seed.' + salt) || 0); } catch (e) {}
+    return y * 10000 + m * 100 + day + bump * 7919;
+  }
+  // 榜单前三名的涨跌标记：与上次记录比较，首次访问显示「–」
+  function chartRankMarks(charts, tops) {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('uzz.chart.prev') || '{}') || {}; } catch (e) {}
+    const next = {};
+    const marks = charts.map((c, i) => tops[i].map((t, j) => {
+      const p = (saved[c.id] || {})[t.id];
+      const mk = typeof p === 'number' ? (p > j ? '▲' : p < j ? '▼' : '–') : '–';
+      (next[c.id] = next[c.id] || {})[t.id] = j;
+      return mk;
+    }));
+    try { localStorage.setItem('uzz.chart.prev', JSON.stringify(next)); } catch (e) {}
+    return marks;
+  }
+  // 发现页「榜单精选」双列榜单卡片（与音乐榜单页共用 /api/charts）
   async function loadDiscoverCharts() {
     const row = $('chartsRow');
     if (!row) return;
     row.innerHTML = '<div class="loading-pad"><span class="spin"></span> 榜单加载中…</div>';
     try {
       // 榜单数据本身实时，展示位按日期轮换，首页每天有变化
-      const { y, m, day } = dailyDate();
-      const seed = y * 10000 + m * 100 + day;
+      const seed = recSeed('charts');
       const charts = shuffleSeeded(await UzzApi.getCharts(), seed).slice(0, 12);
+      // 先渲染榜单卡片，前三首异步填充（避免详情接口拖慢整页）
       row.innerHTML = charts.map((c) => `
-        <div class="chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">
-          <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${c.cover ? `<img src="${escapeHtml(c.cover)}" alt="">` : (c.icon || '📊')}</div>
-          <div class="ch-txt">
-            <div class="ch-name">${escapeHtml(c.name)}</div>
-            <div class="ch-desc">${escapeHtml(c.desc || '')}</div>
-            <div class="ch-play">▶ 立即听榜</div>
+        <div class="chart-card rec-chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}"${c.vendor ? ` data-vendor="${escapeHtml(c.vendor)}"` : ''}>
+          <div class="rcc-head">
+            <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${c.cover ? `<img src="${escapeHtml(c.cover)}" alt="">` : (c.icon || '📊')}</div>
+            <div class="rcc-meta"><div class="ch-name">${escapeHtml(c.name)}</div><div class="ch-desc">${escapeHtml(c.desc || '实时榜单')}</div></div>
           </div>
+          <div class="rcc-songs" data-chart="${escapeHtml(c.id)}"><div class="rcc-song muted">加载前三首…</div></div>
         </div>`).join('') + `
         <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（聚合热歌）">
           <div class="ch-ic qishui-ic">${QISHUI_SVG}</div>
@@ -938,6 +959,21 @@
             <div class="ch-play">▶ 立即听榜</div>
           </div>
         </div>`;
+      // 逐张填充前三首（接口慢也不阻塞卡片出现）
+      charts.forEach((c, ci) => {
+        UzzApi.getPlaylist(c.id, 3).then((r) => {
+          const box = row.querySelectorAll('.rcc-songs')[ci];
+          if (!box) return;
+          const top = r.tracks.slice(0, 3);
+          const mk = chartRankMarks([c], [top])[0];
+          box.innerHTML = top.length ? top.map((t, j) => `
+            <div class="rcc-song"><span class="rcc-n">${j + 1}</span><span class="rcc-t">${escapeHtml(t.name)} - ${escapeHtml(t.artist)}</span><em class="rcc-mk ${mk[j] === '▲' ? 'up' : mk[j] === '▼' ? 'down' : ''}">${mk[j]}</em></div>`).join('')
+            : '<div class="rcc-song muted">点击打开榜单</div>';
+        }).catch(() => {
+          const box = row.querySelectorAll('.rcc-songs')[ci];
+          if (box) box.innerHTML = '<div class="rcc-song muted">点击打开榜单</div>';
+        });
+      });
     } catch (e) {
       row.innerHTML = chartsFallbackHtml();
     }
@@ -998,8 +1034,7 @@
     grid.innerHTML = '<div class="loading-pad" style="grid-column:1/-1"><span class="spin"></span> 推荐歌单加载中…</div>';
     try {
       // 上游 highquality/list 忽略 offset，改为每日轮换真实分类并合并两个分类池
-      const { y, m, day } = dailyDate();
-      const seed = y * 10000 + m * 100 + day;
+      const seed = recSeed('playlists');
       const modeCats = {
         default: ['全部', '华语', '流行', '民谣', '古风', '电子', '轻音乐', '治愈', '摇滚', '说唱', '古典', '爵士'],
         familiar: ['全部', '华语', '流行', '民谣', '古风'],
@@ -1029,6 +1064,56 @@
     } catch (e) {
       grid.innerHTML = `<div class="loading-pad" style="grid-column:1/-1">推荐歌单加载失败：${escapeHtml(e.message || e)}</div>`;
     }
+  }
+
+  /* ── 推荐页：红心相似推荐 / 猜你喜欢 双列歌曲模块 ── */
+  const recLists = { heart: [], foryou: [] };
+  function renderRecSongs(key) {
+    const ul = $(key === 'heart' ? 'heartList' : 'foryouList');
+    if (!ul) return;
+    ul.innerHTML = recLists[key].length
+      ? recLists[key].map((t, i) => trackLi(t, i)).join('')
+      : '<li class="loading-pad">暂无推荐，听几首歌后再来看看</li>';
+  }
+  async function loadHeartSongs() {
+    recLists.heart = [];
+    const ul = $('heartList');
+    if (ul) ul.innerHTML = '<li class="loading-pad"><span class="spin"></span> 推荐加载中…</li>';
+    try {
+      const fav = (Player.getFavorites ? Player.getFavorites() : []).slice();
+      const his = (Player.getHistory ? Player.getHistory() : []).slice();
+      const seed = recSeed('heart');
+      let simi = [];
+      const base = fav[seed % Math.max(1, fav.length)] || his[0];
+      if (base) { try { simi = await UzzApi.getSimi(base.id, base.vendor, 12); } catch (e) {} }
+      if (!simi.length) {
+        try { simi = (await UzzApi.getPlaylist(TOPLIST.hot, 12)).tracks; } catch (e) {}
+      }
+      const seen = new Set();
+      recLists.heart = shuffleSeeded(fav, seed).slice(0, 6).concat(shuffleSeeded(simi, seed + 1))
+        .filter((t) => { const k = t.id + '|' + t.vendor; if (seen.has(k)) return false; seen.add(k); return true; })
+        .slice(0, 12);
+      renderRecSongs('heart');
+    } catch (e) { if (ul) ul.innerHTML = `<li class="loading-pad">推荐加载失败：${escapeHtml(e.message || e)}</li>`; }
+  }
+  async function loadForYou() {
+    recLists.foryou = [];
+    const ul = $('foryouList');
+    if (ul) ul.innerHTML = '<li class="loading-pad"><span class="spin"></span> 推荐加载中…</li>';
+    try {
+      const seed = recSeed('foryou');
+      const cats = ['华语', '流行', '民谣', '古风', '经典'];
+      const cat = cats[seed % cats.length];
+      const list = await UzzApi.getPlaylists(cat, 10, seed % 20);
+      let tracks = [];
+      for (const pl of list.slice(0, 3)) {
+        try { const r = await UzzApi.getPlaylist(pl.id, 12); tracks = tracks.concat(r.tracks); if (tracks.length >= 12) break; } catch (e) {}
+      }
+      if (!tracks.length) { try { tracks = (await UzzApi.getPlaylist(TOPLIST.new, 12)).tracks; } catch (e) {} }
+      const seen = new Set();
+      recLists.foryou = shuffleSeeded(tracks, seed).filter((t) => { const k = t.id + '|' + t.vendor; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 12);
+      renderRecSongs('foryou');
+    } catch (e) { if (ul) ul.innerHTML = `<li class="loading-pad">推荐加载失败：${escapeHtml(e.message || e)}</li>`; }
   }
 
   /* ============================================================
@@ -3576,10 +3661,67 @@
     $('plModalName').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmPlModal(); });
 
     // ── 推荐页 ──
-    $('bannerRow').addEventListener('click', (e) => {
-      const b = e.target.closest('.banner');
-      if (b) openToplist(b.dataset.top);
+    // ── 推荐页：快捷入口（每日推荐 / 心动模式 / 私人雷达 / 私人漫游 / 相似歌曲） ──
+    $('quickRow')?.addEventListener('click', (e) => {
+      const q = e.target.closest('.quick-card'); if (!q) return;
+      switch (q.dataset.qk) {
+        case 'daily': openToplist('daily'); break;
+        case 'heart': {
+          const fav = Player.getFavorites ? Player.getFavorites() : [];
+          if (!fav.length) { toast('还没有红心歌曲，先点 ♥ 收藏几首吧'); return; }
+          Player.playQueue(shuffleSeeded(fav, Date.now() % 100000));
+          toast('心动模式：已随机播放 ' + fav.length + ' 首红心歌曲');
+          break;
+        }
+        case 'radar': {
+          const pool = document.querySelectorAll('#plGrid .pl-card');
+          if (!pool.length) { toast('推荐歌单还没加载好，请稍后再试'); return; }
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          openOnlinePlaylist(pick.dataset.id, { title: pick.querySelector('.plc-name')?.textContent });
+          break;
+        }
+        case 'roam': {
+          const cards = document.querySelectorAll('#chartsRow .chart-card');
+          if (!cards.length) { toast('榜单还没加载好，请稍后再试'); return; }
+          const pick = cards[Math.floor(Math.random() * cards.length)];
+          if (pick.dataset.vendor === 'qishui') openQishuiChart();
+          else openOnlinePlaylist(pick.dataset.id, { title: pick.dataset.name });
+          break;
+        }
+        case 'simi': {
+          const cur = Player.getState && Player.getState().current;
+          const base = cur || (Player.getHistory ? Player.getHistory()[0] : null);
+          if (!base || !base.id) { toast('先播放一首歌，才能找相似歌曲'); return; }
+          UzzApi.getSimi(base.id, base.vendor, 30).then((list) => {
+            if (!list.length) { toast('暂时没有找到相似歌曲'); return; }
+            Player.playQueue(list); toast('已播放 ' + list.length + ' 首相似歌曲');
+          }).catch(() => toast('相似推荐加载失败，请稍后再试'));
+          break;
+        }
+      }
     });
+    // 模块刷新：换一批数据
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.rec-refresh, .rec-playall'); if (!btn) return;
+      if (btn.dataset.refresh) {
+        const key = btn.dataset.refresh;
+        let bump = 0; try { bump = Number(localStorage.getItem('uzz.home.seed.' + key) || 0); } catch (err) {}
+        try { localStorage.setItem('uzz.home.seed.' + key, String(bump + 1)); } catch (err) {}
+        btn.classList.add('spin-on'); setTimeout(() => btn.classList.remove('spin-on'), 600);
+        if (key === 'charts') loadDiscoverCharts();
+        else if (key === 'playlists') loadRecommend();
+        else if (key === 'heart') loadHeartSongs();
+        else if (key === 'foryou') loadForYou();
+        return;
+      }
+      if (btn.dataset.playall) {
+        const list = recLists[btn.dataset.playall] || [];
+        if (!list.length) { toast('没有可播放的歌曲'); return; }
+        Player.playQueue(list); toast('已播放 ' + list.length + ' 首歌曲');
+      }
+    });
+    bindListClick($('heartList'));
+    bindListClick($('foryouList'));
     // 榜单精选（发现页横向卡片）
     $('chartsRow').addEventListener('click', (e) => {
       const c = e.target.closest('.chart-card');
@@ -4073,6 +4215,8 @@
     renderPlaylistNav();
     loadRecommend();
     loadDiscoverCharts();
+    loadHeartSongs();
+    loadForYou();
     // 每日推荐 banner 显示当日日期（网易云式 17 / 10）
     {
       const { m, day } = dailyDate();

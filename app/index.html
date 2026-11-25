@@ -126,36 +126,32 @@
 
         <!-- 视图：发现音乐（推荐页） -->
         <main id="viewDiscover" class="view"><section class="listen-hero" data-module="hero"><div class="hero-copy"><div class="hero-eyebrow">YOUR SOUND. YOUR SPACE.</div><h1>给今天一点好声音</h1><p>从一首喜欢的歌开始。在线发现，或把你的音乐直接拖进来。</p><div class="hero-actions"><button id="heroContinue" class="xy-primary">继续聆听 ↗</button><button id="heroImport" class="xy-secondary">＋ 导入本地音乐</button><button id="homeModuleBtn" class="xy-secondary">模块管理</button></div></div><div class="hero-record" aria-hidden="true"><img src="icon.svg" alt=""/></div></section>
-          <section class="banner-row" id="bannerRow" data-module="banners">
-            <div class="banner b-daily" data-top="daily">
-              <div class="bn-ic bn-day"><span id="bnDailyDay">·</span><small id="bnDailyMon">/·</small></div>
-              <div class="bn-name">每日推荐</div>
-              <div class="bn-sub">根据热歌榜每日更新</div>
-            </div>
-            <div class="banner b-douyin" data-top="douyin">
-              <div class="bn-ic">🎬</div>
-              <div class="bn-name">抖音热歌</div>
-              <div class="bn-sub">正在热播的神曲</div>
-            </div>
-            <div class="banner b-hot" data-top="hot">
-              <div class="bn-ic">🔥</div>
-              <div class="bn-name">热门歌曲</div>
-              <div class="bn-sub">云音乐热歌榜</div>
-            </div>
-            <div class="banner b-new" data-top="new">
-              <div class="bn-ic">✨</div>
-              <div class="bn-name">新歌速递</div>
-              <div class="bn-sub">云音乐新歌榜</div>
-            </div>
+          <!-- 快捷入口（参考网易云推荐页五宫格） -->
+          <section class="rec-quick" id="quickRow" data-module="banners">
+            <button class="quick-card qk-daily" data-qk="daily" type="button"><span class="qc-ic">📅</span><span class="qc-t">每日推荐</span><span class="qc-s">每日好歌 · 每天更新</span></button>
+            <button class="quick-card qk-heart" data-qk="heart" type="button"><span class="qc-ic">💗</span><span class="qc-t">心动模式</span><span class="qc-s">红心歌曲随机播放</span></button>
+            <button class="quick-card qk-radar" data-qk="radar" type="button"><span class="qc-ic">📡</span><span class="qc-t">私人雷达</span><span class="qc-s">发现小众好歌</span></button>
+            <button class="quick-card qk-roam" data-qk="roam" type="button"><span class="qc-ic">🚶</span><span class="qc-t">私人漫游</span><span class="qc-s">榜单随心漫游</span></button>
+            <button class="quick-card qk-simi" data-qk="simi" type="button"><span class="qc-ic">🎧</span><span class="qc-t">相似歌曲</span><span class="qc-s">根据最近播放推荐</span></button>
           </section>
-          <!-- 榜单精选：官方实时榜单卡片，点击直达 -->
+          <!-- 榜单精选：双列榜单卡片（封面 + 前三首 + 涨跌箭头） -->
           <section class="rec-sec charts-sec" data-module="charts">
-            <div class="rec-head">榜单精选</div>
-            <div id="chartsRow" class="charts-row"></div>
+            <div class="rec-head"><h2>榜单精选</h2><button class="rec-refresh" data-refresh="charts" title="换一批榜单">↻</button></div>
+            <div id="chartsRow" class="charts-row rec-charts-grid"></div>
           </section>
           <section class="rec-sec" data-module="playlists">
-            <div class="rec-head">推荐歌单</div>
+            <div class="rec-head"><h2>推荐歌单</h2><button class="rec-refresh" data-refresh="playlists" title="换一批歌单">↻</button></div>
             <div id="plGrid" class="pl-grid"></div>
+          </section>
+          <!-- 红心歌曲和相似推荐 -->
+          <section class="rec-sec" data-module="heart">
+            <div class="rec-head"><h2>你的红心歌曲和相似推荐</h2><button class="rec-playall" data-playall="heart" type="button">▶ 播放</button><button class="rec-refresh" data-refresh="heart" title="换一批">↻</button></div>
+            <ul id="heartList" class="result-list rec-song-list"></ul>
+          </section>
+          <!-- 猜你喜欢的华语好歌 -->
+          <section class="rec-sec" data-module="foryou">
+            <div class="rec-head"><h2>猜你喜欢的「华语」好歌</h2><button class="rec-playall" data-playall="foryou" type="button">▶ 播放</button><button class="rec-refresh" data-refresh="foryou" title="换一批">↻</button></div>
+            <ul id="foryouList" class="result-list rec-song-list"></ul>
           </section>
         </main>
 
