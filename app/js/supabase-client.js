@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.15.2', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.15.3', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -123,27 +123,27 @@
   /* ---------- 会员体系 + 管理员（见 supabase/vip_members.sql） ---------- */
   // 管理员手机号白名单：客户端仅用于展示入口；真正的写权限由数据库 RLS 强制
   const ADMIN_PHONES = ['18474728056'];
-  let adminRpcCache = null; // null = 未查询；true/false = 数据库判定结果
+  // 数据库判定缓存：按用户 ID 绑定，切换账号立即失效（防旧管理员缓存污染新账号）
+  let adminCache = null; // null = 未查询；{ uid, value } = 已查询
   // 手机号规范化：兼容 Supabase 存储的 '+86…' 与 '86…' 两种前缀（实测库里是 86 前缀无 + 号）
   function normalizeAdminPhone(value) {
     return String(value ?? '').replace(/^\+86/, '').replace(/^86(?=1\d{10}$)/, '');
   }
   function isAdmin() {
-    // 优先用数据库侧缓存结果
-    if (adminRpcCache !== null) return adminRpcCache;
     const user = cloud.user;
     if (!user || !user.phone) return false;
+    if (adminCache && adminCache.uid === user.id) return adminCache.value;
     return ADMIN_PHONES.includes(normalizeAdminPhone(user.phone));
   }
   // 数据库侧权威判定：is_current_user_admin()（RPC，免疫客户端改动与手机号格式差异）
   async function isAdminAsync() {
     const user = cloud.user;
-    if (!user) { adminRpcCache = null; return false; }
+    if (!user) { adminCache = null; return false; }
+    if (adminCache && adminCache.uid === user.id) return adminCache.value;
     try {
       const { data, error } = await client().rpc('is_current_user_admin');
-      if (!error && typeof data === 'boolean') { adminRpcCache = data; return data; }
+      if (!error && typeof data === 'boolean') { adminCache = { uid: user.id, value: data }; return data; }
     } catch (e) { /* 回退客户端判定 */ }
-    adminRpcCache = null;
     return isAdmin();
   }
 
@@ -309,7 +309,8 @@
       if (!page.length || (typeof count === 'number' ? offset >= count : page.length < 200)) return rows;
     }
   }
-  cloud.displayUser = user => user?.phone ? user.phone.replace(/(\d{3})\d{4}(\d{4})$/, '$1****$2') : '云端账户';
+  // 脱敏手机号：先去掉 +86/86 前缀，只显示 11 位号码（199****7479）
+  cloud.displayUser = user => user?.phone ? String(user.phone).replace(/^\+?86(?=1\d{10}$)/, '').replace(/(\d{3})\d{4}(\d{4})$/, '$1****$2') : '云端账户';
 
   /* ---------- 资料中心：昵称 / 用户名 / 头像 / 密码 ---------- */
   // 资料统一存在 Supabase Auth 的 user_metadata 里：

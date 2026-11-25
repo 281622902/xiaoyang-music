@@ -39,6 +39,8 @@
         }
       }
       if (cloud.user) { fillProfile(cloud.user); refreshSyncStatus(); }
+      // 设置页「账户与密保」的密保状态随登录态刷新
+      if (window.XYAccountSettings && window.XYAccountSettings.refresh) window.XYAccountSettings.refresh();
       if (window.XYProfile) window.XYProfile.render();
     }
     /* ── 桌面端资料中心：头像 / 昵称 / 用户名 / 密码 ── */

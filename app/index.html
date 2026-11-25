@@ -301,6 +301,7 @@
             <span class="ap-wrap ap-big" id="pfAvaWrap"><img id="pfAvatar" class="pf-avatar" src="icon.svg" alt="用户头像" draggable="false" /></span>
             <div class="pf-head">
               <h2 id="pfName">未登录</h2>
+              <span id="pfVipChip" class="pf-vip-chip hidden"></span>
               <div class="pf-stats">
                 <span class="pf-stat"><b id="pfCountPl">0</b><i>歌单</i></span>
                 <span class="pf-stat"><b id="pfCountFav">0</b><i>收藏</i></span>
@@ -341,24 +342,7 @@
           </section>
 
           <section class="pf-pane hidden" id="pfPaneSettings">
-            <div id="cloudMember">
-              <div class="desktop-profile">
-                <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
-                <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
-                <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
-        <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
-        <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
-        <details class="dp-phone"><summary>绑定手机号（<span id="dpPhoneValue">未绑定</span>）</summary>
-          <label>新手机号<input id="dpNewPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入要绑定的新手机号"></label>
-          <div class="dp-phone-row"><input id="dpNewPhoneCode" type="text" inputmode="numeric" maxlength="6" placeholder="短信验证码"><button id="dpPhoneSend" class="xy-secondary" type="button">获取验证码</button></div>
-          <button id="dpPhoneConfirm" class="xy-primary" type="button">确认换绑</button>
-          <p id="dpPhoneStatus" class="account-status"></p>
-        </details>
-        <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
-              </div>
-              <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
-              <div class="account-buttons"></div>
-            </div>
+            <div id="cloudSyncHint" class="account-status">头像、昵称、用户名与密保等资料编辑已移至「设置 → 账户与密保」</div>
             <details id="legacyAccount"><summary>本机备份账户（旧版）</summary><p>保留原有本机备份功能，本机账户与云端账户分别登录。</p><div id="accountGuest"><div class="account-tabs"><button id="accountLoginTab" class="active" type="button">登录</button><button id="accountRegisterTab" type="button">注册账户</button></div><form id="accountForm" class="account-form"><label>用户名<input id="accountUsername" autocomplete="username" minlength="2" maxlength="24" required placeholder="2–24 个字母、数字或汉字"/></label><label>密码<input id="accountPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="至少 8 位"/></label><button id="accountSubmit" class="xy-primary" type="submit">登录</button></form></div><div id="accountMember" class="hidden"><h3 id="accountName"></h3><p>当前是本机账户。本地音频不会上传，备份只包含在线收藏、歌单与部分偏好。</p><div class="account-buttons"><button id="accountBackup" class="xy-primary">备份收藏与歌单</button><button id="accountRestore" class="xy-secondary">恢复账户备份</button></div><button id="accountLogout" class="account-logout">退出登录</button></div><div id="accountStatus" class="account-status" aria-live="polite"></div></details>
           </section>
         </main>
@@ -368,7 +352,8 @@
           <div class="set-top">
             <h1 class="set-h1">设置</h1>
             <nav class="set-nav" id="setTabs">
-              <button data-tab="general" class="active">常规</button>
+              <button data-tab="account" class="active">账户与密保</button>
+              <button data-tab="general">常规</button>
               <button data-tab="system">系统</button>
               <button data-tab="play">播放</button>
               <button data-tab="keys">快捷键</button>
@@ -382,7 +367,60 @@
           <div class="settings-panel" id="settingsPanel">
 
             <!-- ══════════ 常规 ══════════ -->
-            <section class="set-page" data-page="general">
+            <section class="set-page" data-page="account">
+              <div id="cloudMember">
+                <div class="desktop-profile">
+                  <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
+                  <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
+                  <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
+                  <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
+                  <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
+                  <details class="dp-phone"><summary>绑定手机号（<span id="dpPhoneValue">未绑定</span>）</summary>
+                    <label>新手机号<input id="dpNewPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入要绑定的新手机号"></label>
+                    <div class="dp-phone-row"><input id="dpNewPhoneCode" type="text" inputmode="numeric" maxlength="6" placeholder="短信验证码"><button id="dpPhoneSend" class="xy-secondary" type="button">获取验证码</button></div>
+                    <button id="dpPhoneConfirm" class="xy-primary" type="button">确认换绑</button>
+                    <p id="dpPhoneStatus" class="account-status"></p>
+                  </details>
+                  <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
+                </div>
+                <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
+                <div class="account-buttons"></div>
+              </div>
+              <div class="sec-mgr">
+                <div class="sec-mgr-head">
+                  <h3>密保问题</h3>
+                  <span id="secMgrState" class="pf-sub">读取中…</span>
+                  <button id="secMgrToggle" class="xy-secondary hidden" type="button">设置密保</button>
+                </div>
+                <p class="sec-mgr-sub">至少设置 3 个密保问题（支持自定义问题），忘记密码时须全部答对方可找回密码，答案请牢记</p>
+                <form id="secMgrForm" class="sec-mgr-form hidden" autocomplete="off" novalidate>
+                  <div class="sec-mgr-slot">
+                    <div class="sec-mgr-qrow">
+                      <select id="secMgrQ1" class="ne-select"></select>
+                      <input id="secMgrCustom1" class="sec-mgr-custom hidden" type="text" maxlength="50" placeholder="请输入自定义问题" aria-label="自定义问题"/>
+                    </div>
+                    <input id="secMgrA1" type="text" maxlength="50" placeholder="第 1 题答案（不限大小写）" aria-label="第 1 题答案"/>
+                  </div>
+                  <div class="sec-mgr-slot">
+                    <div class="sec-mgr-qrow">
+                      <select id="secMgrQ2" class="ne-select"></select>
+                      <input id="secMgrCustom2" class="sec-mgr-custom hidden" type="text" maxlength="50" placeholder="请输入自定义问题" aria-label="自定义问题"/>
+                    </div>
+                    <input id="secMgrA2" type="text" maxlength="50" placeholder="第 2 题答案（不限大小写）" aria-label="第 2 题答案"/>
+                  </div>
+                  <div class="sec-mgr-slot">
+                    <div class="sec-mgr-qrow">
+                      <select id="secMgrQ3" class="ne-select"></select>
+                      <input id="secMgrCustom3" class="sec-mgr-custom hidden" type="text" maxlength="50" placeholder="请输入自定义问题" aria-label="自定义问题"/>
+                    </div>
+                    <input id="secMgrA3" type="text" maxlength="50" placeholder="第 3 题答案（不限大小写）" aria-label="第 3 题答案"/>
+                  </div>
+                  <button class="xy-primary" type="submit">保存密保</button>
+                </form>
+                <p id="secMgrStatus" class="account-status"></p>
+              </div>
+            </section>
+            <section class="set-page hidden" data-page="general">
               <h2 class="set-sec">常规</h2>
 
               <div class="st-row">
@@ -1474,6 +1512,7 @@
   <script defer src="vendor/qr/qrcode.js"></script>
   <script defer src="vendor/qr/qrcode-utf8.js"></script>
   <script defer src="js/ne-login.js"></script>
+  <script defer src="js/account-settings.js"></script>
   <script defer src="js/profile.js"></script>
   <script>
     // PWA：注册网络优先 Service Worker，刷新页面即获取最新前端资源

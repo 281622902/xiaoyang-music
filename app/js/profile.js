@@ -163,7 +163,12 @@
         phoneStatus(error.message || '换绑失败');
       } finally { btn.disabled = false; }
     });
-    $('pfEditBtn').addEventListener('click', () => switchPane('settings'));
+    $('pfEditBtn').addEventListener('click', () => {
+      // 资料编辑已移至设置页「账户与密保」分区
+      if (global.XYApp && global.XYApp.showView) global.XYApp.showView('settings');
+      const btn = document.querySelector('#setTabs button[data-tab="account"]');
+      if (btn) btn.click();
+    });
   });
 
   function readJSON(key, def) {
@@ -259,13 +264,29 @@
     const logged = !!user;
     const p = logged && cloud().profile ? cloud().profile(user) : null;
     const name = logged && cloud().displayName ? cloud().displayName(user) : '';
-    $('pfName').textContent = logged ? (name || '云端账户') : '未登录';
+    // 头部名称：优先用户账户（用户名），其次昵称，最后脱敏手机号（不带 86）
+    const uname = p && p.username ? String(p.username) : '';
+    $('pfName').textContent = logged ? (uname || name || '云端账户') : '未登录';
     const av = p && p.avatar;
     const pf = $('pfAvatar');
     if (pf) pf.src = av || 'icon.svg';
     $('pfSub').textContent = logged
-      ? (p && p.username ? '用户名 ' + p.username : '手机号 ' + (cloud().displayUser(user) || ''))
+      ? (uname ? '用户账户 ' + uname : '手机号 ' + (cloud().displayUser(user) || ''))
       : '登录云端账户，收藏与歌单随账号随身携带';
+    // 会员徽章：SVIP/VIP + 到期时间（永久有效或具体日期）
+    const chip = $('pfVipChip');
+    if (chip) {
+      chip.classList.add('hidden');
+      if (logged && global.getVipInfo) {
+        global.getVipInfo(user.phone).then((v) => {
+          if (!v.active) return;
+          const tierText = v.tier === 'svip' ? 'SVIP' : 'VIP';
+          const expireText = v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('zh-CN') + ' 到期' : '永久有效';
+          chip.textContent = tierText + ' · ' + expireText;
+          chip.classList.remove('hidden');
+        }).catch(() => {});
+      }
+    }
     $('pfCountPl').textContent = readJSON('uzz.playlists', []).length;
     $('pfCountFav').textContent = readJSON('uzz.fav', []).length;
     $('pfCountRecent').textContent = historyList().length;

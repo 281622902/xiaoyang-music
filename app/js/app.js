@@ -3965,7 +3965,7 @@
 
     // ── 设置：分类导航（点击切换 + 鼠标滚轮切换/滚动） ──
     const setNav = $('setTabs');
-    const setTabsOrder = ['general', 'system', 'play', 'keys', 'download', 'desktop', 'about'];
+    const setTabsOrder = ['account', 'general', 'system', 'play', 'keys', 'download', 'desktop', 'about'];
     function gotoSetTab(tab) {
       if (!setTabsOrder.includes(tab)) return;
       setTabsOrder.forEach((t) => {
