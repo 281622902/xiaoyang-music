@@ -974,14 +974,14 @@
       const seed = recSeed('charts');
       const charts = shuffleSeeded(await UzzApi.getCharts(), seed).slice(0, 12);
       window.__homeCharts = charts;
-      // 先渲染榜单卡片，前三首异步填充（避免详情接口拖慢整页）
+      // 先渲染榜单卡片骨架（榜名 + 更新描述 + 封面位 + 三行歌曲位），详情异步填充
       row.innerHTML = charts.map((c) => `
         <div class="chart-card rec-chart-card" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}"${c.vendor ? ` data-vendor="${escapeHtml(c.vendor)}"` : ''}>
-          <div class="rcc-head">
-            <div class="ch-ic" style="background:${CHART_COLORS[c.id] || 'linear-gradient(135deg,#7c5cd6,#4f46e5)'}">${coverImg(c.cover, 'ch-cover')}</div>
-            <div class="rcc-meta"><div class="ch-name">${escapeHtml(c.name)}</div><div class="ch-desc">${escapeHtml(c.desc || '实时榜单')}</div></div>
+          <div class="rcc-title"><span class="ch-name">${escapeHtml(c.name)}</span><span class="rcc-upd">${escapeHtml(c.desc || '实时榜单')}</span></div>
+          <div class="rcc-body">
+            <div class="rcc-cover"><span class="rcc-cover-stack"></span><img class="rcc-cover-img" alt="" src="${FALLBACK_COVER}"/></div>
+            <div class="rcc-songs"><div class="rcc-song muted">加载中…</div></div>
           </div>
-          <div class="rcc-songs" data-chart="${escapeHtml(c.id)}"><div class="rcc-song muted">加载前三首…</div></div>
         </div>`).join('') + `
         <div class="chart-card qishui-card" data-id="qishui" data-name="汽水音乐榜" data-vendor="qishui" title="汽水音乐榜（聚合热歌）">
           <div class="ch-ic qishui-ic">${QISHUI_SVG}</div>
@@ -991,19 +991,23 @@
             <div class="ch-play">▶ 立即听榜</div>
           </div>
         </div>`;
-      // 逐张填充前三首（接口慢也不阻塞卡片出现）
+      // 逐张填充：左侧用榜单真实封面（info.cover → 第一首封面），右侧三行纯文字
       charts.forEach((c, ci) => {
         UzzApi.getPlaylist(c.id, 3).then((r) => {
-          const box = row.querySelectorAll('.rcc-songs')[ci];
-          if (!box) return;
-          const top = r.tracks.slice(0, 3);
+          const card = row.querySelectorAll('.rec-chart-card')[ci];
+          if (!card) return;
+          const top = (r.tracks || []).slice(0, 3);
+          const cover = (r.info && r.info.cover) || (top[0] && top[0].pic);
+          const img = card.querySelector('.rcc-cover-img');
+          if (img && cover) { img.src = coverSrc(cover); img.onerror = () => { img.onerror = null; img.src = FALLBACK_COVER; }; }
+          const box = card.querySelector('.rcc-songs');
           const mk = chartRankMarks([c], [top])[0];
           box.innerHTML = top.length ? top.map((t, j) => `
-            <div class="rcc-song">${coverImg(t.pic, 'rcc-cov')}<span class="rcc-n">${j + 1}</span><span class="rcc-t">${escapeHtml(t.name)} - ${escapeHtml(t.artist)}</span><em class="rcc-mk ${mk[j] === '▲' ? 'up' : mk[j] === '▼' ? 'down' : ''}">${mk[j]}</em></div>`).join('')
+            <div class="rcc-song"><span class="rcc-n">${j + 1}</span><span class="rcc-t">${escapeHtml(t.name)} - ${escapeHtml(t.artist)}</span><em class="rcc-mk ${mk[j] === '▲' ? 'up' : mk[j] === '▼' ? 'down' : ''}">${mk[j]}</em></div>`).join('')
             : '<div class="rcc-song muted">点击打开榜单</div>';
         }).catch(() => {
-          const box = row.querySelectorAll('.rcc-songs')[ci];
-          if (box) box.innerHTML = '<div class="rcc-song muted">点击打开榜单</div>';
+          const card = row.querySelectorAll('.rec-chart-card')[ci];
+          if (card) card.querySelector('.rcc-songs').innerHTML = '<div class="rcc-song muted">点击打开榜单</div>';
         });
       });
     } catch (e) {

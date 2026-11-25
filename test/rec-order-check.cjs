@@ -56,8 +56,7 @@ const PLAYLISTS = Array.from({ length: 60 }, (_, i) => ({
       return { label, total: items.length, withImg };
     };
     return [
-      check('#chartsRow .rec-chart-card .ch-ic', 'img', '榜单大封面'),
-      check('#chartsRow .rcc-song:not(.muted)', 'img.rcc-cov', '榜单前三首封面'),
+      check('#chartsRow .rec-chart-card .rcc-cover', 'img.rcc-cover-img', '榜单大封面'),
       check('#heartList li.song', 'img.cov', '红心歌曲封面'),
       check('#plGrid .pl-card', 'img.plc-img', '歌单封面'),
       check('#vipList li.song', 'img.cov', 'VIP歌曲封面'),
@@ -68,6 +67,19 @@ const PLAYLISTS = Array.from({ length: 60 }, (_, i) => ({
     ];
   });
   coverStats.forEach((s) => console.log(`COVER ${s.label}: ${s.withImg}/${s.total}`, s.total > 0 && s.withImg === s.total ? 'OK' : 'FAIL'));
+
+  // 2b) 榜单卡片结构：前三首纯文字（无小缩略图）+ 卡片高度一致
+  const chartStruct = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('#chartsRow .rec-chart-card')];
+    const heights = cards.map((c) => Math.round(c.getBoundingClientRect().height));
+    const miniCovers = document.querySelectorAll('#chartsRow .rcc-song img').length;
+    const songsPerCard = cards.map((c) => c.querySelectorAll('.rcc-song:not(.muted)').length);
+    return { heights: [...new Set(heights)], heightsList: heights, miniCovers, songsPerCard };
+  });
+  const heightsOk = chartStruct.heights.length <= 1;
+  console.log('CHART heights:', chartStruct.heightsList.join(','), heightsOk ? 'OK(统一)' : 'FAIL(参差)');
+  console.log('CHART songs per card:', chartStruct.songsPerCard.join(','), chartStruct.songsPerCard.every((n) => n === 3) ? 'OK' : 'FAIL');
+  console.log('CHART mini covers (should be 0):', chartStruct.miniCovers, chartStruct.miniCovers === 0 ? 'OK(纯文字)' : 'FAIL');
 
   // 3) 快捷入口背景图确实设置了
   const quickBg = await page.evaluate(() =>
