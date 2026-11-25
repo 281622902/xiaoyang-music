@@ -1,7 +1,7 @@
 // 原生脚本：不依赖测试页面的 DOM，不使用 npm 导入。
 (function (global) {
   'use strict';
-  const cloud = global.XYCloud = { appVersion: '3.13.1', user: null, currentSong: null, available: false, error: '' };
+  const cloud = global.XYCloud = { appVersion: '3.13.2', user: null, currentSong: null, available: false, error: '' };
   try {
     if (!global.supabase?.auth) {
       if (typeof global.supabase?.createClient !== 'function') throw new Error('本地云端 SDK 文件缺失，请重新安装或重新同步应用资源');
@@ -50,8 +50,8 @@
     const { data, error } = await client().auth.signInWithOtp({ phone: normalizePhone(phone) });
     if (error) {
       const msg = global.XYNetwork?.describe(error) || error.message || '';
-      throw new Error(/sms|provider|not configured|disabled/i.test(msg)
-        ? '短信验证码服务未开通，请使用密码登录' : msg);
+      throw new Error(/sms_send_failed|provider|not configured|disabled|invalid username|authentication/i.test(msg)
+        ? '短信服务暂不可用（服务端短信账号配置异常），请先用密码登录；管理员可在 Supabase 后台修复短信配置' : msg);
     }
     return data;
   }
@@ -64,6 +64,39 @@
     });
     if (error) throw new Error(global.XYNetwork?.describe(error) || error.message || '验证码不正确');
     return data;
+  }
+  // 忘记密码：OTP 建立临时会话后直接改密（verifyOtp 成功即登录态，updateUser 立即可用）
+  async function resetUserPassword(phone, code, newPassword) {
+    const pw = passwordValue(newPassword);
+    if (pw.length < 6) throw new Error('新密码至少 6 位');
+    await verifyLoginCode(phone, code); // 失败会抛错（验证码不对/过期）
+    const { error } = await client().auth.updateUser({ password: pw });
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message || '密码重置失败');
+    return true;
+  }
+  // 换绑手机号（两步）：
+  //   1) requestPhoneChange(newPhone)：向新手机号发送验证码
+  //   2) confirmPhoneChange(newPhone, code)：凭验证码完成换绑
+  // 依赖 Supabase 短信服务；新手机号已被其他账号绑定时 Supabase 会报错。
+  async function requestPhoneChange(newPhone) {
+    const user = await requireUser();
+    const target = normalizePhone(newPhone);
+    if (user.phone === target) throw new Error('新手机号与当前绑定相同');
+    const { error } = await client().auth.updateUser({ phone: target });
+    if (error) {
+      const msg = global.XYNetwork?.describe(error) || error.message || '';
+      throw new Error(/sms|provider|invalid/i.test(msg) ? '发送验证码失败：' + msg : msg);
+    }
+    return true;
+  }
+  async function confirmPhoneChange(newPhone, code) {
+    const { data, error } = await client().auth.updateUser({
+      phone: normalizePhone(newPhone),
+      token: String(code ?? '').trim(),
+    });
+    if (error) throw new Error(global.XYNetwork?.describe(error) || error.message || '换绑失败');
+    cloud.user = data?.user || cloud.user;
+    return cloud.user;
   }
   // ── 扫码登录票据（桌面端出码轮询；手机端扫码确认，见 supabase/login_tickets.sql） ──
   function randomToken() {
@@ -311,7 +344,10 @@
   Object.assign(global, { registerUser, loginUser, logoutUser, addFavorite, getFavorites,
     createPlaylist, getPlaylists, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist,
     updateProfile, changePassword, compressAvatar,
-    sendLoginCode, verifyLoginCode, createLoginTicket, getLoginTicket });
+    sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket });
+  // 同步挂到 XYCloud，避免调用方在 window / XYCloud 两个对象间踩坑
+  Object.assign(cloud, { registerUser, loginUser, logoutUser, updateProfile, changePassword, compressAvatar,
+    sendLoginCode, verifyLoginCode, resetUserPassword, requestPhoneChange, confirmPhoneChange, createLoginTicket, getLoginTicket });
   cloud.getUpdateInfo = async function () {
     let native = null, androidInfo = null;
     try { native = await global.uzzBridge?.getAppVersion?.(); } catch (e) { /* 桌面外无此桥 */ }

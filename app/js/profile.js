@@ -41,6 +41,53 @@
 
     // 未登录 → 打开登录弹窗；编辑资料 → 跳设置 tab
     $('pfLoginBtn').addEventListener('click', () => { $('accountOpen').click(); $('cloudPhone')?.focus(); });
+
+    /* ── 绑定手机号 / 换绑（依赖短信服务，两步验证） ── */
+    const phoneStatus = (text) => { const el = $('dpPhoneStatus'); if (el) el.textContent = text || ''; };
+    let phoneCdTimer = null;
+    function phoneCooldown(sec) {
+      const btn = $('dpPhoneSend');
+      let left = sec; btn.disabled = true;
+      const paint = () => { btn.textContent = left > 0 ? left + 's 后重发' : '获取验证码'; };
+      paint();
+      clearInterval(phoneCdTimer);
+      phoneCdTimer = setInterval(() => { left -= 1; paint(); if (left <= 0) { clearInterval(phoneCdTimer); btn.disabled = false; } }, 1000);
+    }
+    const newPhoneVal = () => (($('dpNewPhone').value || '').replace(/\D/g, ''));
+    $('dpPhoneSend').addEventListener('click', async () => {
+      const u = cloud().user;
+      if (!u) { phoneStatus('请先登录云端账户'); return; }
+      if (!/^1\d{10}$/.test(newPhoneVal())) { phoneStatus('请输入正确的新手机号'); return; }
+      const btn = $('dpPhoneSend');
+      btn.disabled = true; btn.textContent = '发送中…';
+      try {
+        await global.requestPhoneChange(newPhoneVal());
+        phoneStatus('验证码已发送到新手机号，请查收短信');
+        phoneCooldown(60);
+        $('dpNewPhoneCode').focus();
+      } catch (error) {
+        phoneStatus(error.message || '发送失败');
+        btn.disabled = false; btn.textContent = '获取验证码';
+      }
+    });
+    $('dpPhoneConfirm').addEventListener('click', async () => {
+      const u = cloud().user;
+      if (!u) { phoneStatus('请先登录云端账户'); return; }
+      const code = ($('dpNewPhoneCode').value || '').trim();
+      if (!/^\d{4,8}$/.test(code)) { phoneStatus('请输入短信验证码'); return; }
+      const btn = $('dpPhoneConfirm');
+      btn.disabled = true; phoneStatus('正在换绑…');
+      try {
+        await global.confirmPhoneChange(newPhoneVal(), code);
+        phoneStatus('换绑成功，已绑定新手机号');
+        $('dpNewPhoneCode').value = '';
+        clearInterval(phoneCdTimer); const sb = $('dpPhoneSend'); sb.disabled = false; sb.textContent = '获取验证码';
+        render();
+        global.toast && global.toast('手机号换绑成功');
+      } catch (error) {
+        phoneStatus(error.message || '换绑失败');
+      } finally { btn.disabled = false; }
+    });
     $('pfEditBtn').addEventListener('click', () => switchPane('settings'));
   });
 
@@ -126,6 +173,11 @@
     $('pfLoginBtn').classList.toggle('hidden', logged);
     $('cloudLogout').classList.toggle('hidden', !logged);
     $('pfEditBtn').classList.toggle('hidden', !logged);
+    // 绑定手机号展示（脱敏）
+    const pv = $('dpPhoneValue');
+    if (pv) pv.textContent = logged ? (cloud().displayUser ? cloud().displayUser(user) : '已绑定') : '未登录';
+    const ps = $('dpPhoneStatus');
+    if (ps && !logged) ps.textContent = '';
     renderPane(pfTab);
   }
 

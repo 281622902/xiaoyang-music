@@ -337,9 +337,15 @@
                 <div class="dp-avatar-row"><img id="desktopAvatar" class="dp-avatar" src="icon.svg" alt="用户头像"><div><label class="dp-file">更换头像<input id="desktopAvatarInput" type="file" accept="image/*" hidden></label><button id="desktopAvatarClear" type="button" class="xy-secondary">恢复默认</button></div></div>
                 <label>昵称<input id="desktopNickname" type="text" maxlength="24" autocomplete="nickname" placeholder="给自己起个名字"></label>
                 <label>用户名<input id="desktopUsername" type="text" maxlength="20" autocomplete="username" placeholder="字母或数字，3-20 位"></label>
-                <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
-                <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
-                <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
+        <button id="desktopProfileSave" class="xy-primary" type="button">保存资料</button>
+        <details class="dp-pwd"><summary>修改密码</summary><label>原密码<input id="desktopOldPwd" type="password" autocomplete="current-password"></label><label>新密码<input id="desktopNewPwd" type="password" autocomplete="new-password"></label><label>确认新密码<input id="desktopNewPwd2" type="password" autocomplete="new-password"></label><button id="desktopPwdSave" class="xy-secondary" type="button">修改密码</button></details>
+        <details class="dp-phone"><summary>绑定手机号（<span id="dpPhoneValue">未绑定</span>）</summary>
+          <label>新手机号<input id="dpNewPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入要绑定的新手机号"></label>
+          <div class="dp-phone-row"><input id="dpNewPhoneCode" type="text" inputmode="numeric" maxlength="6" placeholder="短信验证码"><button id="dpPhoneSend" class="xy-secondary" type="button">获取验证码</button></div>
+          <button id="dpPhoneConfirm" class="xy-primary" type="button">确认换绑</button>
+          <p id="dpPhoneStatus" class="account-status"></p>
+        </details>
+        <label class="dp-check"><input id="desktopRecentSync" type="checkbox" checked> 同步最近播放（用于跨设备续听）</label>
               </div>
               <div id="cloudSyncStatus" class="account-status">云端同步状态读取中…</div>
               <div class="account-buttons"></div>
@@ -1289,7 +1295,10 @@
       </div>
       <div class="ne-opts">
         <label class="ne-auto"><input id="neAutoLogin" type="checkbox" checked /><span>自动登录</span></label>
-        <button id="neRegisterLink" class="ne-link" type="button">注册账户</button>
+        <span class="ne-opts-right">
+          <button id="neForgotPwd" class="ne-link hidden" type="button">忘记密码</button>
+          <button id="neRegisterLink" class="ne-link" type="button">注册账户</button>
+        </span>
       </div>
       <button id="cloudSubmit" class="ne-primary" type="submit">密码登录</button>
     </form>
@@ -1299,6 +1308,28 @@
       <label><input id="neAgree" type="checkbox" checked /><span>同意</span></label>
       <a href="#" id="neTerms">《服务条款》</a><a href="#" id="nePrivacy">《隐私政策》</a>
     </div>
+  </div>
+
+  <!-- 忘记密码视图：手机号 + 短信验证码 + 新密码 -->
+  <div id="neResetView" class="hidden">
+    <h3 class="ne-qr-title">重置密码</h3>
+    <p class="ne-reset-sub">输入绑定手机号并验证短信验证码，即可设置新密码</p>
+    <form id="neResetForm" class="ne-form" autocomplete="off" novalidate>
+      <div class="ne-field">
+        <span class="ne-86">+86</span><i class="ne-86-sep" aria-hidden="true"></i>
+        <input id="neResetPhone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入手机号" aria-label="手机号"/>
+      </div>
+      <div class="ne-field ne-code-row">
+        <input id="neResetCode" type="text" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" aria-label="验证码"/>
+        <button id="neResetSend" class="ne-send" type="button">获取验证码</button>
+      </div>
+      <div class="ne-field">
+        <input id="neResetPwd" type="password" autocomplete="new-password" minlength="6" maxlength="128" placeholder="请设置新密码（至少 6 位）" aria-label="新密码"/>
+      </div>
+      <button class="ne-primary" type="submit">重置密码</button>
+    </form>
+    <button id="neResetBack" class="ne-link ne-qr-back" type="button">‹ 返回登录</button>
+    <p id="neResetStatus" class="account-status" role="status" aria-live="polite"></p>
   </div>
 
   <!-- 扫码登录视图（手机端扫码确认接入后即可用） -->

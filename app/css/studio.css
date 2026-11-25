@@ -157,3 +157,23 @@ html[data-theme="dark"] .ne-qr-tip { color: var(--text-2); }
 
 #pfPaneSettings .desktop-profile { max-width: 520px; }
 #pfPaneSettings #cloudMember > .account-buttons { margin: 14px 0 8px; }
+
+/* ── 忘记密码 / 绑定手机号 ── */
+.ne-opts-right { display: flex; align-items: center; gap: 14px; }
+.ne-reset-sub { text-align: center; font-size: 12px; color: #9aa1af; margin: -6px 0 16px; }
+html[data-theme="dark"] .ne-reset-sub { color: var(--text-2); }
+.dp-phone { margin-top: 10px; font-size: 13px; }
+.dp-phone summary { cursor: pointer; color: var(--text-2); }
+.dp-phone summary:hover { color: var(--accent); }
+.dp-phone label { display: block; font-size: 12px; color: var(--text-2); margin: 10px 0 0; }
+.dp-phone input {
+  display: block; width: 100%; margin-top: 6px; min-height: 38px;
+  border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px;
+  color: var(--text); background: var(--bg-0); outline: none;
+}
+.dp-phone input:focus { border-color: var(--accent); }
+.dp-phone-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.dp-phone-row input { flex: 1; margin-top: 0; }
+.dp-phone-row .xy-secondary { white-space: nowrap; min-height: 38px; }
+.dp-phone .xy-primary { width: 100%; margin-top: 10px; }
+.dp-phone .account-status { margin-top: 8px; }

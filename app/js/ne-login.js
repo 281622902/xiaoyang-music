@@ -31,6 +31,8 @@
       $('neCodeField').classList.toggle('hidden', !code);
       // 注册模式只在密码登录下出现：显示确认密码框
       $('neRegField').classList.toggle('hidden', !(!code && registering));
+      // 忘记密码入口：仅在「密码登录」且非注册态显示
+      $('neForgotPwd').classList.toggle('hidden', code || registering);
       $('cloudPassword').autocomplete = (!code && registering) ? 'new-password' : 'current-password';
       $('cloudPassword').placeholder = (!code && registering) ? '请设置登录密码（至少 6 位）' : '请输入登录密码';
       $('cloudSubmit').textContent = code ? '验证码登录' : (registering ? '注册并登录' : '密码登录');
@@ -47,11 +49,11 @@
     $('neRegisterLink').addEventListener('click', () => { registering = !registering; say(''); paintMode(); });
 
     /* ── 验证码发送（60 秒倒计时） ── */
-    function startCooldown(sec) {
-      const btn = $('neSendCode');
+    function startCooldown(sec, btnId) {
+      const btn = $(btnId || 'neSendCode');
       let left = sec;
       btn.disabled = true;
-      const paint = () => { btn.textContent = left > 0 ? left + 's 后重发' : '获取验证码'; };
+      const paint = () => { btn.textContent = left > 0 ? left + 's 后重发' : (btnId === 'neResetSend' ? '获取验证码' : '获取验证码'); };
       paint();
       clearInterval(sendTimer);
       sendTimer = setInterval(() => {
@@ -59,6 +61,7 @@
         if (left <= 0) { clearInterval(sendTimer); btn.disabled = false; }
       }, 1000);
     }
+    function stopCooldown() { clearInterval(sendTimer); for (const id of ['neSendCode', 'neResetSend']) { const b = $(id); if (b) { b.disabled = false; b.textContent = '获取验证码'; } } }
     $('neSendCode').addEventListener('click', async () => {
       if (!validPhone()) { say('请输入正确的 11 位手机号'); $('cloudPhone').focus(); return; }
       if (!$('neAgree').checked) { say('请先勾选同意《服务条款》和《隐私政策》'); return; }
@@ -90,11 +93,11 @@
           const pw = $('cloudPassword').value || '', pw2 = $('neRegPwd2').value || '';
           if (pw.length < 6) { say('密码至少 6 位'); return; }
           if (pw !== pw2) { say('两次输入的密码不一致'); return; }
-          await cloud().registerUser(phoneVal(), pw);
+          await global.registerUser(phoneVal(), pw);
         } else {
           const pw = $('cloudPassword').value || '';
           if (!pw) { say('请输入登录密码'); return; }
-          await cloud().loginUser(phoneVal(), pw);
+          await global.loginUser(phoneVal(), pw);
         }
         // 记住手机号与自动登录（登录成功的会话由 supabase-js 持久化）
         try {
@@ -120,6 +123,7 @@
       card.classList.add('hidden');
       stopPoll();
       clearInterval(sendTimer);
+      backToLogin();
     }
     card.addEventListener('click', (e) => { if (e.target === card) closeModal(); });
     $('accountClose').addEventListener('click', closeModal);
@@ -138,6 +142,60 @@
     for (const id of ['neTerms', 'nePrivacy']) {
       $(id).addEventListener('click', (e) => { e.preventDefault(); say('条款页面筹备中：本应用仅保存收藏/歌单/偏好，不上传本地音频文件'); });
     }
+
+    /* ── 忘记密码视图 ── */
+    const resetStatus = (text) => { $('neResetStatus').textContent = text || ''; };
+    function showReset() {
+      $('neLoginView').classList.add('hidden');
+      $('neQrView').classList.add('hidden');
+      $('neResetView').classList.remove('hidden');
+      $('neResetPhone').value = $('cloudPhone').value || '';
+      resetStatus('');
+    }
+    function backToLogin() {
+      $('neResetView').classList.add('hidden');
+      if ($('neQrView') && !$('neQrView').classList.contains('hidden')) { /* 扫码态保持 */ return; }
+      $('neLoginView').classList.remove('hidden');
+    }
+    $('neForgotPwd').addEventListener('click', showReset);
+    $('neResetBack').addEventListener('click', () => { $('neResetView').classList.add('hidden'); $('neLoginView').classList.remove('hidden'); });
+    $('neResetSend').addEventListener('click', async () => {
+      const phone = ($('neResetPhone').value || '').replace(/\D/g, '');
+      if (!/^1\d{10}$/.test(phone)) { resetStatus('请输入正确的 11 位手机号'); return; }
+      const btn = $('neResetSend');
+      btn.disabled = true; btn.textContent = '发送中…';
+      try {
+        await global.sendLoginCode(phone);
+        resetStatus('验证码已发送，请查收短信');
+        startCooldown(60, 'neResetSend');
+        $('neResetCode').focus();
+      } catch (error) {
+        resetStatus(error.message || '验证码发送失败');
+        btn.disabled = false; btn.textContent = '获取验证码';
+      }
+    });
+    $('neResetForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const phone = ($('neResetPhone').value || '').replace(/\D/g, '');
+      const code = ($('neResetCode').value || '').trim();
+      const pw = $('neResetPwd').value || '';
+      if (!/^1\d{10}$/.test(phone)) { resetStatus('请输入正确的 11 位手机号'); return; }
+      if (!/^\d{4,8}$/.test(code)) { resetStatus('请输入短信中的验证码'); return; }
+      if (pw.length < 6) { resetStatus('新密码至少 6 位'); return; }
+      try {
+        await global.resetUserPassword(phone, code, pw);
+        // 成功：回登录视图，预填手机号与新密码，直接可登录
+        mode = 'pwd'; registering = false;
+        $('cloudPhone').value = phone; $('cloudPassword').value = pw;
+        $('neResetView').classList.add('hidden');
+        $('neLoginView').classList.remove('hidden');
+        paintMode(); stopCooldown();
+        say('密码已重置，请用新密码登录');
+        if (global.toast) global.toast('密码已重置');
+      } catch (error) {
+        resetStatus(error.message || '密码重置失败');
+      }
+    });
 
     /* ── 扫码登录 ── */
     function stopPoll() {
@@ -174,6 +232,7 @@
     }
     async function startQrLogin() {
       $('neLoginView').classList.add('hidden');
+      $('neResetView').classList.add('hidden');
       $('neQrView').classList.remove('hidden');
       $('neQrRefresh').classList.add('hidden');
       $('neQrMask').classList.remove('hidden');
